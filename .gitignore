@@ -1,0 +1,20 @@
+# Archivos de Entorno Virtual
+env/
+venv/
+__pycache__/
+
+# Archivos de Base de Datos
+*.sqlite3
+db.sqlite3
+
+# Archivos de Configuración Sensibles
+.env
+
+# Archivos estáticos y de medios recolectados por Django
+/static/
+/media/
+
+# Archivos del sistema operativo y del editor
+.DS_Store
+*.pyc
+*.swp

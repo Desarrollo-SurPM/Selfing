@@ -1,0 +1,17 @@
+{% extends 'base.html' %}
+{% load crispy_forms_tags %}
+
+{% block title %}Generar Correo{% endblock %}
+
+{% block content %}
+<h2>Generar Correo de Novedades</h2>
+<hr>
+<p>Selecciona una empresa para ver sus novedades y adjuntarlas al correo. Una vez guardado, se enviará al supervisor para su aprobación.</p>
+
+<form method="post">
+    {% csrf_token %}
+    {{ form|crispy }}
+    <button type="submit" class="btn btn-primary mt-3">Guardar y Enviar a Aprobación</button>
+    <a href="{% url 'operator_dashboard' %}" class="btn btn-secondary mt-3">Cancelar</a>
+</form>
+{% endblock %}

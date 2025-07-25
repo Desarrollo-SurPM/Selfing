@@ -1,0 +1,64 @@
+{% extends 'base.html' %}
+
+{% block title %}Dashboard Administrador{% endblock %}
+
+{% block content %}
+<h2>Dashboard de Administración</h2>
+<hr>
+
+<div class="card mb-4">
+    <div class="card-header">
+        <h4>Gestión del Sistema</h4>
+    </div>
+    <div class="card-body">
+        <a href="{% url 'manage_operators' %}" class="btn btn-primary">Gestionar Operadores</a>
+        <a href="{% url 'manage_companies' %}" class="btn btn-info">Gestionar Empresas Cliente</a>
+    </div>
+</div>
+<div class="row">
+    <div class="col-md-8">
+        <h3>Reportes de Novedades</h3>
+        <table class="table table-striped">
+            <thead>
+                <tr>
+                    <th>Fecha</th>
+                    <th>Operador</th>
+                    <th>Empresa</th>
+                    <th>Novedad</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for report in reports %}
+                <tr>
+                    <td>{{ report.created_at|date:"d/m/Y H:i" }}</td>
+                    <td>{{ report.operator.username }}</td>
+                    <td>{{ report.company.name }}</td>
+                    <td>{{ report.message }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    <div class="col-md-4">
+        <h3>Correos para Aprobar</h3>
+        {% for email in pending_emails %}
+        <div class="card mb-2">
+            <div class="card-body">
+                <h5 class="card-title">Correo para: {{ email.company.name }}</h5>
+                <p class="card-text">Creado por: {{ email.operator.username }}</p>
+                <a href="{% url 'approve_email' email.id %}" class="btn btn-success btn-sm">Aprobar</a>
+            </div>
+        </div>
+        {% empty %}
+        <p>No hay correos pendientes.</p>
+        {% endfor %}
+        
+        <h3 class="mt-4">Actividad Reciente</h3>
+        <ul class="list-group">
+            {% for log in traceability_logs %}
+            <li class="list-group-item">{{ log.action }} - {{ log.timestamp|date:"H:i" }}</li>
+            {% endfor %}
+        </ul>
+    </div>
+</div>
+{% endblock %}

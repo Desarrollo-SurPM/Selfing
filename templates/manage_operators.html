@@ -1,0 +1,42 @@
+{% extends 'base.html' %}
+
+{% block title %}Gestionar Operadores{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h2>Gestión de Operadores</h2>
+    <a href="{% url 'create_operator' %}" class="btn btn-success">Añadir Operador</a>
+</div>
+
+<table class="table table-striped table-hover">
+    <thead>
+        <tr>
+            <th>Usuario</th>
+            <th>Nombre</th>
+            <th>Email</th>
+            <th>Activo</th>
+            <th>Acciones</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for op in operators %}
+        <tr>
+            <td>{{ op.username }}</td>
+            <td>{{ op.get_full_name }}</td>
+            <td>{{ op.email }}</td>
+            <td>{% if op.is_active %}Sí{% else %}No{% endif %}</td>
+            <td>
+                <a href="{% url 'edit_operator' op.id %}" class="btn btn-sm btn-warning">Editar</a>
+                <a href="{% url 'delete_operator' op.id %}" class="btn btn-sm btn-danger">Eliminar</a>
+            </td>
+        </tr>
+        {% empty %}
+        <tr>
+            <td colspan="5" class="text-center">No hay operadores registrados.</td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+
+<a href="{% url 'admin_dashboard' %}" class="btn btn-secondary mt-3">Volver al Dashboard</a>
+{% endblock %}

@@ -1,0 +1,70 @@
+{% extends 'base.html' %}
+{% load crispy_forms_tags %}
+
+{% block title %}Registrar Novedad{% endblock %}
+
+{% block content %}
+<div class="container text-center">
+    <h2 class="mb-2">Registrar Novedad en Bitácora</h2>
+
+    <div id="company-selection">
+        <p class="lead">Paso 1: Seleccione la empresa a la cual le anotará la novedad.</p>
+        <div class="row g-4 justify-content-center">
+            {% for company in companies %}
+            <div class="col-md-3">
+                <div class="card h-100 card-option company-card" data-company-id="{{ company.id }}">
+                    <div class="card-body d-flex flex-column justify-content-center">
+                        <i class="fas fa-building fa-2x mb-2"></i>
+                        <h5 class="card-title">{{ company.name }}</h5>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+
+    <div id="update-form-container" style="display: none;">
+        <hr class="my-4">
+        <p class="lead">Paso 2: Escriba la novedad para <strong id="selected-company-name"></strong>.</p>
+        <form method="post" class="text-start">
+            {% csrf_token %}
+            {{ form.company.as_hidden }} {{ form.message|as_crispy_field }}
+            <button type="submit" class="btn btn-primary mt-3">Guardar Novedad</button>
+            <button type="button" id="cancel-button" class="btn btn-secondary mt-3">Cancelar</button>
+        </form>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const companyCards = document.querySelectorAll('.company-card');
+    const companySelectionDiv = document.getElementById('company-selection');
+    const formContainer = document.getElementById('update-form-container');
+    const hiddenCompanyInput = document.querySelector('input[name="company"]');
+    const selectedCompanyNameSpan = document.getElementById('selected-company-name');
+    const cancelButton = document.getElementById('cancel-button');
+
+    companyCards.forEach(card => {
+        card.addEventListener('click', function() {
+            const companyId = this.dataset.companyId;
+            const companyName = this.querySelector('.card-title').textContent;
+
+            // Rellenar el formulario y mostrarlo
+            hiddenCompanyInput.value = companyId;
+            selectedCompanyNameSpan.textContent = companyName;
+            
+            // Ocultar la selección de tarjetas y mostrar el formulario
+            companySelectionDiv.style.display = 'none';
+            formContainer.style.display = 'block';
+        });
+    });
+
+    cancelButton.addEventListener('click', function() {
+        // Ocultar el formulario y volver a mostrar la selección de tarjetas
+        formContainer.style.display = 'none';
+        companySelectionDiv.style.display = 'block';
+        hiddenCompanyInput.value = ''; // Limpiar la selección
+    });
+});
+</script>
+{% endblock %}
