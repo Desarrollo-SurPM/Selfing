@@ -1,0 +1,43 @@
+{% extends 'base.html' %}
+{% load crispy_forms_tags %}
+
+{% block title %}Revisar Correo para {{ email.company.name }}{% endblock %}
+
+{% block content %}
+<div class="card">
+    <div class="card-header bg-primary text-white">
+        <h2>Revisión de Correo</h2>
+    </div>
+    <div class="card-body">
+        <h4 class="card-title">Destinatario: {{ email.company.name }}</h4>
+        <p class="card-text">Creado por: <strong>{{ email.operator.username }}</strong> el {{ email.created_at|date:"d/m/Y \a \l\a\s H:i" }}</p>
+        <hr>
+
+        <h4>Novedades Incluidas:</h4>
+        {% if updates_list %}
+            <ul class="list-group mb-3">
+                {% for update in updates_list %}
+                    <li class="list-group-item">
+                        <strong>{{ update.installation.name }} ({{ update.created_at|date:"H:i" }}):</strong>
+                        <p class="mb-0">{{ update.message }}</p>
+                    </li>
+                {% endfor %}
+            </ul>
+        {% else %}
+            <p class="text-muted">No se incluyeron novedades específicas.</p>
+        {% endif %}
+
+        <hr>
+
+        <form method="post">
+            {% csrf_token %}
+            <h4>Observaciones Adicionales (Editable):</h4>
+            {{ form|crispy }}
+            <div class="d-flex justify-content-end mt-4">
+                <a href="{% url 'admin_dashboard' %}" class="btn btn-secondary me-2">Cancelar</a>
+                <button type="submit" class="btn btn-success">Aprobar y Enviar Correo</button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

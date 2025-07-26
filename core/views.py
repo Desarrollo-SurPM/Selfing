@@ -1,11 +1,12 @@
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth.decorators import login_required, user_passes_test
 from django.contrib.auth.models import User
+from django.http import JsonResponse
 from django.utils import timezone
 from django import forms  # Importación añadida para usar widgets de formulario
 from .models import Company, Installation, ChecklistItem, ChecklistLog, UpdateLog, Email, TraceabilityLog
 from .forms import (
-    UpdateLogForm, EmailForm, OperatorCreationForm, OperatorChangeForm, 
+    UpdateLogForm, EmailForm, OperatorCreationForm, OperatorChangeForm, EmailApprovalForm,
     CompanyForm, InstallationForm, ChecklistItemForm
 )
 
@@ -277,12 +278,12 @@ def update_log_view(request):
             log = form.save(commit=False)
             log.operator = request.user
             log.save()
+            # CORRECCIÓN: El log de trazabilidad ahora usa la instalación
             TraceabilityLog.objects.create(user=request.user, action=f"Registró novedad para {log.installation}")
             return redirect('operator_dashboard')
     else:
         form = UpdateLogForm()
 
-    # Usamos prefetch_related para cargar todas las instalaciones en una sola consulta
     companies_with_installations = Company.objects.prefetch_related('installations')
     
     context = {
@@ -294,19 +295,93 @@ def update_log_view(request):
 @login_required
 def email_form_view(request):
     if request.method == 'POST':
-        form = EmailForm(request.POST, operator=request.user)
+        # El formulario ya no necesita el argumento 'operator'
+        form = EmailForm(request.POST)
         if form.is_valid():
             email = form.save(commit=False)
             email.operator = request.user
-            email.status = 'pending'
+            email.status = 'pending' # ¡Status clave para que aparezca en el dashboard de admin!
             email.save()
-            form.save_m2m()
+            # Guardamos las novedades seleccionadas después de guardar el objeto principal
+            form.save_m2m() 
             TraceabilityLog.objects.create(user=request.user, action=f"Generó borrador de correo para {email.company.name}")
             return redirect('operator_dashboard')
+        # Si el formulario no es válido, se volverá a renderizar la página
+        # mostrando los errores correspondientes.
     else:
-        company_id = request.GET.get('company')
-        initial_data = {}
-        if company_id:
-            initial_data['company'] = company_id
-        form = EmailForm(initial=initial_data, operator=request.user)
+        form = EmailForm()
+        
     return render(request, 'email_form.html', {'form': form})
+
+@login_required
+def log_virtual_round(request):
+    if request.method == 'POST':
+        # Buscamos la tarea específica de la ronda virtual
+        # Es importante que el texto coincida con el que está en la base de datos
+        checklist_item_text = "Realizar ronda virtual por todas las cámaras (recordatorio cada hora)."
+        item = get_object_or_404(ChecklistItem, description=checklist_item_text)
+
+        # Creamos el registro en el log del checklist
+        log, created = ChecklistLog.objects.get_or_create(
+            operator=request.user,
+            item=item,
+            completed_at__date=timezone.now().date(),
+            # Opcional: para permitir múltiples rondas al día, podrías ajustar el filtro
+        )
+
+        if created:
+            TraceabilityLog.objects.create(user=request.user, action="Confirmó realización de ronda virtual.")
+            return JsonResponse({'status': 'success', 'message': 'Ronda registrada.'})
+        else:
+            return JsonResponse({'status': 'success', 'message': 'Ronda ya había sido registrada hoy.'})
+    
+    return JsonResponse({'status': 'error', 'message': 'Método no permitido.'}, status=405)
+@login_required
+def get_updates_for_company(request, company_id):
+    # Buscamos todas las novedades cuya instalación pertenece a la empresa seleccionada
+    updates = UpdateLog.objects.filter(installation__company_id=company_id).order_by('-created_at')
+    
+    # Formateamos los datos para enviarlos como JSON
+    updates_list = []
+    for update in updates:
+        updates_list.append({
+            'id': update.id,
+            'text': f"({update.installation.name}) {update.created_at.strftime('%d/%m %H:%M')} - {update.message[:40]}..."
+        })
+        
+    return JsonResponse({'updates': updates_list})
+
+@login_required
+@user_passes_test(is_supervisor)
+def review_and_approve_email(request, email_id):
+    email = get_object_or_404(Email, id=email_id)
+    
+    if request.method == 'POST':
+        # Procesa el formulario de edición y aprobación
+        form = EmailApprovalForm(request.POST, instance=email)
+        if form.is_valid():
+            # Guarda los cambios en las observaciones
+            form.save() 
+            
+            # Cambia el estado a 'Aprobado'
+            email.status = 'approved'
+            email.approved_by = request.user
+            email.approved_at = timezone.now()
+            email.save(update_fields=['status', 'approved_by', 'approved_at'])
+
+            TraceabilityLog.objects.create(user=request.user, action=f"Revisó y aprobó correo para {email.company.name}")
+            
+            # Aquí iría la lógica futura para enviar el correo real
+            # send_email_notification(email)
+            
+            return redirect('admin_dashboard')
+    else:
+        # Muestra el formulario con los datos actuales del correo
+        form = EmailApprovalForm(instance=email)
+
+    context = {
+        'email': email,
+        'form': form,
+        'updates_list': email.updates.all() # Pasa las novedades seleccionadas a la plantilla
+    }
+    return render(request, 'review_email.html', context)

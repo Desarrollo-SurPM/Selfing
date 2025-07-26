@@ -32,7 +32,7 @@
                 <tr>
                     <td>{{ report.created_at|date:"d/m/Y H:i" }}</td>
                     <td>{{ report.operator.username }}</td>
-                    <td>{{ report.company.name }}</td>
+                    <td>{{ report.installation.company.name }}</td> {# Se accede a la empresa a través de la instalación #}
                     <td>{{ report.message }}</td>
                 </tr>
                 {% endfor %}
@@ -46,7 +46,7 @@
             <div class="card-body">
                 <h5 class="card-title">Correo para: {{ email.company.name }}</h5>
                 <p class="card-text">Creado por: {{ email.operator.username }}</p>
-                <a href="{% url 'approve_email' email.id %}" class="btn btn-success btn-sm">Aprobar</a>
+                <a href="{% url 'review_email' email.id %}" class="btn btn-success btn-sm">Revisar y Aprobar</a>
             </div>
         </div>
         {% empty %}

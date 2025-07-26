@@ -12,27 +12,45 @@ class UpdateLogForm(forms.ModelForm):
             'message': forms.Textarea(attrs={'rows': 4, 'placeholder': 'Describa la novedad...'}),
         }
 
+class EmailApprovalForm(forms.ModelForm):
+    class Meta:
+        model = Email
+        fields = ['observations'] # Por ahora, solo permitimos editar las observaciones
+        widgets = {
+            'observations': forms.Textarea(attrs={'rows': 10}),
+        }
 class EmailForm(forms.ModelForm):
-    # 👇 --- ESTA ES LA CORRECCIÓN PARA EL ERROR TypeError --- 👇
     def __init__(self, *args, **kwargs):
-        # Extraemos 'operator' antes de llamar al padre para que no cause un error
-        operator = kwargs.pop('operator', None)
+        # Ya no necesitamos la lógica del 'operator' aquí
         super(EmailForm, self).__init__(*args, **kwargs)
+
+        self.fields['updates'].label = "Novedades a Incluir"
         
-        # Filtramos el queryset de novedades si se proporciona un operador
-        if operator and 'company' in self.initial:
-            company_id = self.initial['company']
-            self.fields['updates'].queryset = UpdateLog.objects.filter(
-                installation__company_id=company_id
-            )
-    # 👆 --- FIN DE LA CORRECCIÓN --- 👆
+        # --- ESTA ES LA LÓGICA CLAVE ---
+        # Si el formulario se está enviando (es un POST y tiene datos)
+        if self.data:
+            try:
+                # Tomamos el ID de la empresa que se envió en el formulario
+                company_id = int(self.data.get('company'))
+                # Actualizamos la lista de opciones válidas para el campo 'updates'
+                # para que la validación funcione correctamente.
+                self.fields['updates'].queryset = UpdateLog.objects.filter(
+                    installation__company_id=company_id
+                )
+            except (ValueError, TypeError):
+                # Si algo falla, usamos un queryset vacío para evitar más errores
+                self.fields['updates'].queryset = UpdateLog.objects.none()
+        # Si es una petición GET (la primera vez que se carga la página),
+        # la lista de novedades empieza vacía.
+        else:
+            self.fields['updates'].queryset = UpdateLog.objects.none()
 
     class Meta:
         model = Email
         fields = ['company', 'updates', 'observations']
         widgets = {
             'updates': forms.CheckboxSelectMultiple,
-            'observations': forms.Textarea(attrs={'rows': 5}),
+            'observations': forms.Textarea(attrs={'rows': 5, 'placeholder': 'Añada observaciones adicionales aquí...'}),
         }
 
 class OperatorCreationForm(UserCreationForm):

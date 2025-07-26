@@ -3,6 +3,8 @@ from . import views
 
 urlpatterns = [
     path('', views.home, name='home'),
+      # 👇 AÑADE ESTA RUTA PARA LA COMUNICACIÓN DINÁMICA 👇
+    path('ajax/get-updates/<int:company_id>/', views.get_updates_for_company, name='ajax_get_updates'),
     
     # --- Admin ---
     path('dashboard/admin/', views.admin_dashboard, name='admin_dashboard'),
@@ -27,11 +29,13 @@ urlpatterns = [
     path('checklist/', views.checklist_view, name='checklist'),
     path('update-log/', views.update_log_view, name='update_log'),
     path('email/new/', views.email_form_view, name='email_form'),
-
+    path('email/review/<int:email_id>/', views.review_and_approve_email, name='review_email'),
     # 👇 AÑADE ESTAS RUTAS PARA GESTIONAR INSTALACIONES 👇
     path('dashboard/companies/<int:company_id>/installations/', views.manage_installations, name='manage_installations'),
     path('dashboard/installations/add/<int:company_id>/', views.create_installation, name='create_installation'),
     path('dashboard/installations/edit/<int:installation_id>/', views.edit_installation, name='edit_installation'),
     path('dashboard/installations/delete/<int:installation_id>/', views.delete_installation, name='delete_installation'),
     # 👆 HASTA AQUÍ 👆
+        # 👇 AÑADE ESTA RUTA PARA LA RONDA VIRTUAL 👇
+    path('log-virtual-round/', views.log_virtual_round, name='log_virtual_round'),
 ]

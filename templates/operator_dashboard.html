@@ -4,45 +4,153 @@
 
 {% block content %}
 <div class="container text-center">
-    <h2 class="mb-4">Bienvenido, {{ user.username }}. Elija una opción</h2>
-    <div class="row g-4 justify-content-center">
+    <div class="d-flex justify-content-between align-items-center mb-4 flex-wrap">
+        <h2 class="mb-0">Bienvenido, {{ user.username }}</h2>
+        <div class="card text-center bg-light">
+            <div class="card-header">
+                Próxima Ronda Virtual
+            </div>
+            <div class="card-body py-2">
+                <h4 class="card-title mb-0" id="round-countdown">--:--</h4>
+            </div>
+        </div>
+    </div>
 
-        <div class="col-md-3">
+    <p class="lead mb-4">Elija una opción para continuar con su turno.</p>
+    
+    <div class="row g-4 justify-content-center">
+        <div class="col-12 col-md-3">
             <a href="{% url 'checklist' %}" class="card-link">
                 <div class="card h-100 card-option">
-                    <div class="card-body d-flex flex-column justify-content-center">
+                    <div class="card-body d-flex flex-column justify-content-center align-items-center">
                         <i class="fas fa-clipboard-check fa-3x mb-3"></i>
                         <h5 class="card-title">Checklist</h5>
-                        <p class="card-text">Ver y registrar tareas del turno.</p>
+                        <p class="card-text small text-muted">Ver y registrar tareas del turno.</p>
                     </div>
                 </div>
             </a>
         </div>
 
-        <div class="col-md-3">
+        <div class="col-12 col-md-3">
             <a href="{% url 'update_log' %}" class="card-link">
                 <div class="card h-100 card-option">
-                    <div class="card-body d-flex flex-column justify-content-center">
+                    <div class="card-body d-flex flex-column justify-content-center align-items-center">
                         <i class="fas fa-book fa-3x mb-3"></i>
                         <h5 class="card-title">Novedades (Bitácora)</h5>
-                        <p class="card-text">Anotar eventos por empresa.</p>
+                        <p class="card-text small text-muted">Anotar eventos por empresa.</p>
                     </div>
                 </div>
             </a>
         </div>
 
-        <div class="col-md-3">
+        <div class="col-12 col-md-3">
             <a href="{% url 'email_form' %}" class="card-link">
                 <div class="card h-100 card-option">
-                    <div class="card-body d-flex flex-column justify-content-center">
+                    <div class="card-body d-flex flex-column justify-content-center align-items-center">
                         <i class="fas fa-envelope-open-text fa-3x mb-3"></i>
                         <h5 class="card-title">Generar Correo</h5>
-                        <p class="card-text">Enviar novedades a supervisión.</p>
+                        <p class="card-text small text-muted">Enviar novedades a supervisión.</p>
                     </div>
                 </div>
             </a>
         </div>
+        </div>
+</div>
 
+<div class="modal fade" id="roundNotificationModal" tabindex="-1" aria-labelledby="modalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title" id="modalLabel"><i class="fas fa-bell me-2"></i>Notificación de Ronda</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body fs-5 text-center">
+                <p>Es hora de realizar la ronda virtual por todas las cámaras.</p>
+                <p>Por favor, confirme que ha completado la tarea.</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Más Tarde</button>
+                <button type="button" class="btn btn-primary" id="confirmRoundButton">Aceptar y Registrar</button>
+            </div>
+        </div>
     </div>
 </div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Busca el token CSRF en todo el documento para más flexibilidad
+    function getCsrfToken() {
+        const tokenElement = document.querySelector('input[name="csrfmiddlewaretoken"]');
+        return tokenElement ? tokenElement.value : '';
+    }
+
+    const countdownElement = document.getElementById('round-countdown');
+    const roundModal = new bootstrap.Modal(document.getElementById('roundNotificationModal'));
+    const confirmButton = document.getElementById('confirmRoundButton');
+    let timerInterval;
+
+    function startCountdown() {
+        clearInterval(timerInterval);
+
+        timerInterval = setInterval(function() {
+            const now = new Date();
+            const minutes = now.getMinutes();
+            const seconds = now.getSeconds();
+
+            const minutesRemaining = 59 - minutes;
+            const secondsRemaining = 59 - seconds;
+
+            const displayMinutes = String(minutesRemaining).padStart(2, '0');
+            const displaySeconds = String(secondsRemaining).padStart(2, '0');
+
+            countdownElement.textContent = `${displayMinutes}:${displaySeconds}`;
+
+            if (minutes === 0 && seconds === 0) {
+                roundModal.show();
+            }
+        }, 1000);
+    }
+
+    if (confirmButton) {
+        confirmButton.addEventListener('click', function() {
+            const url = "{% url 'log_virtual_round' %}";
+            const csrfToken = getCsrfToken();
+
+            if (!csrfToken) {
+                console.error("CSRF token not found!");
+                return;
+            }
+
+            fetch(url, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': csrfToken
+                },
+                body: JSON.stringify({})
+            })
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('Network response was not ok');
+                }
+                return response.json();
+            })
+            .then(data => {
+                console.log('Respuesta del servidor:', data);
+                alert('Ronda registrada con éxito a las ' + new Date().toLocaleTimeString());
+                roundModal.hide();
+            })
+            .catch(error => {
+                console.error('Error al registrar la ronda:', error);
+                alert('Hubo un error al registrar la ronda.');
+            });
+        });
+    }
+
+    // Inicia el contador en cuanto carga la página
+    startCountdown();
+});
+</script>
 {% endblock %}

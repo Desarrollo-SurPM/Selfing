@@ -1,7 +1,7 @@
 {% extends 'base.html' %}
 {% load crispy_forms_tags %}
 
-{% block title %}Generar Correo{% endblock %}
+{% block title %}Generar Correo de Novedades{% endblock %}
 
 {% block content %}
 <h2>Generar Correo de Novedades</h2>
@@ -10,8 +10,81 @@
 
 <form method="post">
     {% csrf_token %}
-    {{ form|crispy }}
+    
+    {{ form.company|as_crispy_field }}
+    
+    <div id="div_id_updates" class="mb-3">
+        <label for="id_updates" class="form-label">Novedades a Incluir*</label>
+        <div id="updates-checkbox-container" class="form-check">
+            <p class="text-muted small mt-2">Seleccione una empresa para ver sus novedades.</p>
+        </div>
+    </div>
+    
+    {{ form.observations|as_crispy_field }}
+    
     <button type="submit" class="btn btn-primary mt-3">Guardar y Enviar a Aprobación</button>
     <a href="{% url 'operator_dashboard' %}" class="btn btn-secondary mt-3">Cancelar</a>
 </form>
+{% endblock %}
+
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const companySelect = document.getElementById('id_company');
+    const updatesContainer = document.getElementById('updates-checkbox-container');
+
+    companySelect.addEventListener('change', function() {
+        const companyId = this.value;
+        // Limpia las novedades anteriores y muestra mensaje de carga
+        updatesContainer.innerHTML = '<p class="text-muted small mt-2">Cargando novedades...</p>';
+
+        if (!companyId) {
+            updatesContainer.innerHTML = '<p class="text-muted small mt-2">Seleccione una empresa para ver sus novedades.</p>';
+            return;
+        }
+
+        // Petición al servidor para obtener las novedades de la empresa seleccionada
+        const url = `/ajax/get-updates/${companyId}/`;
+        fetch(url)
+            .then(response => response.json())
+            .then(data => {
+                // Limpia el contenedor
+                updatesContainer.innerHTML = '';
+                
+                if (data.updates && data.updates.length > 0) {
+                    data.updates.forEach(update => {
+                        const div = document.createElement('div');
+                        div.classList.add('form-check');
+                        
+                        const input = document.createElement('input');
+                        input.type = 'checkbox';
+                        input.name = 'updates';
+                        input.value = update.id;
+                        input.classList.add('form-check-input');
+                        input.id = `id_updates_${update.id}`;
+                        
+                        const label = document.createElement('label');
+                        label.classList.add('form-check-label');
+                        label.htmlFor = `id_updates_${update.id}`;
+                        label.textContent = update.text;
+                        
+                        div.appendChild(input);
+                        div.appendChild(label);
+                        updatesContainer.appendChild(div);
+                    });
+                } else {
+                    updatesContainer.innerHTML = '<p class="text-muted small mt-2">Esta empresa no tiene novedades registradas.</p>';
+                }
+            })
+            .catch(error => {
+                console.error('Error al cargar las novedades:', error);
+                updatesContainer.innerHTML = '<p class="text-danger small mt-2">No se pudieron cargar las novedades.</p>';
+            });
+    });
+
+    // Dispara el evento 'change' al cargar la página para inicializar el campo
+    companySelect.dispatchEvent(new Event('change'));
+});
+</script>
 {% endblock %}
