@@ -36,6 +36,10 @@ urlpatterns = [
     path('dashboard/installations/edit/<int:installation_id>/', views.edit_installation, name='edit_installation'),
     path('dashboard/installations/delete/<int:installation_id>/', views.delete_installation, name='delete_installation'),
     # 👆 HASTA AQUÍ 👆
+    path('dashboard/monitored-services/', views.manage_monitored_services, name='manage_monitored_services'),
+    path('dashboard/monitored-services/add/', views.create_monitored_service, name='create_monitored_service'),
+    path('dashboard/monitored-services/edit/<int:service_id>/', views.edit_monitored_service, name='edit_monitored_service'),
+    path('dashboard/monitored-services/delete/<int:service_id>/', views.delete_monitored_service, name='delete_monitored_service'),
         # 👇 AÑADE ESTA RUTA PARA LA RONDA VIRTUAL 👇
     path('log-virtual-round/', views.log_virtual_round, name='log_virtual_round'),
 ]

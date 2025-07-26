@@ -16,6 +16,29 @@
         </div>
     </div>
 
+    <div class="card mb-4">
+        <div class="card-header">
+            <h5 class="mb-0">Estado de Servicios Críticos</h5>
+        </div>
+        <div class="card-body p-2">
+            <ul class="list-group list-group-horizontal-lg">
+                {% for service in service_status_list %}
+                <li class="list-group-item flex-fill d-flex justify-content-between align-items-center">
+                    {{ service.name }}
+                    {% if service.status is True %}
+                        <span class="badge bg-success rounded-pill"><i class="fas fa-check-circle"></i> Activo</span>
+                    {% elif service.status is False %}
+                        <span class="badge bg-danger rounded-pill"><i class="fas fa-exclamation-triangle"></i> Caído</span>
+                    {% else %}
+                        <span class="badge bg-secondary rounded-pill"><i class="fas fa-question-circle"></i> Pendiente</span>
+                    {% endif %}
+                </li>
+                {% empty %}
+                <li class="list-group-item flex-fill">No hay servicios monitoreados.</li>
+                {% endfor %}
+            </ul>
+        </div>
+    </div>
     <p class="lead mb-4">Elija una opción para continuar con su turno.</p>
     
     <div class="row g-4 justify-content-center">
@@ -54,7 +77,7 @@
                 </div>
             </a>
         </div>
-        </div>
+    </div>
 </div>
 
 <div class="modal fade" id="roundNotificationModal" tabindex="-1" aria-labelledby="modalLabel" aria-hidden="true">

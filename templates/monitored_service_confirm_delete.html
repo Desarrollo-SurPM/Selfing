@@ -1,0 +1,11 @@
+{% extends 'base.html' %}
+{% block title %}Confirmar Eliminación{% endblock %}
+{% block content %}
+<h2>¿Estás seguro?</h2>
+<p>Estás a punto de eliminar el servicio monitoreado: <strong>"{{ service.name }}"</strong>.</p>
+<form method="post">
+    {% csrf_token %}
+    <button type="submit" class="btn btn-danger">Sí, eliminar</button>
+    <a href="{% url 'manage_monitored_services' %}" class="btn btn-secondary">Cancelar</a>
+</form>
+{% endblock %}

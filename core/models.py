@@ -78,3 +78,21 @@ class TraceabilityLog(models.Model):
     timestamp = models.DateTimeField(auto_now_add=True)
     def __str__(self):
         return f"{self.user.username} - {self.action} a las {self.timestamp}"
+
+class MonitoredService(models.Model):
+    name = models.CharField(max_length=100, unique=True, help_text="Ej: Conexión a Internet, Servidor de Archivos")
+    ip_address = models.CharField(max_length=100, help_text="Dirección IP o dominio a monitorear")
+    is_active = models.BooleanField(default=True, help_text="Marcar para activar el monitoreo de este servicio")
+
+    def __str__(self):
+        return self.name
+
+class ServiceStatusLog(models.Model):
+    service = models.ForeignKey(MonitoredService, on_delete=models.CASCADE, related_name='logs')
+    is_up = models.BooleanField()
+    timestamp = models.DateTimeField(auto_now_add=True)
+    response_time = models.FloatField(null=True, blank=True, help_text="Tiempo de respuesta en ms")
+
+    def __str__(self):
+        status = "Activo" if self.is_up else "Caído"
+        return f"{self.service.name} - {status} a las {self.timestamp.strftime('%Y-%m-%d %H:%M:%S')}"

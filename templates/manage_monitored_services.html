@@ -1,0 +1,28 @@
+{% extends 'base.html' %}
+{% block title %}Gestionar Servicios Monitoreados{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h2>Servicios Monitoreados</h2>
+    <a href="{% url 'create_monitored_service' %}" class="btn btn-success">Añadir Servicio</a>
+</div>
+<div class="list-group">
+    {% for service in services %}
+    <div class="list-group-item d-flex justify-content-between align-items-center">
+        <div>
+            <h5 class="mb-1">{{ service.name }}</h5>
+            <small class="text-muted">{{ service.ip_address }}</small>
+        </div>
+        <div>
+            <span class="badge bg-{% if service.is_active %}success{% else %}secondary{% endif %} me-3">
+                {% if service.is_active %}Monitoreo Activo{% else %}Inactivo{% endif %}
+            </span>
+            <a href="{% url 'edit_monitored_service' service.id %}" class="btn btn-sm btn-warning">Editar</a>
+            <a href="{% url 'delete_monitored_service' service.id %}" class="btn btn-sm btn-danger">Eliminar</a>
+        </div>
+    </div>
+    {% empty %}
+    <p class="text-center">No hay servicios configurados para monitorear.</p>
+    {% endfor %}
+</div>
+<a href="{% url 'admin_dashboard' %}" class="btn btn-secondary mt-3">Volver al Dashboard</a>
+{% endblock %}

@@ -4,10 +4,10 @@ from django.contrib.auth.models import User
 from django.http import JsonResponse
 from django.utils import timezone
 from django import forms  # Importación añadida para usar widgets de formulario
-from .models import Company, Installation, ChecklistItem, ChecklistLog, UpdateLog, Email, TraceabilityLog
+from .models import Company, Installation, ChecklistItem, ChecklistLog, UpdateLog, Email, TraceabilityLog, MonitoredService
 from .forms import (
     UpdateLogForm, EmailForm, OperatorCreationForm, OperatorChangeForm, EmailApprovalForm,
-    CompanyForm, InstallationForm, ChecklistItemForm
+    CompanyForm, InstallationForm, ChecklistItemForm, MonitoredServiceForm,
 )
 
 def is_supervisor(user):
@@ -26,13 +26,27 @@ def home(request):
 @login_required
 @user_passes_test(is_supervisor)
 def admin_dashboard(request):
-    reports = UpdateLog.objects.all().order_by('-created_at')
+    reports = UpdateLog.objects.all().order_by('-created_at')[:20]
     pending_emails = Email.objects.filter(status='pending').order_by('-created_at')
     traceability_logs = TraceabilityLog.objects.all().order_by('-timestamp')[:20]
+
+    # --- LÓGICA AÑADIDA PARA EL PANEL DE ESTADO ---
+    monitored_services = MonitoredService.objects.filter(is_active=True)
+    status_list = []
+    for service in monitored_services:
+        # Obtenemos el último registro de estado para cada servicio
+        latest_log = service.logs.order_by('-timestamp').first()
+        status_list.append({
+            'name': service.name,
+            'status': latest_log.is_up if latest_log else None, # 'None' si nunca se ha chequeado
+            'last_checked': latest_log.timestamp if latest_log else None
+        })
+
     context = {
         'reports': reports,
         'pending_emails': pending_emails,
         'traceability_logs': traceability_logs,
+        'service_status_list': status_list # Pasamos la lista a la plantilla
     }
     return render(request, 'admin_dashboard.html', context)
 
@@ -241,7 +255,20 @@ def delete_checklist_item(request, item_id):
 
 @login_required
 def operator_dashboard(request):
-    return render(request, 'operator_dashboard.html')
+    # --- LÓGICA AÑADIDA PARA EL PANEL DE ESTADO ---
+    monitored_services = MonitoredService.objects.filter(is_active=True)
+    status_list = []
+    for service in monitored_services:
+        latest_log = service.logs.order_by('-timestamp').first()
+        status_list.append({
+            'name': service.name,
+            'status': latest_log.is_up if latest_log else None
+        })
+
+    context = {
+        'service_status_list': status_list
+    }
+    return render(request, 'operator_dashboard.html', context)
 
 @login_required
 def checklist_view(request):
@@ -385,3 +412,43 @@ def review_and_approve_email(request, email_id):
         'updates_list': email.updates.all() # Pasa las novedades seleccionadas a la plantilla
     }
     return render(request, 'review_email.html', context)
+
+@login_required
+@user_passes_test(is_supervisor)
+def manage_monitored_services(request):
+    services = MonitoredService.objects.all()
+    return render(request, 'manage_monitored_services.html', {'services': services})
+
+@login_required
+@user_passes_test(is_supervisor)
+def create_monitored_service(request):
+    if request.method == 'POST':
+        form = MonitoredServiceForm(request.POST)
+        if form.is_valid():
+            form.save()
+            return redirect('manage_monitored_services')
+    else:
+        form = MonitoredServiceForm()
+    return render(request, 'monitored_service_form.html', {'form': form, 'title': 'Añadir Servicio a Monitorear'})
+
+@login_required
+@user_passes_test(is_supervisor)
+def edit_monitored_service(request, service_id):
+    service = get_object_or_404(MonitoredService, id=service_id)
+    if request.method == 'POST':
+        form = MonitoredServiceForm(request.POST, instance=service)
+        if form.is_valid():
+            form.save()
+            return redirect('manage_monitored_services')
+    else:
+        form = MonitoredServiceForm(instance=service)
+    return render(request, 'monitored_service_form.html', {'form': form, 'title': 'Editar Servicio Monitoreado'})
+
+@login_required
+@user_passes_test(is_supervisor)
+def delete_monitored_service(request, service_id):
+    service = get_object_or_404(MonitoredService, id=service_id)
+    if request.method == 'POST':
+        service.delete()
+        return redirect('manage_monitored_services')
+    return render(request, 'monitored_service_confirm_delete.html', {'service': service})

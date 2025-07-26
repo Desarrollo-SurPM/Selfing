@@ -27,6 +27,7 @@ INSTALLED_APPS = [
     # Librerías de terceros
     'crispy_forms',
     'crispy_bootstrap5',
+    'django_apscheduler',
 ]
 
 CRISPY_ALLOWED_TEMPLATE_PACKS = "bootstrap5"

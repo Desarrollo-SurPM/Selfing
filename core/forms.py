@@ -1,7 +1,7 @@
 from django import forms
 from django.contrib.auth.forms import UserCreationForm
 from django.contrib.auth.models import User
-from .models import UpdateLog, Email, ChecklistItem, Company, Installation
+from .models import UpdateLog, Email, ChecklistItem, Company, Installation, MonitoredService
 
 class UpdateLogForm(forms.ModelForm):
     class Meta:
@@ -77,3 +77,13 @@ class ChecklistItemForm(forms.ModelForm):
     class Meta:
         model = ChecklistItem
         fields = ['description']
+
+class MonitoredServiceForm(forms.ModelForm):
+    class Meta:
+        model = MonitoredService
+        fields = ['name', 'ip_address', 'is_active']
+        labels = {
+            'name': 'Nombre del Servicio',
+            'ip_address': 'Dirección IP o Dominio',
+            'is_active': '¿Activar monitoreo para este servicio?'
+        }
