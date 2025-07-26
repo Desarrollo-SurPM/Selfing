@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Reporte de Turno</title>
+    <style>
+        @page { size: a4 portrait; margin: 2cm; }
+        body { font-family: sans-serif; font-size: 11pt; }
+        h1, h2, h3 { color: #333; }
+        h1 { font-size: 24pt; text-align: center; }
+        h2 { font-size: 16pt; border-bottom: 1px solid #ccc; padding-bottom: 5px; margin-top: 25px; }
+        table { width: 100%; border-collapse: collapse; margin-top: 15px; }
+        th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+        th { background-color: #f2f2f2; }
+        .footer { position: fixed; bottom: 0; left: 0; right: 0; text-align: center; font-size: 9pt; color: #777; }
+        .signature { margin-top: 80px; text-align: center; font-size: 12pt; }
+        .signature-line { border-top: 1px solid #000; width: 250px; margin: 0 auto; padding-top: 5px; }
+    </style>
+</head>
+<body>
+    <h1>Reporte de Turno</h1>
+
+    <h3>Operador: {{ operator.get_full_name|default:operator.username }}</h3>
+    <p><strong>Inicio del Turno:</strong> {{ start_time|date:"d/m/Y H:i" }}</p>
+    <p><strong>Fin del Turno:</strong> {{ end_time|date:"d/m/Y H:i" }}</p>
+
+    <h2>Checklist Completado</h2>
+    {% if completed_checklist %}
+        <ul>
+        {% for log in completed_checklist %}
+            <li>({{ log.completed_at|date:"H:i" }}) - {{ log.item.description }}</li>
+        {% endfor %}
+        </ul>
+    {% else %}
+        <p>No se completaron tareas del checklist en este turno.</p>
+    {% endif %}
+    
+    <h2>Rondas Virtuales Confirmadas</h2>
+    {% if rondas_virtuales %}
+        <ul>
+        {% for ronda in rondas_virtuales %}
+            <li>Ronda confirmada a las <strong>{{ ronda.completed_at|date:"H:i:s" }} hrs.</strong></li>
+        {% endfor %}
+        </ul>
+    {% else %}
+        <p>No se confirmaron rondas virtuales en este turno.</p>
+    {% endif %}
+    <h2>Bitácora de Novedades</h2>
+    {% if updates_log %}
+        <table>
+            <thead>
+                <tr>
+                    <th>Hora</th>
+                    <th>Instalación</th>
+                    <th>Novedad</th>
+                </tr>
+            </thead>
+            <tbody>
+            {% for update in updates_log %}
+                <tr>
+                    <td>{{ update.created_at|date:"H:i" }}</td>
+                    <td>{{ update.installation.name }} ({{ update.installation.company.name }})</td>
+                    <td>{{ update.message }}</td>
+                </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    {% else %}
+        <p>No se registraron novedades en este turno.</p>
+    {% endif %}
+
+    <div class="signature">
+        <p>Aprobado y Firmado Digitalmente</p>
+        <p class="signature-line">{{ operator.get_full_name|default:operator.username }}</p>
+    </div>
+
+    <div class="footer">
+        Generado por Plataforma de Control Selfing - Página <pdf:page> de <pdf:pagenumber>
+    </div>
+</body>
+</html>

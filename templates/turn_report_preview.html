@@ -1,0 +1,27 @@
+{% extends 'base.html' %}
+{% block title %}Finalizar Turno{% endblock %}
+{% block content %}
+<div class="container">
+    <div class="text-center">
+        <h2 class="h3">Revisión y Firma del Reporte de Turno</h2>
+        <p class="lead text-muted">Por favor, revise el reporte de su turno. Al presionar "Aprobar y Finalizar", su turno se cerrará y su sesión terminará.</p>
+    </div>
+
+    <div class="card my-4">
+        <div class="card-header">
+            <h4>Reporte de Turno - {{ report.operator.get_full_name|default:report.operator.username }}</h4>
+        </div>
+        <div class="card-body">
+            <iframe src="{{ report.pdf_report.url }}" width="100%" height="600px" style="border: 1px solid #ccc;"></iframe>
+        </div>
+    </div>
+
+    <form method="post" class="text-center">
+        {% csrf_token %}
+        <a href="{% url 'operator_dashboard' %}" class="btn btn-secondary">Cancelar y Volver al Panel</a>
+        <button type="submit" class="btn btn-success btn-lg">
+            <i class="fas fa-check-circle me-2"></i>Aprobar y Finalizar Turno
+        </button>
+    </form>
+</div>
+{% endblock %}

@@ -96,3 +96,14 @@ class ServiceStatusLog(models.Model):
     def __str__(self):
         status = "Activo" if self.is_up else "Caído"
         return f"{self.service.name} - {status} a las {self.timestamp.strftime('%Y-%m-%d %H:%M:%S')}"
+
+class TurnReport(models.Model):
+    operator = models.ForeignKey(User, on_delete=models.CASCADE, related_name='turn_reports')
+    start_time = models.DateTimeField()
+    end_time = models.DateTimeField(auto_now_add=True)
+    pdf_report = models.FileField(upload_to='turn_reports/%Y/%m/%d/')
+    is_signed = models.BooleanField(default=False)
+    signed_at = models.DateTimeField(null=True, blank=True)
+
+    def __str__(self):
+        return f"Reporte de {self.operator.username} - {self.end_time.strftime('%Y-%m-%d %H:%M')}"

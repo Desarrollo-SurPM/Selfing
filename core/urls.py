@@ -42,4 +42,11 @@ urlpatterns = [
     path('dashboard/monitored-services/delete/<int:service_id>/', views.delete_monitored_service, name='delete_monitored_service'),
         # 👇 AÑADE ESTA RUTA PARA LA RONDA VIRTUAL 👇
     path('log-virtual-round/', views.log_virtual_round, name='log_virtual_round'),
+
+        # 👇 --- AÑADE ESTAS RUTAS PARA EL REPORTE DE TURNO --- 👇
+    path('turn/end/', views.end_turn_preview, name='end_turn_preview'),
+    path('turn/sign/<int:report_id>/', views.sign_turn_report, name='sign_turn_report'),
+
+    # 👇 AÑADE ESTA RUTA PARA VER LOS REPORTES 👇
+    path('dashboard/turn-reports/', views.view_turn_reports, name='view_turn_reports'),
 ]
