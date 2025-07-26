@@ -1,106 +1,146 @@
 {% extends 'base.html' %}
 
-{% block title %}Dashboard Administrador{% endblock %}
+{% block title %}Dashboard de Administración{% endblock %}
 
 {% block content %}
-<h2>Dashboard de Administración</h2>
-<hr>
+<h2 class="mb-4">Dashboard de Administración</h2>
 
-<div class="card mb-4">
-    <div class="card-header">
-        <h4>Gestión del Sistema</h4>
-    </div>
-    <div class="card-body">
-        <a href="{% url 'manage_operators' %}" class="btn btn-primary">Gestionar Operadores</a>
-        <a href="{% url 'manage_companies' %}" class="btn btn-info">Gestionar Empresas Cliente</a>
-        <a href="{% url 'manage_checklist_items' %}" class="btn btn-secondary">Gestionar Checklist</a>
-        <a href="{% url 'manage_monitored_services' %}" class="btn btn-dark">Monitoreo de Servicios</a>
-    </div>
-</div>
-
-<div class="card mb-4">
-    <div class="card-header">
-        <h4><i class="fas fa-network-wired me-2"></i>Estado de Servicios Monitoreados</h4>
-    </div>
-    <div class="card-body">
-        <ul class="list-group list-group-flush">
-            {% for service in service_status_list %}
-                <li class="list-group-item d-flex justify-content-between align-items-center">
-                    {{ service.name }}
-                    <span>
-                        {% if service.status is True %}
-                            <span class="badge bg-success rounded-pill">Activo</span>
-                        {% elif service.status is False %}
-                            <span class="badge bg-danger rounded-pill">Caído</span>
-                        {% else %}
-                            <span class="badge bg-secondary rounded-pill">Pendiente</span>
-                        {% endif %}
-                    </span>
-                </li>
-            {% empty %}
-                <li class="list-group-item">No hay servicios configurados para monitorear.</li>
-            {% endfor %}
-        </ul>
-    </div>
-</div>
-
-<div class="row">
-    </div>
-
-<div class="row">
-    <div class="col-md-8">
-        <h3>Reportes de Novedades</h3>
-        <table class="table table-striped table-hover table-sm">
-            <thead>
-                <tr>
-                    <th>Fecha</th>
-                    <th>Operador</th>
-                    <th>Empresa / Instalación</th>
-                    <th>Novedad</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for report in reports %}
-                <tr>
-                    <td>{{ report.created_at|date:"d/m/Y H:i" }}</td>
-                    <td>{{ report.operator.username }}</td>
-                    <td>
-                        <strong>{{ report.installation.company.name }}</strong>
-                        <br>
-                        <small class="text-muted">{{ report.installation.name }}</small>
-                    </td>
-                    <td>{{ report.message }}</td>
-                </tr>
-                {% empty %}
-                <tr>
-                    <td colspan="4" class="text-center">No hay novedades registradas.</td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
-    </div>
-    <div class="col-md-4">
-        <h3>Correos para Aprobar</h3>
-        {% for email in pending_emails %}
-        <div class="card mb-2">
+<div class="row g-4 mb-4">
+    <div class="col-md-3">
+        <div class="card kpi-card text-center shadow-sm">
             <div class="card-body">
-                <h5 class="card-title">Correo para: {{ email.company.name }}</h5>
-                <p class="card-text">Creado por: {{ email.operator.username }}</p>
-                <a href="{% url 'review_email' email.id %}" class="btn btn-success btn-sm">Revisar y Aprobar</a>
+                <i class="fas fa-book fa-2x text-primary mb-2"></i>
+                <h3 class="card-title">{{ novedades_hoy }}</h3>
+                <p class="card-text text-muted">Novedades Hoy</p>
             </div>
         </div>
-        {% empty %}
-        <p>No hay correos pendientes.</p>
-        {% endfor %}
-        
-        <h3 class="mt-4">Actividad Reciente</h3>
-        <ul class="list-group">
-            {% for log in traceability_logs %}
-            <li class="list-group-item">{{ log.action }} - {{ log.timestamp|date:"H:i" }}</li>
-            {% empty %}
-            <li class="list-group-item">No hay actividad reciente.</li>
-            {% endfor %}
-        </ul>
+    </div>
+    <div class="col-md-3">
+        <div class="card kpi-card text-center shadow-sm">
+            <div class="card-body">
+                <i class="fas fa-envelope-open-text fa-2x text-warning mb-2"></i>
+                <h3 class="card-title">{{ correos_pendientes_count }}</h3>
+                <p class="card-text text-muted">Correos Pendientes</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card kpi-card text-center shadow-sm">
+            <div class="card-body">
+                <i class="fas fa-users fa-2x text-info mb-2"></i>
+                <h3 class="card-title">{{ operadores_activos }}</h3>
+                <p class="card-text text-muted">Operadores Activos</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card kpi-card text-center shadow-sm">
+            <div class="card-body">
+                <i class="fas fa-network-wired fa-2x text-success mb-2"></i>
+                <h3 class="card-title">{{ servicios_monitoreados_activos }}</h3>
+                <p class="card-text text-muted">Servicios Monitoreados</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row g-4">
+
+    <div class="col-lg-8">
+        <div class="card shadow-sm mb-4">
+            <div class="card-header">
+                <h5 class="mb-0">Gestión del Sistema</h5>
+            </div>
+            <div class="card-body">
+                <a href="{% url 'manage_operators' %}" class="btn btn-primary">Gestionar Operadores</a>
+                <a href="{% url 'manage_companies' %}" class="btn btn-info">Gestionar Empresas</a>
+                <a href="{% url 'manage_checklist_items' %}" class="btn btn-secondary">Gestionar Checklist</a>
+                <a href="{% url 'manage_monitored_services' %}" class="btn btn-dark">Monitoreo de Servicios</a>
+            </div>
+        </div>
+
+        <div class="card shadow-sm">
+            <div class="card-header">
+                <h5 class="mb-0">Reporte de Novedades del Día</h5>
+            </div>
+            <div class="table-responsive">
+                <table class="table table-hover mb-0">
+                    <thead>
+                        <tr>
+                            <th>Hora</th>
+                            <th>Operador</th>
+                            <th>Empresa / Instalación</th>
+                            <th>Novedad</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for report in reports %}
+                        <tr>
+                            <td>{{ report.created_at|date:"H:i" }}</td>
+                            <td>{{ report.operator.username }}</td>
+                            <td>
+                                <strong>{{ report.installation.company.name }}</strong>
+                                <br><small class="text-muted">{{ report.installation.name }}</small>
+                            </td>
+                            <td>{{ report.message }}</td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="4" class="text-center py-4">No hay novedades registradas hoy.</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-4">
+        <div class="card shadow-sm mb-4">
+            <div class="card-header"><h5 class="mb-0">Estado de Servicios</h5></div>
+            <ul class="list-group list-group-flush">
+                {% for service in service_status_list %}
+                <li class="list-group-item d-flex justify-content-between align-items-center">
+                    {{ service.name }}
+                    {% if service.status is True %}<span class="badge bg-success">Activo</span>
+                    {% elif service.status is False %}<span class="badge bg-danger">Caído</span>
+                    {% else %}<span class="badge bg-secondary">Pendiente</span>{% endif %}
+                </li>
+                {% empty %}
+                <li class="list-group-item">No hay servicios activos.</li>
+                {% endfor %}
+            </ul>
+        </div>
+
+        <div class="card shadow-sm mb-4">
+            <div class="card-header"><h5 class="mb-0">Correos por Aprobar</h5></div>
+            <div class="list-group list-group-flush">
+                {% for email in pending_emails %}
+                <a href="{% url 'review_email' email.id %}" class="list-group-item list-group-item-action">
+                    <div class="d-flex w-100 justify-content-between">
+                        <h6 class="mb-1"><strong>{{ email.company.name }}</strong></h6>
+                        <small>{{ email.created_at|timesince }} ago</small>
+                    </div>
+                    <small>Enviado por: {{ email.operator.username }}</small>
+                </a>
+                {% empty %}
+                <div class="list-group-item">No hay correos pendientes.</div>
+                {% endfor %}
+            </div>
+        </div>
+
+        <div class="card shadow-sm">
+            <div class="card-header"><h5 class="mb-0">Actividad Reciente (Últimas 6)</h5></div>
+            <ul class="list-group list-group-flush">
+                {% for log in traceability_logs %}
+                <li class="list-group-item">
+                    <small>{{ log.action }} <span class="text-muted">- {{ log.timestamp|timesince }} ago</span></small>
+                </li>
+                {% empty %}
+                <li class="list-group-item">No hay actividad reciente.</li>
+                {% endfor %}
+            </ul>
+        </div>
     </div>
 </div>
 {% endblock %}

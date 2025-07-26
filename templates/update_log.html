@@ -1,45 +1,61 @@
 {% extends 'base.html' %}
 {% load crispy_forms_tags %}
 
-{% block title %}Registrar Novedad{% endblock %}
+{% block title %}Registrar Novedad en Bitácora{% endblock %}
 
 {% block content %}
-<div class="container text-center">
-    <h2 class="mb-3">Registrar Novedad en Bitácora</h2>
+<div class="container">
+    <div class="text-center mb-4">
+        <h2 class="h3">Registrar Novedad en Bitácora</h2>
+        <p class="text-muted">Siga los pasos para registrar un nuevo evento.</p>
+    </div>
 
     <div id="company-selection">
-        <p class="lead">Paso 1: Seleccione la empresa.</p>
+        <h4 class="mb-3 fw-normal">Paso 1: Seleccione la Empresa</h4>
         <div class="row g-4 justify-content-center">
             {% for company in companies %}
             <div class="col-md-3">
                 <div class="card h-100 card-option company-card" data-company-id="{{ company.id }}" data-company-name="{{ company.name }}">
-                    <div class="card-body d-flex flex-column justify-content-center">
-                        <i class="fas fa-building fa-2x mb-2"></i>
-                        <h5 class="card-title">{{ company.name }}</h5>
+                    <div class="card-body d-flex flex-column justify-content-center align-items-center">
+                        <i class="fas fa-building fa-3x text-primary mb-3"></i>
+                        <h5 class="card-title h6">{{ company.name }}</h5>
                     </div>
                 </div>
             </div>
             {% endfor %}
         </div>
+        <div class="text-center mt-4">
+            <a href="{% url 'operator_dashboard' %}" class="btn btn-outline-secondary">
+                <i class="fas fa-arrow-left me-2"></i>Volver al Panel
+            </a>
+        </div>
     </div>
 
     <div id="installation-selection" style="display: none;">
         <hr class="my-4">
-        <p class="lead">Paso 2: Seleccione la instalación para <strong></strong>.</p>
+        <h4 class="mb-3 fw-normal">Paso 2: Seleccione la Instalación para <strong id="company-name-for-installations"></strong></h4>
         <div id="installation-list" class="row g-4 justify-content-center">
             </div>
-        <button type="button" class="btn btn-secondary mt-4 back-to-companies">Volver a Empresas</button>
+        <div class="text-center mt-4">
+            <button type="button" class="btn btn-outline-secondary back-to-companies">
+                <i class="fas fa-arrow-left me-2"></i>Volver a Empresas
+            </button>
+        </div>
     </div>
 
     <div id="update-form-container" style="display: none;">
         <hr class="my-4">
-        <p class="lead">Paso 3: Escriba la novedad para <strong></strong>.</p>
-        <form method="post" class="text-start">
-            {% csrf_token %}
-            {{ form.installation|as_crispy_field }}
-            {{ form.message|as_crispy_field }}
-            <button type="submit" class="btn btn-primary mt-3">Guardar Novedad</button>
-            <button type="button" class="btn btn-secondary mt-3 back-to-installations">Volver a Instalaciones</button>
+        <h4 class="mb-3 fw-normal">Paso 3: Describa la Novedad para <strong id="installation-name-for-form"></strong></h4>
+        <form method="post" class="card shadow-sm">
+            <div class="card-body">
+                {% csrf_token %}
+                {{ form.installation|as_crispy_field }}
+                {{ form.message|as_crispy_field }}
+                <div class="d-flex justify-content-end mt-3">
+                    <button type="button" class="btn btn-outline-secondary me-2 back-to-installations">Volver</button>
+                    <button type="submit" class="btn btn-primary">Guardar Novedad</button>
+                </div>
+            </div>
         </form>
     </div>
 </div>
@@ -47,17 +63,23 @@
 <script id="installations-data" type="application/json">
 {
     {% for company in companies %}
-        "{{ company.id }}": [
-            {% for installation in company.installations.all %}
-                { "id": "{{ installation.id }}", "name": "{{ installation.name }}" }
-                {% if not forloop.last %},{% endif %}
-            {% endfor %}
-        ]
+        "{{ company.id }}": {
+            "name": "{{ company.name }}",
+            "installations": [
+                {% for installation in company.installations.all %}
+                    { "id": "{{ installation.id }}", "name": "{{ installation.name }}" }
+                    {% if not forloop.last %},{% endif %}
+                {% endfor %}
+            ]
+        }
         {% if not forloop.last %},{% endif %}
     {% endfor %}
 }
 </script>
+{% endblock %}
 
+
+{% block extra_js %}
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     const installationsData = JSON.parse(document.getElementById('installations-data').textContent);
@@ -68,73 +90,73 @@ document.addEventListener('DOMContentLoaded', function() {
 
     const installationListDiv = document.getElementById('installation-list');
     const hiddenInstallationInput = document.querySelector('input[name="installation"]');
+    
+    let currentCompanyId = null;
 
     // --- MANEJO DE CLICS ---
     document.body.addEventListener('click', function(e) {
-        // Clic en una tarjeta de EMPRESA
-        if (e.target.closest('.company-card')) {
-            const card = e.target.closest('.company-card');
-            const companyId = card.dataset.companyId;
-            const companyName = card.dataset.companyName;
-            const companyInstallations = installationsData[companyId];
+        const companyCard = e.target.closest('.company-card');
+        const installationCard = e.target.closest('.installation-card');
+        const backToCompaniesBtn = e.target.closest('.back-to-companies');
+        const backToInstallationsBtn = e.target.closest('.back-to-installations');
 
-            if (companyInstallations && companyInstallations.length > 1) {
-                // Si hay MÁS de una instalación, muestra la lista de instalaciones
-                populateInstallations(companyId, companyName);
-                showSection('installations');
-            } else if (companyInstallations && companyInstallations.length === 1) {
-                // Si hay SOLO una instalación, salta directo al formulario
-                const installation = companyInstallations[0];
-                setupForm(installation.id, `${installation.name} (${companyName})`);
-                showSection('form');
-            } else {
-                // Si no hay instalaciones, no se puede anotar novedad
-                alert(`La empresa '${companyName}' no tiene instalaciones registradas. Por favor, pida al administrador que las añada.`);
-            }
-        }
-
-        // Clic en una tarjeta de INSTALACIÓN
-        if (e.target.closest('.installation-card')) {
-            const card = e.target.closest('.installation-card');
-            const installationId = card.dataset.installationId;
-            const installationName = card.dataset.installationName;
-            setupForm(installationId, installationName);
-            showSection('form');
-        }
-        
-        // Clic en botones de "VOLVER"
-        if (e.target.matches('.back-to-companies')) {
+        if (companyCard) {
+            handleCompanySelection(companyCard);
+        } else if (installationCard) {
+            handleInstallationSelection(installationCard);
+        } else if (backToCompaniesBtn) {
             showSection('companies');
-        }
-        if (e.target.matches('.back-to-installations')) {
+        } else if (backToInstallationsBtn) {
+            // Re-popula las instalaciones de la empresa actual antes de mostrar
+            const companyName = installationsData[currentCompanyId].name;
+            populateInstallations(currentCompanyId, companyName);
             showSection('installations');
         }
     });
 
-    // --- FUNCIONES AUXILIARES ---
-    function populateInstallations(companyId, companyName) {
-        installationListDiv.innerHTML = ''; // Limpia la lista anterior
-        const companyInstallations = installationsData[companyId] || [];
+    // --- FUNCIONES LÓGICAS ---
+    function handleCompanySelection(card) {
+        currentCompanyId = card.dataset.companyId;
+        const companyData = installationsData[currentCompanyId];
+        const companyName = companyData.name;
+        const companyInstallations = companyData.installations;
+
+        if (companyInstallations && companyInstallations.length > 0) {
+            populateInstallations(currentCompanyId, companyName);
+            showSection('installations');
+        } else {
+            alert(`La empresa '${companyName}' no tiene instalaciones registradas.`);
+        }
+    }
+
+    function handleInstallationSelection(card) {
+        const installationId = card.dataset.installationId;
+        const installationName = card.dataset.installationName;
+        const companyName = installationsData[currentCompanyId].name;
         
+        hiddenInstallationInput.value = installationId;
+        document.getElementById('installation-name-for-form').textContent = `${installationName} (${companyName})`;
+        showSection('form');
+    }
+    
+    function populateInstallations(companyId, companyName) {
+        installationListDiv.innerHTML = '';
+        const companyInstallations = installationsData[companyId].installations;
+        document.getElementById('company-name-for-installations').textContent = companyName;
+
         companyInstallations.forEach(inst => {
             installationListDiv.innerHTML += `
                 <div class="col-md-3">
                     <div class="card h-100 card-option installation-card" 
                          data-installation-id="${inst.id}" 
-                         data-installation-name="${inst.name} (${companyName})">
-                        <div class="card-body d-flex flex-column justify-content-center">
-                            <i class="fas fa-warehouse fa-2x mb-2"></i>
-                            <h5 class="card-title">${inst.name}</h5>
+                         data-installation-name="${inst.name}">
+                        <div class="card-body d-flex flex-column justify-content-center align-items-center">
+                            <i class="fas fa-warehouse fa-3x text-primary mb-3"></i>
+                            <h5 class="card-title h6">${inst.name}</h5>
                         </div>
                     </div>
                 </div>`;
         });
-        installationSelectionDiv.querySelector('strong').textContent = companyName;
-    }
-    
-    function setupForm(installationId, fullInstallationName) {
-        hiddenInstallationInput.value = installationId;
-        formContainer.querySelector('strong').textContent = fullInstallationName;
     }
     
     function showSection(sectionName) {

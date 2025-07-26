@@ -37,3 +37,22 @@ a.card-link {
 .card .list-group-flush .list-group-item:last-child {
     border-bottom: 0;
 }
+/* Estilos para las tarjetas de KPI */
+.kpi-card .card-body {
+    padding: 1.5rem;
+}
+
+.kpi-card h3 {
+    font-size: 2.5rem;
+    font-weight: 700;
+}
+
+/* Sombra suave para todas las tarjetas */
+.card.shadow-sm {
+    box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075) !important;
+}
+
+/* Eliminar borde de la tabla dentro de la tarjeta */
+.card .table {
+    border-top: 1px solid #dee2e6;
+}

@@ -4,35 +4,47 @@
 {% block title %}Generar Correo de Novedades{% endblock %}
 
 {% block content %}
-<h2>Generar Correo de Novedades</h2>
-<hr>
-<p>Selecciona una empresa para ver sus novedades y adjuntarlas al correo. Una vez guardado, se enviará al supervisor para su aprobación.</p>
+<div class="container">
+    <div class="row justify-content-center">
+        <div class="col-lg-8">
+            <div class="text-center mb-4">
+                <h2 class="h3">Generar Correo de Novedades</h2>
+                <p class="text-muted">Seleccione una empresa para adjuntar sus novedades al reporte.</p>
+            </div>
 
-<form method="post">
-    {% csrf_token %}
-    
-    {{ form.company|as_crispy_field }}
-    
-    <div id="div_id_updates" class="mt-3">
-        <label class="form-label">Novedades a Incluir*</label>
-        <div id="updates-accordion-container" class="accordion mt-2">
-            <div class="accordion-item">
-                <div class="accordion-header">
-                    <button class="accordion-button collapsed" type="button" disabled>
-                        <span class="text-muted">Seleccione una empresa para ver sus novedades.</span>
-                    </button>
+            <div class="card shadow-sm">
+                <div class="card-body p-4">
+                    <form method="post">
+                        {% csrf_token %}
+                        
+                        {{ form.company|as_crispy_field }}
+                        
+                        <div id="div_id_updates" class="mt-3">
+                            <label class="form-label fw-bold">Novedades a Incluir*</label>
+                            <div id="updates-accordion-container" class="accordion mt-2">
+                                <div class="accordion-item">
+                                    <div class="accordion-header">
+                                        <button class="accordion-button collapsed bg-light" type="button" disabled>
+                                            <span class="text-muted">Seleccione una empresa para ver sus novedades.</span>
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        {{ form.observations|as_crispy_field }}
+                        
+                        <div class="d-flex justify-content-end mt-4">
+                            <a href="{% url 'operator_dashboard' %}" class="btn btn-outline-secondary me-2">Cancelar</a>
+                            <button type="submit" class="btn btn-primary">Guardar y Enviar a Aprobación</button>
+                        </div>
+                    </form>
                 </div>
             </div>
         </div>
     </div>
-    
-    {{ form.observations|as_crispy_field }}
-    
-    <button type="submit" class="btn btn-primary mt-3">Guardar y Enviar a Aprobación</button>
-    <a href="{% url 'operator_dashboard' %}" class="btn btn-secondary mt-3">Cancelar</a>
-</form>
+</div>
 {% endblock %}
-
 
 {% block extra_js %}
 <script>

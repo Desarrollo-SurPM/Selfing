@@ -2,6 +2,7 @@ from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth.decorators import login_required, user_passes_test
 from django.contrib.auth.models import User
 from django.http import JsonResponse
+from datetime import timedelta
 from django.utils import timezone
 from django import forms  # Importación añadida para usar widgets de formulario
 from .models import Company, Installation, ChecklistItem, ChecklistLog, UpdateLog, Email, TraceabilityLog, MonitoredService
@@ -26,27 +27,43 @@ def home(request):
 @login_required
 @user_passes_test(is_supervisor)
 def admin_dashboard(request):
-    reports = UpdateLog.objects.all().order_by('-created_at')[:20]
-    pending_emails = Email.objects.filter(status='pending').order_by('-created_at')
-    traceability_logs = TraceabilityLog.objects.all().order_by('-timestamp')[:20]
+    # --- CÁLCULO DE MÉTRICAS (KPIs) ---
+    today = timezone.now().date()
+    novedades_hoy = UpdateLog.objects.filter(created_at__date=today).count()
+    correos_pendientes_count = Email.objects.filter(status='pending').count()
+    operadores_activos = User.objects.filter(is_superuser=False, is_active=True).count()
+    servicios_monitoreados_activos = MonitoredService.objects.filter(is_active=True).count()
 
-    # --- LÓGICA AÑADIDA PARA EL PANEL DE ESTADO ---
+    # --- DATOS PARA LAS LISTAS Y TABLAS ---
+    # Limita la actividad reciente a los últimos 6 registros
+    traceability_logs = TraceabilityLog.objects.all().order_by('-timestamp')[:6]
+    
+    # Mantenemos las otras consultas
+    reports = UpdateLog.objects.filter(created_at__date=today).order_by('-created_at')
+    pending_emails = Email.objects.filter(status='pending').order_by('-created_at')
+    
     monitored_services = MonitoredService.objects.filter(is_active=True)
     status_list = []
     for service in monitored_services:
-        # Obtenemos el último registro de estado para cada servicio
         latest_log = service.logs.order_by('-timestamp').first()
         status_list.append({
             'name': service.name,
-            'status': latest_log.is_up if latest_log else None, # 'None' si nunca se ha chequeado
+            'status': latest_log.is_up if latest_log else None,
             'last_checked': latest_log.timestamp if latest_log else None
         })
 
     context = {
+        # KPIs
+        'novedades_hoy': novedades_hoy,
+        'correos_pendientes_count': correos_pendientes_count,
+        'operadores_activos': operadores_activos,
+        'servicios_monitoreados_activos': servicios_monitoreados_activos,
+        
+        # Listas
         'reports': reports,
         'pending_emails': pending_emails,
         'traceability_logs': traceability_logs,
-        'service_status_list': status_list # Pasamos la lista a la plantilla
+        'service_status_list': status_list
     }
     return render(request, 'admin_dashboard.html', context)
 
