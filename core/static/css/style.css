@@ -19,3 +19,21 @@ a.card-link {
     text-decoration: none;
     color: inherit;
 }
+/* Estilos para el Checklist del Operador */
+.form-check-input {
+    width: 1.25em;
+    height: 1.25em;
+    margin-top: 0.3em;
+}
+
+.form-check-label {
+    cursor: pointer;
+}
+
+.card .list-group-flush .list-group-item:first-child {
+    border-top: 0;
+}
+
+.card .list-group-flush .list-group-item:last-child {
+    border-bottom: 0;
+}

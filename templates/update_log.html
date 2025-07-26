@@ -5,14 +5,14 @@
 
 {% block content %}
 <div class="container text-center">
-    <h2 class="mb-2">Registrar Novedad en Bitácora</h2>
+    <h2 class="mb-3">Registrar Novedad en Bitácora</h2>
 
     <div id="company-selection">
-        <p class="lead">Paso 1: Seleccione la empresa a la cual le anotará la novedad.</p>
+        <p class="lead">Paso 1: Seleccione la empresa.</p>
         <div class="row g-4 justify-content-center">
             {% for company in companies %}
             <div class="col-md-3">
-                <div class="card h-100 card-option company-card" data-company-id="{{ company.id }}">
+                <div class="card h-100 card-option company-card" data-company-id="{{ company.id }}" data-company-name="{{ company.name }}">
                     <div class="card-body d-flex flex-column justify-content-center">
                         <i class="fas fa-building fa-2x mb-2"></i>
                         <h5 class="card-title">{{ company.name }}</h5>
@@ -23,48 +23,129 @@
         </div>
     </div>
 
+    <div id="installation-selection" style="display: none;">
+        <hr class="my-4">
+        <p class="lead">Paso 2: Seleccione la instalación para <strong></strong>.</p>
+        <div id="installation-list" class="row g-4 justify-content-center">
+            </div>
+        <button type="button" class="btn btn-secondary mt-4 back-to-companies">Volver a Empresas</button>
+    </div>
+
     <div id="update-form-container" style="display: none;">
         <hr class="my-4">
-        <p class="lead">Paso 2: Escriba la novedad para <strong id="selected-company-name"></strong>.</p>
+        <p class="lead">Paso 3: Escriba la novedad para <strong></strong>.</p>
         <form method="post" class="text-start">
             {% csrf_token %}
-            {{ form.company.as_hidden }} {{ form.message|as_crispy_field }}
+            {{ form.installation|as_crispy_field }}
+            {{ form.message|as_crispy_field }}
             <button type="submit" class="btn btn-primary mt-3">Guardar Novedad</button>
-            <button type="button" id="cancel-button" class="btn btn-secondary mt-3">Cancelar</button>
+            <button type="button" class="btn btn-secondary mt-3 back-to-installations">Volver a Instalaciones</button>
         </form>
     </div>
 </div>
 
+<script id="installations-data" type="application/json">
+{
+    {% for company in companies %}
+        "{{ company.id }}": [
+            {% for installation in company.installations.all %}
+                { "id": "{{ installation.id }}", "name": "{{ installation.name }}" }
+                {% if not forloop.last %},{% endif %}
+            {% endfor %}
+        ]
+        {% if not forloop.last %},{% endif %}
+    {% endfor %}
+}
+</script>
+
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    const companyCards = document.querySelectorAll('.company-card');
+    const installationsData = JSON.parse(document.getElementById('installations-data').textContent);
+
     const companySelectionDiv = document.getElementById('company-selection');
+    const installationSelectionDiv = document.getElementById('installation-selection');
     const formContainer = document.getElementById('update-form-container');
-    const hiddenCompanyInput = document.querySelector('input[name="company"]');
-    const selectedCompanyNameSpan = document.getElementById('selected-company-name');
-    const cancelButton = document.getElementById('cancel-button');
 
-    companyCards.forEach(card => {
-        card.addEventListener('click', function() {
-            const companyId = this.dataset.companyId;
-            const companyName = this.querySelector('.card-title').textContent;
+    const installationListDiv = document.getElementById('installation-list');
+    const hiddenInstallationInput = document.querySelector('input[name="installation"]');
 
-            // Rellenar el formulario y mostrarlo
-            hiddenCompanyInput.value = companyId;
-            selectedCompanyNameSpan.textContent = companyName;
-            
-            // Ocultar la selección de tarjetas y mostrar el formulario
-            companySelectionDiv.style.display = 'none';
-            formContainer.style.display = 'block';
+    // --- MANEJO DE CLICS ---
+    document.body.addEventListener('click', function(e) {
+        // Clic en una tarjeta de EMPRESA
+        if (e.target.closest('.company-card')) {
+            const card = e.target.closest('.company-card');
+            const companyId = card.dataset.companyId;
+            const companyName = card.dataset.companyName;
+            const companyInstallations = installationsData[companyId];
+
+            if (companyInstallations && companyInstallations.length > 1) {
+                // Si hay MÁS de una instalación, muestra la lista de instalaciones
+                populateInstallations(companyId, companyName);
+                showSection('installations');
+            } else if (companyInstallations && companyInstallations.length === 1) {
+                // Si hay SOLO una instalación, salta directo al formulario
+                const installation = companyInstallations[0];
+                setupForm(installation.id, `${installation.name} (${companyName})`);
+                showSection('form');
+            } else {
+                // Si no hay instalaciones, no se puede anotar novedad
+                alert(`La empresa '${companyName}' no tiene instalaciones registradas. Por favor, pida al administrador que las añada.`);
+            }
+        }
+
+        // Clic en una tarjeta de INSTALACIÓN
+        if (e.target.closest('.installation-card')) {
+            const card = e.target.closest('.installation-card');
+            const installationId = card.dataset.installationId;
+            const installationName = card.dataset.installationName;
+            setupForm(installationId, installationName);
+            showSection('form');
+        }
+        
+        // Clic en botones de "VOLVER"
+        if (e.target.matches('.back-to-companies')) {
+            showSection('companies');
+        }
+        if (e.target.matches('.back-to-installations')) {
+            showSection('installations');
+        }
+    });
+
+    // --- FUNCIONES AUXILIARES ---
+    function populateInstallations(companyId, companyName) {
+        installationListDiv.innerHTML = ''; // Limpia la lista anterior
+        const companyInstallations = installationsData[companyId] || [];
+        
+        companyInstallations.forEach(inst => {
+            installationListDiv.innerHTML += `
+                <div class="col-md-3">
+                    <div class="card h-100 card-option installation-card" 
+                         data-installation-id="${inst.id}" 
+                         data-installation-name="${inst.name} (${companyName})">
+                        <div class="card-body d-flex flex-column justify-content-center">
+                            <i class="fas fa-warehouse fa-2x mb-2"></i>
+                            <h5 class="card-title">${inst.name}</h5>
+                        </div>
+                    </div>
+                </div>`;
         });
-    });
-
-    cancelButton.addEventListener('click', function() {
-        // Ocultar el formulario y volver a mostrar la selección de tarjetas
+        installationSelectionDiv.querySelector('strong').textContent = companyName;
+    }
+    
+    function setupForm(installationId, fullInstallationName) {
+        hiddenInstallationInput.value = installationId;
+        formContainer.querySelector('strong').textContent = fullInstallationName;
+    }
+    
+    function showSection(sectionName) {
+        companySelectionDiv.style.display = 'none';
+        installationSelectionDiv.style.display = 'none';
         formContainer.style.display = 'none';
-        companySelectionDiv.style.display = 'block';
-        hiddenCompanyInput.value = ''; // Limpiar la selección
-    });
+
+        if (sectionName === 'companies') companySelectionDiv.style.display = 'block';
+        if (sectionName === 'installations') installationSelectionDiv.style.display = 'block';
+        if (sectionName === 'form') formContainer.style.display = 'block';
+    }
 });
 </script>
 {% endblock %}

@@ -2,11 +2,16 @@ from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth.decorators import login_required, user_passes_test
 from django.contrib.auth.models import User
 from django.utils import timezone
-from .models import Company, OperatorProfile, ChecklistItem, ChecklistLog, UpdateLog, Email, TraceabilityLog
-from .forms import UpdateLogForm, EmailForm, OperatorCreationForm, OperatorChangeForm, CompanyForm
+from django import forms  # Importación añadida para usar widgets de formulario
+from .models import Company, Installation, ChecklistItem, ChecklistLog, UpdateLog, Email, TraceabilityLog
+from .forms import (
+    UpdateLogForm, EmailForm, OperatorCreationForm, OperatorChangeForm, 
+    CompanyForm, InstallationForm, ChecklistItemForm
+)
 
 def is_supervisor(user):
-    return user.is_superuser or user.groups.filter(name='Supervisores').exists()
+    # Por ahora, solo los superusuarios son supervisores.
+    return user.is_superuser
 
 @login_required
 def home(request):
@@ -15,7 +20,8 @@ def home(request):
     else:
         return redirect('operator_dashboard')
 
-# Vistas de Administrador/Supervisor
+# --- Vistas de Administrador/Supervisor ---
+
 @login_required
 @user_passes_test(is_supervisor)
 def admin_dashboard(request):
@@ -122,24 +128,145 @@ def delete_company(request, company_id):
         return redirect('manage_companies')
     return render(request, 'company_confirm_delete.html', {'company': company})
 
-# Vistas del Operador
+# Vistas de Gestión de Instalaciones
+@login_required
+@user_passes_test(is_supervisor)
+def manage_installations(request, company_id):
+    company = get_object_or_404(Company, id=company_id)
+    installations = Installation.objects.filter(company=company)
+    context = {
+        'company': company,
+        'installations': installations
+    }
+    return render(request, 'manage_installations.html', context)
+
+@login_required
+@user_passes_test(is_supervisor)
+def create_installation(request, company_id):
+    company = get_object_or_404(Company, id=company_id)
+    if request.method == 'POST':
+        form = InstallationForm(request.POST)
+        if form.is_valid():
+            installation = form.save(commit=False)
+            installation.company = company
+            installation.save()
+            return redirect('manage_installations', company_id=company.id)
+    else:
+        form = InstallationForm(initial={'company': company})
+        form.fields['company'].widget = forms.HiddenInput()
+
+    context = {
+        'form': form, 
+        'title': f'Añadir Instalación para {company.name}',
+        'company': company
+    }
+    return render(request, 'installation_form.html', context)
+
+@login_required
+@user_passes_test(is_supervisor)
+def edit_installation(request, installation_id):
+    installation = get_object_or_404(Installation, id=installation_id)
+    company = installation.company
+    if request.method == 'POST':
+        form = InstallationForm(request.POST, instance=installation)
+        if form.is_valid():
+            form.save()
+            return redirect('manage_installations', company_id=company.id)
+    else:
+        form = InstallationForm(instance=installation)
+        form.fields['company'].widget = forms.HiddenInput()
+
+    context = {
+        'form': form, 
+        'title': f'Editar Instalación {installation.name}',
+        'company': company
+    }
+    return render(request, 'installation_form.html', context)
+
+@login_required
+@user_passes_test(is_supervisor)
+def delete_installation(request, installation_id):
+    installation = get_object_or_404(Installation, id=installation_id)
+    company_id = installation.company.id
+    if request.method == 'POST':
+        installation.delete()
+        return redirect('manage_installations', company_id=company_id)
+    
+    return render(request, 'installation_confirm_delete.html', {'installation': installation})
+
+
+# Vistas de Gestión de Checklist
+@login_required
+@user_passes_test(is_supervisor)
+def manage_checklist_items(request):
+    items = ChecklistItem.objects.all()
+    return render(request, 'manage_checklist.html', {'items': items})
+
+@login_required
+@user_passes_test(is_supervisor)
+def create_checklist_item(request):
+    if request.method == 'POST':
+        form = ChecklistItemForm(request.POST)
+        if form.is_valid():
+            form.save()
+            return redirect('manage_checklist_items')
+    else:
+        form = ChecklistItemForm()
+    return render(request, 'checklist_item_form.html', {'form': form, 'title': 'Añadir Tarea al Checklist'})
+
+@login_required
+@user_passes_test(is_supervisor)
+def edit_checklist_item(request, item_id):
+    item = get_object_or_404(ChecklistItem, id=item_id)
+    if request.method == 'POST':
+        form = ChecklistItemForm(request.POST, instance=item)
+        if form.is_valid():
+            form.save()
+            return redirect('manage_checklist_items')
+    else:
+        form = ChecklistItemForm(instance=item)
+    return render(request, 'checklist_item_form.html', {'form': form, 'title': 'Editar Tarea del Checklist'})
+
+@login_required
+@user_passes_test(is_supervisor)
+def delete_checklist_item(request, item_id):
+    item = get_object_or_404(ChecklistItem, id=item_id)
+    if request.method == 'POST':
+        item.delete()
+        return redirect('manage_checklist_items')
+    return render(request, 'checklist_item_confirm_delete.html', {'item': item})
+
+# --- Vistas del Operador ---
+
 @login_required
 def operator_dashboard(request):
     return render(request, 'operator_dashboard.html')
 
 @login_required
 def checklist_view(request):
-    items = ChecklistItem.objects.all()
     if request.method == 'POST':
-        item_id = request.POST.get('item_id')
-        item = get_object_or_404(ChecklistItem, id=item_id)
-        ChecklistLog.objects.create(operator=request.user, item=item)
-        TraceabilityLog.objects.create(user=request.user, action=f"Completó checklist: {item.description}")
+        item_ids = request.POST.getlist('items')
+        for item_id in item_ids:
+            item = get_object_or_404(ChecklistItem, id=item_id)
+            log, created = ChecklistLog.objects.get_or_create(
+                operator=request.user, 
+                item=item,
+                completed_at__date=timezone.now().date()
+            )
+            if created:
+                TraceabilityLog.objects.create(user=request.user, action=f"Completó checklist: {item.description}")
         return redirect('checklist')
 
-    completed_today = ChecklistLog.objects.filter(operator=request.user, completed_at__date=timezone.now().date())
-    completed_ids = completed_today.values_list('item_id', flat=True)
-    context = {'items': items, 'completed_ids': completed_ids}
+    all_items = ChecklistItem.objects.all()
+    completed_ids = ChecklistLog.objects.filter(
+        operator=request.user, 
+        completed_at__date=timezone.now().date()
+    ).values_list('item_id', flat=True)
+
+    context = {
+        'items': all_items,
+        'completed_ids': completed_ids
+    }
     return render(request, 'checklist.html', context)
 
 @login_required
@@ -150,16 +277,19 @@ def update_log_view(request):
             log = form.save(commit=False)
             log.operator = request.user
             log.save()
-            TraceabilityLog.objects.create(user=request.user, action=f"Registró novedad para {log.company.name}")
+            TraceabilityLog.objects.create(user=request.user, action=f"Registró novedad para {log.installation}")
             return redirect('operator_dashboard')
     else:
         form = UpdateLogForm()
-    companies = Company.objects.all()
+
+    # Usamos prefetch_related para cargar todas las instalaciones en una sola consulta
+    companies_with_installations = Company.objects.prefetch_related('installations')
+    
     context = {
         'form': form,
-        'companies': companies
+        'companies': companies_with_installations
     }
-    return render(request, 'update_log.html', {'form': form})
+    return render(request, 'update_log.html', context)
 
 @login_required
 def email_form_view(request):
