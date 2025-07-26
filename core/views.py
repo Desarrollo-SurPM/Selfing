@@ -363,20 +363,32 @@ def log_virtual_round(request):
             return JsonResponse({'status': 'success', 'message': 'Ronda ya había sido registrada hoy.'})
     
     return JsonResponse({'status': 'error', 'message': 'Método no permitido.'}, status=405)
+
 @login_required
 def get_updates_for_company(request, company_id):
-    # Buscamos todas las novedades cuya instalación pertenece a la empresa seleccionada
-    updates = UpdateLog.objects.filter(installation__company_id=company_id).order_by('-created_at')
-    
-    # Formateamos los datos para enviarlos como JSON
-    updates_list = []
-    for update in updates:
-        updates_list.append({
-            'id': update.id,
-            'text': f"({update.installation.name}) {update.created_at.strftime('%d/%m %H:%M')} - {update.message[:40]}..."
+    # Obtenemos todas las instalaciones de la empresa que tienen novedades
+    installations_with_updates = Installation.objects.filter(
+        company_id=company_id,
+        updatelog__isnull=False
+    ).distinct()
+
+    # Estructuramos los datos para enviarlos como JSON
+    response_data = []
+    for installation in installations_with_updates:
+        updates = UpdateLog.objects.filter(installation=installation).order_by('-created_at')
+        updates_list = []
+        for update in updates:
+            updates_list.append({
+                'id': update.id,
+                'text': f"{update.created_at.strftime('%d/%m %H:%M')} - {update.message}"
+            })
+        
+        response_data.append({
+            'installation_name': installation.name,
+            'updates': updates_list
         })
         
-    return JsonResponse({'updates': updates_list})
+    return JsonResponse({'grouped_updates': response_data})
 
 @login_required
 @user_passes_test(is_supervisor)

@@ -13,10 +13,16 @@
     
     {{ form.company|as_crispy_field }}
     
-    <div id="div_id_updates" class="mb-3">
-        <label for="id_updates" class="form-label">Novedades a Incluir*</label>
-        <div id="updates-checkbox-container" class="form-check">
-            <p class="text-muted small mt-2">Seleccione una empresa para ver sus novedades.</p>
+    <div id="div_id_updates" class="mt-3">
+        <label class="form-label">Novedades a Incluir*</label>
+        <div id="updates-accordion-container" class="accordion mt-2">
+            <div class="accordion-item">
+                <div class="accordion-header">
+                    <button class="accordion-button collapsed" type="button" disabled>
+                        <span class="text-muted">Seleccione una empresa para ver sus novedades.</span>
+                    </button>
+                </div>
+            </div>
         </div>
     </div>
     
@@ -32,54 +38,78 @@
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     const companySelect = document.getElementById('id_company');
-    const updatesContainer = document.getElementById('updates-checkbox-container');
+    const updatesContainer = document.getElementById('updates-accordion-container');
 
     companySelect.addEventListener('change', function() {
         const companyId = this.value;
-        // Limpia las novedades anteriores y muestra mensaje de carga
-        updatesContainer.innerHTML = '<p class="text-muted small mt-2">Cargando novedades...</p>';
+        updatesContainer.innerHTML = `
+            <div class="accordion-item">
+                <div class="accordion-header"><button class="accordion-button collapsed" type="button" disabled>
+                    <span class="text-muted">Cargando novedades...</span>
+                </button></div>
+            </div>`;
 
         if (!companyId) {
-            updatesContainer.innerHTML = '<p class="text-muted small mt-2">Seleccione una empresa para ver sus novedades.</p>';
+            updatesContainer.innerHTML = `
+            <div class="accordion-item">
+                <div class="accordion-header"><button class="accordion-button collapsed" type="button" disabled>
+                    <span class="text-muted">Seleccione una empresa para ver sus novedades.</span>
+                </button></div>
+            </div>`;
             return;
         }
 
-        // Petición al servidor para obtener las novedades de la empresa seleccionada
         const url = `/ajax/get-updates/${companyId}/`;
         fetch(url)
             .then(response => response.json())
             .then(data => {
-                // Limpia el contenedor
-                updatesContainer.innerHTML = '';
+                updatesContainer.innerHTML = ''; // Limpia el contenedor
                 
-                if (data.updates && data.updates.length > 0) {
-                    data.updates.forEach(update => {
-                        const div = document.createElement('div');
-                        div.classList.add('form-check');
-                        
-                        const input = document.createElement('input');
-                        input.type = 'checkbox';
-                        input.name = 'updates';
-                        input.value = update.id;
-                        input.classList.add('form-check-input');
-                        input.id = `id_updates_${update.id}`;
-                        
-                        const label = document.createElement('label');
-                        label.classList.add('form-check-label');
-                        label.htmlFor = `id_updates_${update.id}`;
-                        label.textContent = update.text;
-                        
-                        div.appendChild(input);
-                        div.appendChild(label);
-                        updatesContainer.appendChild(div);
+                if (data.grouped_updates && data.grouped_updates.length > 0) {
+                    data.grouped_updates.forEach((group, index) => {
+                        let checkboxesHTML = '';
+                        group.updates.forEach(update => {
+                            checkboxesHTML += `
+                                <div class="form-check">
+                                    <input type="checkbox" name="updates" value="${update.id}" class="form-check-input" id="update_${update.id}">
+                                    <label class="form-check-label" for="update_${update.id}">${update.text}</label>
+                                </div>`;
+                        });
+
+                        const accordionItemHTML = `
+                            <div class="accordion-item">
+                                <h2 class="accordion-header" id="heading_${index}">
+                                    <button class="accordion-button" type="button" data-bs-toggle="collapse" 
+                                            data-bs-target="#collapse_${index}" aria-expanded="true" aria-controls="collapse_${index}">
+                                        <strong>${group.installation_name}</strong>
+                                    </button>
+                                </h2>
+                                <div id="collapse_${index}" class="accordion-collapse collapse show" 
+                                     aria-labelledby="heading_${index}">
+                                    <div class="accordion-body">
+                                        ${checkboxesHTML}
+                                    </div>
+                                </div>
+                            </div>`;
+                        updatesContainer.innerHTML += accordionItemHTML;
                     });
                 } else {
-                    updatesContainer.innerHTML = '<p class="text-muted small mt-2">Esta empresa no tiene novedades registradas.</p>';
+                    updatesContainer.innerHTML = `
+                    <div class="accordion-item">
+                        <div class="accordion-header"><button class="accordion-button collapsed" type="button" disabled>
+                            <span class="text-muted">Esta empresa no tiene novedades registradas.</span>
+                        </button></div>
+                    </div>`;
                 }
             })
             .catch(error => {
                 console.error('Error al cargar las novedades:', error);
-                updatesContainer.innerHTML = '<p class="text-danger small mt-2">No se pudieron cargar las novedades.</p>';
+                updatesContainer.innerHTML = `
+                    <div class="accordion-item">
+                        <div class="accordion-header"><button class="accordion-button collapsed" type="button" disabled>
+                            <span class="text-danger">No se pudieron cargar las novedades.</span>
+                        </button></div>
+                    </div>`;
             });
     });
 
