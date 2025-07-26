@@ -1,0 +1,25 @@
+<ul class="list-group list-group-flush">
+    {% for service in service_status_list %}
+    <li class="list-group-item d-flex justify-content-between align-items-center">
+        <span>
+            {% if service.status is True %}
+                <i class="fas fa-check-circle text-success me-2"></i>
+            {% elif service.status is False %}
+                <i class="fas fa-exclamation-triangle text-danger me-2"></i>
+            {% else %}
+                <i class="fas fa-question-circle text-secondary me-2"></i>
+            {% endif %}
+            {{ service.name }}
+        </span>
+        {% if service.status is True %}
+            <span class="badge bg-success">Activo</span>
+        {% elif service.status is False %}
+            <span class="badge bg-danger">Caído</span>
+        {% else %}
+            <span class="badge bg-secondary">Pendiente</span>
+        {% endif %}
+    </li>
+    {% empty %}
+    <li class="list-group-item">No hay servicios monitoreados.</li>
+    {% endfor %}
+</ul>

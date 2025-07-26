@@ -481,3 +481,17 @@ def delete_monitored_service(request, service_id):
         service.delete()
         return redirect('manage_monitored_services')
     return render(request, 'monitored_service_confirm_delete.html', {'service': service})
+
+@login_required
+def get_service_status(request):
+    monitored_services = MonitoredService.objects.filter(is_active=True)
+    status_list = []
+    for service in monitored_services:
+        latest_log = service.logs.order_by('-timestamp').first()
+        status_list.append({
+            'name': service.name,
+            'status': latest_log.is_up if latest_log else None,
+        })
+    
+    # Renderiza la mini plantilla con los datos actualizados y la devuelve como respuesta
+    return render(request, '_service_status_panel.html', {'service_status_list': status_list})

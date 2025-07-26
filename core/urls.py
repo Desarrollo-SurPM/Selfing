@@ -5,7 +5,7 @@ urlpatterns = [
     path('', views.home, name='home'),
       # 👇 AÑADE ESTA RUTA PARA LA COMUNICACIÓN DINÁMICA 👇
     path('ajax/get-updates/<int:company_id>/', views.get_updates_for_company, name='ajax_get_updates'),
-    
+    path('ajax/get-service-status/', views.get_service_status, name='ajax_get_service_status'),
     # --- Admin ---
     path('dashboard/admin/', views.admin_dashboard, name='admin_dashboard'),
     path('email/approve/<int:email_id>/', views.approve_email, name='approve_email'),

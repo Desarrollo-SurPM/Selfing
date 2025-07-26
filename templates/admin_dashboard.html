@@ -48,9 +48,7 @@
 
     <div class="col-lg-8">
         <div class="card shadow-sm mb-4">
-            <div class="card-header">
-                <h5 class="mb-0">Gestión del Sistema</h5>
-            </div>
+            <div class="card-header"><h5 class="mb-0">Gestión del Sistema</h5></div>
             <div class="card-body">
                 <a href="{% url 'manage_operators' %}" class="btn btn-primary">Gestionar Operadores</a>
                 <a href="{% url 'manage_companies' %}" class="btn btn-info">Gestionar Empresas</a>
@@ -60,19 +58,10 @@
         </div>
 
         <div class="card shadow-sm">
-            <div class="card-header">
-                <h5 class="mb-0">Reporte de Novedades del Día</h5>
-            </div>
+            <div class="card-header"><h5 class="mb-0">Reporte de Novedades del Día</h5></div>
             <div class="table-responsive">
                 <table class="table table-hover mb-0">
-                    <thead>
-                        <tr>
-                            <th>Hora</th>
-                            <th>Operador</th>
-                            <th>Empresa / Instalación</th>
-                            <th>Novedad</th>
-                        </tr>
-                    </thead>
+                    <thead><tr><th>Hora</th><th>Operador</th><th>Empresa / Instalación</th><th>Novedad</th></tr></thead>
                     <tbody>
                         {% for report in reports %}
                         <tr>
@@ -85,9 +74,7 @@
                             <td>{{ report.message }}</td>
                         </tr>
                         {% empty %}
-                        <tr>
-                            <td colspan="4" class="text-center py-4">No hay novedades registradas hoy.</td>
-                        </tr>
+                        <tr><td colspan="4" class="text-center py-4">No hay novedades registradas hoy.</td></tr>
                         {% endfor %}
                     </tbody>
                 </table>
@@ -96,21 +83,10 @@
     </div>
 
     <div class="col-lg-4">
-        <div class="card shadow-sm mb-4">
+        
+        <div class="card shadow-sm mb-4" id="service-status-panel">
             <div class="card-header"><h5 class="mb-0">Estado de Servicios</h5></div>
-            <ul class="list-group list-group-flush">
-                {% for service in service_status_list %}
-                <li class="list-group-item d-flex justify-content-between align-items-center">
-                    {{ service.name }}
-                    {% if service.status is True %}<span class="badge bg-success">Activo</span>
-                    {% elif service.status is False %}<span class="badge bg-danger">Caído</span>
-                    {% else %}<span class="badge bg-secondary">Pendiente</span>{% endif %}
-                </li>
-                {% empty %}
-                <li class="list-group-item">No hay servicios activos.</li>
-                {% endfor %}
-            </ul>
-        </div>
+            </div>
 
         <div class="card shadow-sm mb-4">
             <div class="card-header"><h5 class="mb-0">Correos por Aprobar</h5></div>
@@ -133,9 +109,7 @@
             <div class="card-header"><h5 class="mb-0">Actividad Reciente (Últimas 6)</h5></div>
             <ul class="list-group list-group-flush">
                 {% for log in traceability_logs %}
-                <li class="list-group-item">
-                    <small>{{ log.action }} <span class="text-muted">- {{ log.timestamp|timesince }} ago</span></small>
-                </li>
+                <li class="list-group-item"><small>{{ log.action }} <span class="text-muted">- {{ log.timestamp|timesince }} ago</span></small></li>
                 {% empty %}
                 <li class="list-group-item">No hay actividad reciente.</li>
                 {% endfor %}
@@ -143,4 +117,33 @@
         </div>
     </div>
 </div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // --- LÓGICA DE ACTUALIZACIÓN DE SERVICIOS (Nueva versión) ---
+    const statusPanel = document.getElementById('service-status-panel');
+
+    function updateServiceStatus() {
+        const url = `{% url 'ajax_get_service_status' %}?timestamp=${new Date().getTime()}`;
+        
+        fetch(url)
+            .then(response => response.text())
+            .then(html => {
+                const listContainer = statusPanel.querySelector('.list-group');
+                if (listContainer) {
+                    listContainer.outerHTML = html;
+                } else {
+                    statusPanel.querySelector('.card-header').insertAdjacentHTML('afterend', html);
+                }
+            })
+            .catch(error => console.error('Error al actualizar servicios:', error));
+    }
+
+    // Actualiza al cargar la página y luego cada 20 segundos
+    updateServiceStatus();
+    setInterval(updateServiceStatus, 20000);
+});
+</script>
 {% endblock %}

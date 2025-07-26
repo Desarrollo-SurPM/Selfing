@@ -18,6 +18,6 @@ def start():
     """
     scheduler = BackgroundScheduler()
     # Añade la tarea para que se ejecute cada 10 minutos
-    scheduler.add_job(check_services_job, 'interval', seconds=10)
+    scheduler.add_job(check_services_job, 'interval', minutes=1)
     scheduler.start()
     print("Planificador de tareas iniciado. El chequeo de servicios se ejecutará cada 10 minutos.")
