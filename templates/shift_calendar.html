@@ -1,0 +1,48 @@
+{% extends 'base.html' %}
+
+{% block title %}Calendario de Turnos{% endblock %}
+
+{% block content %}
+<h2 class="mb-4">Calendario de Turnos</h2>
+
+<div class="card shadow-sm mb-4">
+    <div class="card-body">
+        <div id='calendar'></div>
+    </div>
+</div>
+
+<a href="{% url 'admin_dashboard' %}" class="btn btn-secondary mt-3">Volver al Dashboard</a>
+{% endblock %}
+
+{% block extra_js %}
+<script src='https://cdn.jsdelivr.net/npm/fullcalendar@6.1.13/index.global.min.js'></script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    var calendarEl = document.getElementById('calendar');
+    var calendar = new FullCalendar.Calendar(calendarEl, {
+        initialView: 'dayGridMonth',
+        locale: 'es', // Set locale to Spanish
+        headerToolbar: {
+            left: 'prev,next today',
+            center: 'title',
+            right: 'dayGridMonth,timeGridWeek,timeGridDay'
+        },
+        events: '{% url "ajax_get_shifts_for_calendar" %}',
+        eventDidMount: function(info) {
+            // Add popover for event details on hover
+            var tooltip = new bootstrap.Tooltip(info.el, {
+                title: info.event.extendedProps.description,
+                placement: 'top',
+                trigger: 'hover',
+                container: 'body'
+            });
+        },
+        eventClick: function(info) {
+            // You can add more complex behavior here, e.g., open a modal with shift details
+            alert('Detalles del Turno:\n' + info.event.extendedProps.description);
+        }
+    });
+    calendar.render();
+});
+</script>
+{% endblock %}

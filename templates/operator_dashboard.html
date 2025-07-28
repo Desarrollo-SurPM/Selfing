@@ -1,91 +1,116 @@
 {% extends 'base.html' %}
-{% load static %} 
+{% load static %}
 {% block title %}Panel del Operador{% endblock %}
 
 {% block content %}
-<div class="container">
-    <div class="d-flex justify-content-between align-items-center mb-4 border-bottom pb-3 flex-wrap">
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-4 pb-3 border-bottom flex-wrap">
         <div>
-            <h2 class="h3">Bienvenido, {{ user.username }}</h2>
+            <h2 class="h3 text-secondary">Bienvenido, {{ user.username }}</h2>
             {% if active_shift and active_shift.actual_start_time %}
-                <p class="text-muted mb-0">Turno Activo: {{ active_shift.shift_type.name }} (Iniciado a las {{ active_shift.actual_start_time|date:"H:i" }} hrs)</p>
+                <p class="text-muted mb-0">Turno Activo: <span class="badge bg-primary">{{ active_shift.shift_type.name }}</span> (Iniciado a las {{ active_shift.actual_start_time|date:"H:i" }} hrs)</p>
             {% elif active_shift %}
-                <p class="text-info mb-0">Tienes un turno asignado para hoy: {{ active_shift.shift_type.name }}.</p>
+                <p class="text-info mb-0">Tienes un turno asignado para hoy: <span class="badge bg-info">{{ active_shift.shift_type.name }}</span>.</p>
             {% else %}
                 <p class="text-danger mb-0">No tienes un turno activo asignado para hoy.</p>
             {% endif %}
         </div>
         <div id="finish-round-container" {% if not active_round_id %}style="display: none;"{% endif %}>
-             <a href="{% if active_round_id %}{% url 'finish_virtual_round' active_round_id %}{% endif %}" id="finish-round-link" class="btn btn-danger btn-lg">
+             <a href="{% if active_round_id %}{% url 'finish_virtual_round' active_round_id %}{% endif %}" id="finish-round-link" class="btn btn-danger btn-lg shadow-sm">
                 <i class="fas fa-stop-circle me-2"></i>Finalizar Ronda en Curso
             </a>
         </div>
     </div>
 
     {% if not active_shift or not active_shift.actual_start_time %}
-        <div class="text-center p-5 bg-light rounded shadow-sm">
-            <h1 class="display-4">Turno Pendiente</h1>
-            <p class="lead">Presiona el botón para registrar el inicio de tu jornada de trabajo.</p>
+        <div class="text-center p-5 bg-light rounded shadow-lg animate__animated animate__fadeIn">
+            <h1 class="display-4 text-dark mb-4">¡Listo para Empezar!</h1>
+            <p class="lead text-muted">Presiona el botón para registrar el inicio de tu jornada de trabajo y acceder a tus herramientas.</p>
             {% if active_shift %}
             <form method="post" action="{% url 'start_shift' %}">
                 {% csrf_token %}
-                <button type="submit" class="btn btn-primary btn-lg"><i class="fas fa-play-circle me-2"></i>Iniciar Turno</button>
+                <button type="submit" class="btn btn-success btn-lg mt-3 shadow-sm animate__animated animate__pulse animate__infinite"><i class="fas fa-play-circle me-2"></i>Iniciar Turno</button>
             </form>
             {% else %}
-            <p class="text-muted">Contacta a tu supervisor para que te asigne un turno.</p>
+            <p class="text-danger mt-3 mb-0">Contacta a tu supervisor para que te asigne un turno.</p>
             {% endif %}
         </div>
 
     {% elif active_shift.actual_end_time %}
-        <div class="text-center p-5 bg-light rounded shadow-sm">
-            <h1 class="display-4 text-success">Turno Finalizado</h1>
-            <p class="lead">Ya has completado y firmado tu turno para el día de hoy.</p>
-            <p class="text-muted">Tu reporte ha sido enviado a supervisión.</p>
+        <div class="text-center p-5 bg-light rounded shadow-lg animate__animated animate__fadeIn">
+            <h1 class="display-4 text-success mb-4">¡Turno Finalizado!</h1>
+            <p class="lead text-muted">Has completado y firmado tu turno para el día de hoy. Tu reporte ha sido enviado a supervisión.</p>
+            <p class="text-muted mt-4">Gracias por tu servicio.</p>
         </div>
-        
+
     {% else %}
         <div class="row g-4">
             <div class="col-lg-8">
-                <h4 class="mb-3">Progreso del Turno</h4>
-                <div class="progress mb-4" style="height: 25px;">
-                    <div class="progress-bar" role="progressbar" style="width: {{ progress_percentage }}%;" aria-valuenow="{{ progress_percentage }}">{{ progress_percentage }}%</div>
-                </div>
-                
-                <ul class="list-group">
-                    {% for task_key, task_data in progress_tasks.items %}
-                    <li class="list-group-item d-flex justify-content-between align-items-center">
-                        {{ task_data.text }}
-                        {% if task_data.completed %}
-                            <span class="badge bg-success"><i class="fas fa-check me-1"></i>Completado</span>
-                        {% else %}
-                            <span class="badge bg-secondary">Pendiente</span>
-                        {% endif %}
-                    </li>
-                    {% endfor %}
-                </ul>
-
-                <div class="mt-4 pt-4 border-top">
-                    <h5 class="mb-3">Acciones Rápidas</h5>
-                    <a href="{% url 'checklist' %}" class="btn btn-primary">Ir al Checklist</a>
-                    <a href="{% url 'update_log' %}" class="btn btn-info">Anotar en Bitácora</a>
-                    <a href="{% url 'email_form' %}" class="btn btn-success">Generar Correo</a>
-                    
-                    {% if progress_percentage >= 99 %}
-                    <a href="{% url 'end_turn_preview' %}" class="btn btn-danger">
-                        <i class="fas fa-power-off me-2"></i>Finalizar Turno y Generar Reporte
-                    </a>
-                    {% endif %}
+                <div class="card shadow-sm mb-4">
+                    <div class="card-header bg-light">
+                        <h5 class="mb-0 text-secondary"><i class="fas fa-chart-line me-2"></i>Progreso del Turno</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="progress mb-4" style="height: 28px; border-radius: 8px;">
+                            <div class="progress-bar bg-primary" role="progressbar" style="width: {{ progress_percentage }}%;" aria-valuenow="{{ progress_percentage }}" aria-valuemin="0" aria-valuemax="100">
+                                <span class="fw-bold">{{ progress_percentage }}%</span>
+                            </div>
+                        </div>
+                        <ul class="list-group list-group-flush border rounded">
+                            {% for task_key, task_data in progress_tasks.items %}
+                            <li class="list-group-item d-flex justify-content-between align-items-center py-3">
+                                <span class="fs-5 {% if task_data.completed %}text-success text-decoration-line-through{% else %}text-muted{% endif %}">
+                                    <i class="fas {% if task_data.completed %}fa-check-circle{% else %}fa-circle{% endif %} me-3"></i>
+                                    {{ task_data.text }}
+                                </span>
+                                {% if task_data.completed %}
+                                    <span class="badge bg-success rounded-pill px-3 py-2">Completado</span>
+                                {% else %}
+                                    <span class="badge bg-secondary rounded-pill px-3 py-2">Pendiente</span>
+                                {% endif %}
+                            </li>
+                            {% endfor %}
+                        </ul>
+                        <div class="mt-4 pt-4 border-top text-center">
+                            <h5 class="mb-3 text-secondary">Acciones Rápidas</h5>
+                            <div class="d-grid gap-2 d-md-flex justify-content-center">
+                                <a href="{% url 'checklist' %}" class="btn btn-primary btn-lg shadow-sm"><i class="fas fa-list-check me-2"></i>Ir al Checklist</a>
+                                <a href="{% url 'update_log' %}" class="btn btn-info btn-lg shadow-sm"><i class="fas fa-edit me-2"></i>Anotar en Bitácora</a>
+                                <a href="{% url 'email_form' %}" class="btn btn-success btn-lg shadow-sm"><i class="fas fa-paper-plane me-2"></i>Generar Correo</a>
+                                {% if progress_percentage >= 99 %}
+                                <a href="{% url 'end_turn_preview' %}" class="btn btn-danger btn-lg shadow-sm animate__animated animate__heartBeat animate__infinite">
+                                    <i class="fas fa-power-off me-2"></i>Finalizar Turno y Reporte
+                                </a>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
 
             <div class="col-lg-4">
-                <div class="card text-center shadow-sm mb-4">
-                    <div class="card-header">Próxima Ronda Virtual</div>
-                    <div class="card-body"><h3 class="display-5 fw-bold" id="round-countdown">--:--</h3></div>
+                <div class="card text-center shadow-sm mb-4 border-primary">
+                    <div class="card-header bg-primary text-white">Próxima Ronda Virtual</div>
+                    <div class="card-body"><h3 class="display-5 fw-bold text-primary" id="round-countdown">--:--</h3></div>
                 </div>
-                <div class="card shadow-sm" id="service-status-panel">
-                    <div class="card-header">Estado de Servicios Críticos</div>
+                <div class="card shadow-sm mb-4 border-secondary" id="service-status-panel">
+                    <div class="card-header bg-light text-secondary">Estado de Servicios Críticos</div>
+                </div>
+                
+                <div class="card shadow-sm border-info">
+                    <div class="card-header bg-light text-secondary">
+                        <h5 class="mb-0"><i class="fas fa-history me-2"></i>Tu Actividad Reciente</h5>
                     </div>
+                    <ul class="list-group list-group-flush">
+                        {% for log in traceability_logs %}
+                        <li class="list-group-item">
+                            <small>{{ log.action }} <span class="text-muted">- {{ log.timestamp|timesince }}</span></small>
+                        </li>
+                        {% empty %}
+                        <li class="list-group-item text-center text-muted py-3">No tienes actividad reciente.</li>
+                        {% endfor %}
+                    </ul>
+                </div>
             </div>
         </div>
     {% endif %}
@@ -93,17 +118,17 @@
 
 <div class="modal fade" id="checklistAlertModal" tabindex="-1" aria-labelledby="checklistAlertLabel" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered">
-        <div class="modal-content">
+        <div class="modal-content border-info shadow-lg">
             <div class="modal-header bg-info text-white">
                 <h5 class="modal-title" id="checklistAlertLabel"><i class="fas fa-tasks me-2"></i>Recordatorio de Tarea</h5>
                 <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Cerrar"></button>
             </div>
-            <div class="modal-body fs-5 text-center">
-                <p>Es momento de realizar la siguiente tarea del checklist:</p>
-                <h4 class="fw-bold" id="checklistAlertTask"></h4>
+            <div class="modal-body fs-5 text-center p-4">
+                <p class="mb-3">Es momento de realizar la siguiente tarea del checklist:</p>
+                <h4 class="fw-bold text-dark" id="checklistAlertTask"></h4>
             </div>
-            <div class="modal-footer">
-                <a href="{% url 'checklist' %}" class="btn btn-primary">Ir al Checklist</a>
+            <div class="modal-footer justify-content-center">
+                <a href="{% url 'checklist' %}" class="btn btn-primary"><i class="fas fa-arrow-right me-2"></i>Ir al Checklist</a>
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Entendido</button>
             </div>
         </div>
@@ -112,80 +137,110 @@
 
 <div class="modal fade" id="roundNotificationModal" tabindex="-1" aria-labelledby="modalLabel" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered">
-        <div class="modal-content">
+        <div class="modal-content border-primary shadow-lg">
             <div class="modal-header bg-primary text-white">
                 <h5 class="modal-title" id="modalLabel"><i class="fas fa-bell me-2"></i>Notificación de Ronda</h5>
                 <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Cerrar"></button>
             </div>
-            <div class="modal-body fs-5 text-center">
-                <p>Es hora de realizar la ronda virtual por todas las cámaras.</p>
+            <div class="modal-body fs-5 text-center p-4">
+                <p class="mb-3">Es hora de realizar la ronda virtual por todas las cámaras.</p>
                 <p>Por favor, confirme para iniciar el registro de la ronda.</p>
             </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Más Tarde</button>
-                <button type="button" class="btn btn-primary" id="confirmRoundButton">Iniciar Ronda</button>
+            <div class="modal-footer justify-content-center">
+                <button type="button" class="btn btn-secondary me-2" data-bs-dismiss="modal">Más Tarde</button>
+                <button type="button" class="btn btn-primary" id="confirmRoundButton"><i class="fas fa-play-circle me-2"></i>Iniciar Ronda</button>
             </div>
         </div>
     </div>
 </div>
 {% endblock %}
 
-
 {% block extra_js %}
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     function getCsrfToken() {
-        // Busca el token en los formularios, que es más seguro
         const tokenElement = document.querySelector('form input[name="csrfmiddlewaretoken"]');
         return tokenElement ? tokenElement.value : '';
     }
 
     const countdownElement = document.getElementById('round-countdown');
     const roundModalElement = document.getElementById('roundNotificationModal');
+
+    // La lógica del contador solo se activa si el operador tiene un turno iniciado.
+    {% if active_shift and active_shift.actual_start_time %}
     
-    // Solo inicializa la lógica si los elementos del turno activo existen
+    // --- NUEVA LÓGICA DE TEMPORIZADOR DE RONDAS ---
     if (roundModalElement && countdownElement) {
         const roundModal = new bootstrap.Modal(roundModalElement);
         const alertSound = new Audio("{% static 'sounds/alarm.mp3' %}");
         const confirmButton = document.getElementById('confirmRoundButton');
+        
+        // Obtenemos la hora de inicio del turno desde Django
+        const shiftStartTime = new Date("{{ active_shift.actual_start_time.isoformat }}");
         let countdownInterval;
+        // Esta variable nos ayudará a no disparar la misma alarma varias veces
+        let lastTriggeredHour = -1;
 
-        function startCountdown() {
+        function startHourlyRoundCountdown() {
             clearInterval(countdownInterval);
+
             countdownInterval = setInterval(function() {
                 const now = new Date();
-                const minutes = now.getMinutes();
-                const seconds = now.getSeconds();
-                const minutesRemaining = 59 - minutes;
-                const secondsRemaining = 59 - seconds;
-                countdownElement.textContent = `${String(minutesRemaining).padStart(2, '0')}:${String(secondsRemaining).padStart(2, '0')}`;
                 
-                // Para pruebas: se activa cada minuto y reproduce el sonido
-                if (seconds === 0) { 
-                    alertSound.play().catch(e => console.error("Error al reproducir sonido:", e));
-                    roundModal.show();
+                // 1. Calculamos el tiempo transcurrido desde el inicio del turno en milisegundos
+                const elapsedMilliseconds = now - shiftStartTime;
+
+                // 2. Calculamos cuántos ciclos de una hora han pasado y cuál es el siguiente
+                const hourInMilliseconds = 3600000; // 60 * 60 * 1000
+                const nextHourMark = Math.floor(elapsedMilliseconds / hourInMilliseconds) + 1;
+                
+                // 3. Determinamos la hora exacta de la próxima ronda
+                const nextRoundTime = new Date(shiftStartTime.getTime() + nextHourMark * hourInMilliseconds);
+
+                // 4. Calculamos el tiempo restante hasta la próxima ronda
+                const timeRemaining = nextRoundTime - now;
+
+                if (timeRemaining > 0) {
+                    const minutesRemaining = Math.floor((timeRemaining % hourInMilliseconds) / 60000);
+                    const secondsRemaining = Math.floor((timeRemaining % 60000) / 1000);
+                    
+                    countdownElement.textContent = `${String(minutesRemaining).padStart(2, '0')}:${String(secondsRemaining).padStart(2, '0')}`;
+                } else {
+                    countdownElement.textContent = "00:00";
                 }
+
+                // 5. Verificamos si es momento de mostrar la notificación
+                // La alarma suena si el tiempo restante es menor a 1 segundo Y si no la hemos mostrado para esta hora.
+                if (timeRemaining <= 1000 && nextHourMark !== lastTriggeredHour) {
+                    lastTriggeredHour = nextHourMark; // Marcamos esta hora como "notificada"
+                    alertSound.play().catch(e => console.error("Error al reproducir sonido:", e));
+                    if (!roundModal._isShown) {
+                       roundModal.show();
+                    }
+                }
+
             }, 1000);
         }
-        startCountdown();
+
+        startHourlyRoundCountdown();
 
         if (confirmButton) {
             confirmButton.addEventListener('click', function() {
-                const url = "{% url 'start_virtual_round' %}"; 
+                const url = "{% url 'start_virtual_round' %}";
                 const csrfToken = getCsrfToken();
                 if (!csrfToken) { console.error("Token CSRF no encontrado."); return; }
 
-                fetch(url, { 
-                    method: 'POST', 
-                    headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken }, 
-                    body: JSON.stringify({}) 
+                fetch(url, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
+                    body: JSON.stringify({})
                 })
                 .then(response => { if (!response.ok) throw new Error('Error de red.'); return response.json(); })
                 .then(data => {
                     if (data.status === 'success') {
                         alert('Ronda virtual iniciada. No olvide finalizarla al terminar la revisión.');
                         roundModal.hide();
-                        window.location.reload(); 
+                        window.location.reload();
                     } else {
                         alert('Hubo un error al iniciar la ronda: ' + data.message);
                     }
@@ -195,38 +250,30 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
 
-     {% if active_shift and active_shift.actual_start_time %}
-        const checklistAlertModalElement = document.getElementById('checklistAlertModal');
-        if (checklistAlertModalElement) {
-            const checklistAlertModal = new bootstrap.Modal(checklistAlertModalElement);
-            const alertSound = new Audio("{% static 'sounds/alarm.mp3' %}");
+    // --- LÓGICA DE RECORDATORIOS DEL CHECKLIST ---
+    const checklistAlertModalElement = document.getElementById('checklistAlertModal');
+    if (checklistAlertModalElement) {
+        const checklistAlertModal = new bootstrap.Modal(checklistAlertModalElement);
+        const alertSound = new Audio("{% static 'sounds/alarm.mp3' %}");
+        const pendingTasks = JSON.parse('{{ pending_checklist_json|safe }}');
+        const shiftStartTimeForChecklist = new Date("{{ active_shift.actual_start_time.isoformat }}");
 
-            // Obtenemos las tareas pendientes que pasamos desde la vista
-            const pendingTasks = JSON.parse('{{ pending_checklist_json|safe }}');
-            
-            const shiftStartTime = new Date("{{ active_shift.actual_start_time.isoformat }}");
-
-            pendingTasks.forEach(task => {
-                // Calculamos la hora exacta de la alarma para cada tarea
-                const alertTime = new Date(shiftStartTime.getTime() + task.offset_minutes * 60000);
-                const now = new Date();
-                
-                // Calculamos cuántos milisegundos faltan para la alarma
-                const timeToAlert = alertTime.getTime() - now.getTime();
-
-                if (timeToAlert > 0) {
-                    // Si el tiempo es en el futuro, programamos la alarma
-                    setTimeout(function() {
-                        // Personalizamos el mensaje del modal y lo mostramos
-                        document.getElementById('checklistAlertTask').textContent = task.description;
-                        alertSound.play();
-                        checklistAlertModal.show();
-                    }, timeToAlert);
-                }
-            });
-        }
+        pendingTasks.forEach(task => {
+            const alertTime = new Date(shiftStartTimeForChecklist.getTime() + task.offset_minutes * 60000);
+            const now = new Date();
+            const timeToAlert = alertTime.getTime() - now.getTime();
+            if (timeToAlert > 0) {
+                setTimeout(function() {
+                    document.getElementById('checklistAlertTask').textContent = task.description;
+                    alertSound.play();
+                    checklistAlertModal.show();
+                }, timeToAlert);
+            }
+        });
+    }
     {% endif %}
-    // Lógica de actualización de servicios
+
+    // --- LÓGICA DE ACTUALIZACIÓN DE SERVICIOS ---
     const statusPanel = document.getElementById('service-status-panel');
     if (statusPanel) {
         function updateServiceStatus() {

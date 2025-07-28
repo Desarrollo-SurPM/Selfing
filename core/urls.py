@@ -59,6 +59,8 @@ urlpatterns = [
     path('turn/sign/<int:report_id>/', views.sign_turn_report, name='sign_turn_report'),
 
     path('shift/start/', views.start_shift, name='start_shift'),
+    # Dentro de urlpatterns, junto a las otras rutas de gestión de turnos:
+    path('dashboard/shift-calendar/', views.shift_calendar_view, name='shift_calendar'),
     # Rondas Virtuales
     path('round/start/', views.start_virtual_round, name='start_virtual_round'),
     path('round/finish/<int:round_id>/', views.finish_virtual_round, name='finish_virtual_round'),
@@ -66,4 +68,5 @@ urlpatterns = [
     # --- Rutas AJAX ---
     path('ajax/get-updates/<int:company_id>/', views.get_updates_for_company, name='ajax_get_updates'),
     path('ajax/get-service-status/', views.get_service_status, name='ajax_get_service_status'),
+    path('ajax/shifts/', views.get_shifts_for_calendar, name='ajax_get_shifts_for_calendar'),
 ]
