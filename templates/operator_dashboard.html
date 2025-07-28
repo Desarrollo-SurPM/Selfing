@@ -211,11 +211,10 @@ document.addEventListener('DOMContentLoaded', function() {
 
                 // 5. Verificamos si es momento de mostrar la notificación
                 // La alarma suena si el tiempo restante es menor a 1 segundo Y si no la hemos mostrado para esta hora.
-                if (timeRemaining <= 1000 && nextHourMark !== lastTriggeredHour) {
-                    lastTriggeredHour = nextHourMark; // Marcamos esta hora como "notificada"
+                 if (now.getSeconds() === 0) { 
                     alertSound.play().catch(e => console.error("Error al reproducir sonido:", e));
-                    if (!roundModal._isShown) {
-                       roundModal.show();
+                    if (roundModal && !roundModal._isShown) {
+                        roundModal.show();
                     }
                 }
 
@@ -291,7 +290,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 .catch(error => console.error('Error al actualizar servicios:', error));
         }
         updateServiceStatus();
-        setInterval(updateServiceStatus, 20000);
+        setInterval(updateServiceStatus, 5000);
     }
 });
 </script>

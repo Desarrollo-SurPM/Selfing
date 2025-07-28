@@ -126,6 +126,14 @@ class ServiceStatusLog(models.Model):
         return f"{self.service.name} - {status} a las {self.timestamp.strftime('%Y-%m-%d %H:%M:%S')}"
 
 class TurnReport(models.Model):
+    # --- CAMBIO AQUÍ: AÑADIR null=True ---
+    operator_shift = models.OneToOneField(
+        OperatorShift,
+        on_delete=models.CASCADE,
+        related_name='turn_report',
+        null=True  # Permite que el campo esté vacío temporalmente
+    )
+    # --- FIN DEL CAMBIO ---
     operator = models.ForeignKey(User, on_delete=models.CASCADE, related_name='turn_reports')
     start_time = models.DateTimeField()
     end_time = models.DateTimeField(auto_now_add=True)

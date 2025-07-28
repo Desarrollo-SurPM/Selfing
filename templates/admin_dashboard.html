@@ -153,7 +153,7 @@ document.addEventListener('DOMContentLoaded', function() {
             .catch(error => console.error('Error al actualizar servicios:', error));
     }
     updateServiceStatus();
-    setInterval(updateServiceStatus, 20000);
+    setInterval(updateServiceStatus, 5000);
 });
 </script>
 {% endblock %}

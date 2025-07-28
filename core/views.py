@@ -420,96 +420,84 @@ def get_shifts_for_calendar(request):
 
 
 # --- VISTAS DE OPERADOR ---
+
 @login_required
 def operator_dashboard(request):
     active_shift = get_active_shift(request.user)
     
-    # --- LÓGICA DE PROGRESO CORREGIDA Y MÁS ROBUSTA ---
-    progress_tasks = {
-        'rondas': {'completed': False, 'text': 'Realizar Rondas Virtuales'},
-        'bitacora': {'completed': False, 'text': 'Anotar en Bitácora'},
-        'correos': {'completed': False, 'text': 'Enviar Correos de Novedades'}
-    }
+    progress_tasks = {}
     completed_tasks_count = 0
-    total_tasks = 3
+    total_tasks = 3 
 
-    # Solo calculamos el progreso si el turno ha iniciado
     if active_shift and active_shift.actual_start_time:
-        # 1. Comprobar si se ha realizado al menos UNA ronda virtual
-        if VirtualRoundLog.objects.filter(operator_shift=active_shift).exists():
-            progress_tasks['rondas']['completed'] = True
+        # ... (La lógica de Rondas y Bitácora no cambia) ...
+        total_rondas_requeridas = 7
+        rondas_completadas = VirtualRoundLog.objects.filter(operator_shift=active_shift).count()
+        rondas_completas = rondas_completadas >= total_rondas_requeridas
+        progress_tasks['rondas'] = {
+            'completed': rondas_completas,
+            'text': f"Realizar Rondas Virtuales ({rondas_completadas}/{total_rondas_requeridas})"
+        }
+        if rondas_completas:
             completed_tasks_count += 1
 
-        # 2. Comprobar si se ha anotado al menos UNA novedad en la bitácora
-        if UpdateLog.objects.filter(operator_shift=active_shift).exists():
-            progress_tasks['bitacora']['completed'] = True
+        empresas_con_instalaciones = Company.objects.filter(installations__isnull=False).distinct()
+        total_empresas_requeridas = empresas_con_instalaciones.count()
+        ids_empresas_con_log = UpdateLog.objects.filter(operator_shift=active_shift).values_list('installation__company_id', flat=True).distinct()
+        bitacora_completa = len(ids_empresas_con_log) >= total_empresas_requeridas
+        progress_tasks['bitacora'] = {
+            'completed': bitacora_completa,
+            'text': f"Anotar en Bitácora ({len(ids_empresas_con_log)}/{total_empresas_requeridas} empresas)"
+        }
+        if bitacora_completa:
             completed_tasks_count += 1
-            
-        # 3. --- LÓGICA DE CORREOS CORREGIDA ---
-        #    Comprobar si se han enviado TODOS los correos necesarios
-        companies_with_updates = Company.objects.filter(
-            installations__updatelog__operator_shift=active_shift
-        ).distinct()
+
+        # --- INICIO DE LA SECCIÓN CORREGIDA ---
         
-        # Si no hubo novedades en ninguna empresa, la tarea se considera completada por defecto
-        if not companies_with_updates.exists():
-            progress_tasks['correos']['completed'] = True
+        # 3. Validación estricta de Correos (un correo por cada empresa)
+        # Se elimina el filtro .filter(is_active=True)
+        todas_las_empresas = Company.objects.all() 
+        total_empresas_correo = todas_las_empresas.count()
+        ids_empresas_con_correo = Email.objects.filter(
+            operator=request.user, 
+            created_at__gte=active_shift.actual_start_time
+        ).values_list('company_id', flat=True)
+        correos_completos = len(ids_empresas_con_correo) >= total_empresas_correo
+        progress_tasks['correos'] = {
+            'completed': correos_completos,
+            'text': f"Enviar Correos de Novedades ({len(ids_empresas_con_correo)}/{total_empresas_correo} empresas)"
+        }
+        if correos_completos:
             completed_tasks_count += 1
-        else:
-            # Si hubo novedades, verificamos que se haya enviado un correo por CADA empresa afectada
-            sent_emails = Email.objects.filter(
-                operator=request.user, 
-                created_at__gte=active_shift.actual_start_time
-            )
-            sent_email_company_ids = sent_emails.values_list('company_id', flat=True)
             
-            # Verificamos si falta alguna empresa
-            missing_emails = False
-            for company in companies_with_updates:
-                if company.id not in sent_email_company_ids:
-                    missing_emails = True
-                    break  # Si encontramos una que falta, no necesitamos seguir buscando
-            
-            # La tarea solo se completa si NO faltan correos
-            if not missing_emails:
-                progress_tasks['correos']['completed'] = True
-                completed_tasks_count += 1
-
     progress_percentage = int((completed_tasks_count / total_tasks) * 100) if total_tasks > 0 else 0
+    
+    # --- FIN DE LA SECCIÓN CORREGIDA ---
 
+    # El resto de la función no cambia...
     pending_checklist_items = []
     if active_shift and active_shift.actual_start_time:
-        completed_in_shift_ids = ChecklistLog.objects.filter(
-            operator_shift=active_shift
-        ).values_list('item_id', flat=True)
-        
-        # Obtenemos solo las tareas que AÚN NO se han completado
+        completed_in_shift_ids = ChecklistLog.objects.filter(operator_shift=active_shift).values_list('item_id', flat=True)
         pending_items = ChecklistItem.objects.exclude(id__in=completed_in_shift_ids)
-        
         for item in pending_items:
             pending_checklist_items.append({
                 'description': item.description,
                 'offset_minutes': item.trigger_offset_minutes
             })
 
+    traceability_logs = TraceabilityLog.objects.filter(user=request.user).order_by('-timestamp')[:5]
+
     context = {
         'active_shift': active_shift,
         'progress_tasks': progress_tasks,
         'progress_percentage': progress_percentage,
-        'service_status_list': [], # Se llenará más abajo
         'active_round_id': request.session.get('active_round_id'),
         'pending_checklist_json': json.dumps(pending_checklist_items),
+        'traceability_logs': traceability_logs,
     }
     
-    # Lógica para panel de servicios (sin cambios)
-    monitored_services = MonitoredService.objects.filter(is_active=True)
-    status_list = []
-    for service in monitored_services:
-        latest_log = service.logs.order_by('-timestamp').first()
-        status_list.append({ 'id': service.id, 'name': service.name, 'status': latest_log.is_up if latest_log else None })
-    context['service_status_list'] = status_list
-
     return render(request, 'operator_dashboard.html', context)
+
 
 def get_active_shift(user):
     """Función auxiliar para obtener el turno activo de un operador."""
@@ -617,43 +605,49 @@ def email_form_view(request):
 
 # Flujo de Rondas Virtuales
 
+
 @login_required
 def end_turn_preview(request):
     active_shift = get_active_shift(request.user)
-    if not active_shift:
+    if not active_shift or not active_shift.actual_start_time:
+        messages.error(request, "No tienes un turno activo o iniciado.")
         return redirect('operator_dashboard')
 
-    # --- INICIO DE LA LÓGICA DE VALIDACIÓN ---
-    # 1. Encontrar todas las empresas que tuvieron novedades en este turno
-    companies_with_updates = Company.objects.filter(
-        installations__updatelog__operator_shift=active_shift
-    ).distinct()
+    validation_errors = []
 
-    # 2. Encontrar todos los correos que el operador ya envió a aprobación en este turno
-    sent_emails_for_companies = Email.objects.filter(
-        operator=request.user,
-        created_at__gte=active_shift.actual_start_time
-    ).values_list('company_id', flat=True)
+    # ... (Validación de Rondas y Bitácora no cambia) ...
+    total_rondas_requeridas = 7
+    rondas_completadas = VirtualRoundLog.objects.filter(operator_shift=active_shift).count()
+    if rondas_completadas < total_rondas_requeridas:
+        faltantes = total_rondas_requeridas - rondas_completadas
+        validation_errors.append(f"Faltan {faltantes} rondas virtuales por completar.")
 
-    # 3. Comparar para encontrar las empresas faltantes
-    missing_companies = []
-    for company in companies_with_updates:
-        if company.id not in sent_emails_for_companies:
-            missing_companies.append(company.name)
+    empresas_con_instalaciones = Company.objects.filter(installations__isnull=False).distinct()
+    ids_empresas_con_log = UpdateLog.objects.filter(operator_shift=active_shift).values_list('installation__company_id', flat=True).distinct()
+    empresas_faltantes_bitacora = [c.name for c in empresas_con_instalaciones if c.id not in ids_empresas_con_log]
+    if empresas_faltantes_bitacora:
+        validation_errors.append(f"Falta registrar en bitácora para: {', '.join(empresas_faltantes_bitacora)}.")
 
-    # 4. Si faltan empresas, bloquear, notificar y detener la ejecución
-    if missing_companies:
-        message = f"No puedes finalizar el turno. Faltan correos por generar para las siguientes empresas: {', '.join(missing_companies)}."
-        messages.error(request, message)
+    # --- INICIO DE LA SECCIÓN CORREGIDA ---
+    
+    # 3. Validar Correos
+    # Se elimina el filtro .filter(is_active=True)
+    todas_las_empresas = Company.objects.all()
+    ids_empresas_con_correo = Email.objects.filter(operator=request.user, created_at__gte=active_shift.actual_start_time).values_list('company_id', flat=True)
+    empresas_faltantes_correo = [c.name for c in todas_las_empresas if c.id not in ids_empresas_con_correo]
+    if empresas_faltantes_correo:
+        validation_errors.append(f"Falta generar correo para: {', '.join(empresas_faltantes_correo)}.")
+        
+    # --- FIN DE LA SECCIÓN CORREGIDA ---
+        
+    if validation_errors:
+        full_error_message = "No puedes finalizar el turno. Tareas pendientes: " + " ".join(validation_errors)
+        messages.error(request, full_error_message)
         return redirect('operator_dashboard')
 
-    # --- FIN DE LA LÓGICA DE VALIDACIÓN ---
-
-    # --- SI LA VALIDACIÓN PASA, SE PROCEDE A GENERAR EL PDF ---
-    # (Este es el bloque de código que faltaba)
-
-    completed_checklist = ChecklistLog.objects.filter(operator_shift=active_shift)
-    updates_log = UpdateLog.objects.filter(operator_shift=active_shift)
+    # El resto de la función no cambia...
+    completed_checklist = ChecklistLog.objects.filter(operator_shift=active_shift).select_related('item')
+    updates_log = UpdateLog.objects.filter(operator_shift=active_shift).select_related('installation__company')
     rondas_virtuales = VirtualRoundLog.objects.filter(operator_shift=active_shift)
 
     context = {
@@ -671,17 +665,17 @@ def end_turn_preview(request):
     pdf = pisa.pisaDocument(BytesIO(html.encode("UTF-8")), result)
 
     if not pdf.err:
-        report = TurnReport(operator=request.user, start_time=active_shift.actual_start_time)
-        pdf_file = ContentFile(result.getvalue())
-        report.pdf_report.save(
-            f'reporte_turno_{request.user.username}_{timezone.now().strftime("%Y%m%d%H%M%S")}.pdf',
-            pdf_file
+        report, created = TurnReport.objects.get_or_create(
+            operator_shift=active_shift,
+            defaults={'operator': request.user, 'start_time': active_shift.actual_start_time}
         )
-        active_shift.actual_end_time = timezone.now()
-        active_shift.save()
+        pdf_file = ContentFile(result.getvalue())
+        report.pdf_report.save(f'reporte_turno_{request.user.username}_{timezone.now().strftime("%Y%m%d")}.pdf', pdf_file, save=True)
         return redirect('sign_turn_report', report_id=report.id)
 
-    return HttpResponse("Error al generar el PDF", status=500)
+    messages.error(request, f"Error al generar el PDF: {pdf.err}")
+    return redirect('operator_dashboard')
+
 
 @login_required
 def start_virtual_round(request):
