@@ -85,13 +85,13 @@
                 </div>
                 <div class="card shadow-sm" id="service-status-panel">
                     <div class="card-header">Estado de Servicios Críticos</div>
-                </div>
+                    </div>
             </div>
         </div>
     {% endif %}
 </div>
 
-<div class="modal fade" id="roundNotificationModal" tabindex="-1">
+<div class="modal fade" id="roundNotificationModal" tabindex="-1" aria-labelledby="modalLabel" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content">
             <div class="modal-header bg-primary text-white">
@@ -116,6 +116,7 @@
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     function getCsrfToken() {
+        // Busca el token en los formularios, que es más seguro
         const tokenElement = document.querySelector('form input[name="csrfmiddlewaretoken"]');
         return tokenElement ? tokenElement.value : '';
     }
@@ -123,6 +124,7 @@ document.addEventListener('DOMContentLoaded', function() {
     const countdownElement = document.getElementById('round-countdown');
     const roundModalElement = document.getElementById('roundNotificationModal');
     
+    // Solo inicializa la lógica si los elementos del turno activo existen
     if (roundModalElement && countdownElement) {
         const roundModal = new bootstrap.Modal(roundModalElement);
         const alertSound = new Audio("{% static 'sounds/alarm.mp3' %}");
@@ -139,6 +141,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 const secondsRemaining = 59 - seconds;
                 countdownElement.textContent = `${String(minutesRemaining).padStart(2, '0')}:${String(secondsRemaining).padStart(2, '0')}`;
                 
+                // Para pruebas: se activa cada minuto y reproduce el sonido
                 if (seconds === 0) { 
                     alertSound.play().catch(e => console.error("Error al reproducir sonido:", e));
                     roundModal.show();
@@ -173,6 +176,7 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
 
+    // Lógica de actualización de servicios
     const statusPanel = document.getElementById('service-status-panel');
     if (statusPanel) {
         function updateServiceStatus() {

@@ -343,7 +343,7 @@ def operator_dashboard(request):
         'correos': {'completed': False, 'text': 'Enviar Correos de Novedades'}
     }
     completed_tasks_count = 0
-    total_tasks = 3 # Total de pilares del turno
+    total_tasks = 3
 
     # Solo calculamos el progreso si el turno ha iniciado
     if active_shift and active_shift.actual_start_time:
@@ -357,23 +357,32 @@ def operator_dashboard(request):
             progress_tasks['bitacora']['completed'] = True
             completed_tasks_count += 1
             
-        # 3. Comprobar si se han enviado TODOS los correos necesarios
-        companies_with_updates = Company.objects.filter(installations__updatelog__operator_shift=active_shift).distinct()
+        # 3. --- LÓGICA DE CORREOS CORREGIDA ---
+        #    Comprobar si se han enviado TODOS los correos necesarios
+        companies_with_updates = Company.objects.filter(
+            installations__updatelog__operator_shift=active_shift
+        ).distinct()
         
-        # Si no hubo novedades, la tarea de correos se considera completada por defecto
+        # Si no hubo novedades en ninguna empresa, la tarea se considera completada por defecto
         if not companies_with_updates.exists():
             progress_tasks['correos']['completed'] = True
             completed_tasks_count += 1
         else:
-            sent_emails = Email.objects.filter(operator=request.user, created_at__gte=active_shift.actual_start_time)
+            # Si hubo novedades, verificamos que se haya enviado un correo por CADA empresa afectada
+            sent_emails = Email.objects.filter(
+                operator=request.user, 
+                created_at__gte=active_shift.actual_start_time
+            )
             sent_email_company_ids = sent_emails.values_list('company_id', flat=True)
             
+            # Verificamos si falta alguna empresa
             missing_emails = False
             for company in companies_with_updates:
                 if company.id not in sent_email_company_ids:
                     missing_emails = True
-                    break
+                    break  # Si encontramos una que falta, no necesitamos seguir buscando
             
+            # La tarea solo se completa si NO faltan correos
             if not missing_emails:
                 progress_tasks['correos']['completed'] = True
                 completed_tasks_count += 1
@@ -397,7 +406,6 @@ def operator_dashboard(request):
     context['service_status_list'] = status_list
 
     return render(request, 'operator_dashboard.html', context)
-
 
 def get_active_shift(user):
     """Función auxiliar para obtener el turno activo de un operador."""
