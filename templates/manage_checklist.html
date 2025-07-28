@@ -8,19 +8,33 @@
     <a href="{% url 'create_checklist_item' %}" class="btn btn-success">Añadir Tarea</a>
 </div>
 
-<ul class="list-group">
-    {% for item in items %}
-    <li class="list-group-item d-flex justify-content-between align-items-center">
-        {{ item.description }}
-        <div>
-            <a href="{% url 'edit_checklist_item' item.id %}" class="btn btn-sm btn-warning">Editar</a>
-            <a href="{% url 'delete_checklist_item' item.id %}" class="btn btn-sm btn-danger">Eliminar</a>
-        </div>
-    </li>
-    {% empty %}
-    <li class="list-group-item text-center">No hay tareas definidas en el checklist.</li>
-    {% endfor %}
-</ul>
+<table class="table table-hover">
+    <thead>
+        <tr>
+            <th>Descripción</th>
+            <th>Fase del Turno</th>
+            <th>Minuto de Alerta</th>
+            <th>Acciones</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for item in items %}
+        <tr>
+            <td>{{ item.description }}</td>
+            <td>{{ item.get_phase_display }}</td>
+            <td>{{ item.trigger_offset_minutes }}</td>
+            <td>
+                <a href="{% url 'edit_checklist_item' item.id %}" class="btn btn-sm btn-warning">Editar</a>
+                <a href="{% url 'delete_checklist_item' item.id %}" class="btn btn-sm btn-danger">Eliminar</a>
+            </td>
+        </tr>
+        {% empty %}
+        <tr>
+            <td colspan="4" class="text-center">No hay tareas definidas.</td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
 
 <a href="{% url 'admin_dashboard' %}" class="btn btn-secondary mt-3">Volver al Dashboard</a>
 {% endblock %}

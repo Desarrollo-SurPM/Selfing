@@ -1,0 +1,13 @@
+{% extends 'base.html' %}
+{% load crispy_forms_tags %}
+{% block title %}{{ title }}{% endblock %}
+{% block content %}
+<h2>{{ title }}</h2>
+<hr>
+<form method="post">
+    {% csrf_token %}
+    {{ form|crispy }}
+    <button type="submit" class="btn btn-primary mt-3">Guardar Plantilla</button>
+    <a href="{% url 'manage_shift_types' %}" class="btn btn-secondary mt-3">Cancelar</a>
+</form>
+{% endblock %}

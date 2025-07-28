@@ -1,0 +1,36 @@
+{% extends 'base.html' %}
+{% block title %}Gestión de Turnos{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h2>Turnos Asignados (Próximos 7 días)</h2>
+    <a href="{% url 'assign_shift' %}" class="btn btn-success">Asignar Nuevo Turno</a>
+</div>
+
+<div class="card shadow-sm">
+    <div class="list-group list-group-flush">
+        {% for shift in assigned_shifts %}
+        <div class="list-group-item">
+            <div class="d-flex w-100 justify-content-between">
+                <div>
+                    <h5 class="mb-1">{{ shift.operator.get_full_name|default:shift.operator.username }}</h5>
+                    <p class="mb-1">
+                        <span class="badge bg-primary">{{ shift.shift_type.name }}</span>
+                        {{ shift.shift_type.start_time|time:"H:i" }} - {{ shift.shift_type.end_time|time:"H:i" }}
+                    </p>
+                </div>
+                <div>
+                    <small class="text-muted">{{ shift.date|date:"l, d \d\e F" }}</small>
+                    <div class="mt-2">
+                        <a href="{% url 'edit_assigned_shift' shift.id %}" class="btn btn-sm btn-warning">Editar</a>
+                        <a href="{% url 'delete_assigned_shift' shift.id %}" class="btn btn-sm btn-danger">Eliminar</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% empty %}
+        <div class="list-group-item text-center p-4">No hay turnos asignados para los próximos 7 días.</div>
+        {% endfor %}
+    </div>
+</div>
+<a href="{% url 'admin_dashboard' %}" class="btn btn-secondary mt-3">Volver al Panel</a>
+{% endblock %}

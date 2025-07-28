@@ -1,0 +1,12 @@
+{% extends 'base.html' %}
+{% block title %}Confirmar Eliminación{% endblock %}
+{% block content %}
+<h2>¿Estás seguro?</h2>
+<p>Estás a punto de eliminar el turno de <strong>{{ assigned_shift.operator.username }}</strong> para el día <strong>{{ assigned_shift.date|date:"d/m/Y" }}</strong>.</p>
+<p>Esta acción no se puede deshacer.</p>
+<form method="post">
+    {% csrf_token %}
+    <button type="submit" class="btn btn-danger">Sí, eliminar</button>
+    <a href="{% url 'manage_shifts' %}" class="btn btn-secondary">Cancelar</a>
+</form>
+{% endblock %}

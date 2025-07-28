@@ -1,7 +1,13 @@
 from django import forms
 from django.contrib.auth.forms import UserCreationForm
 from django.contrib.auth.models import User
-from .models import UpdateLog, Email, ChecklistItem, Company, Installation, MonitoredService
+# Importación consolidada de todos los modelos necesarios
+from .models import (
+    UpdateLog, Email, ChecklistItem, Company, Installation, MonitoredService,
+    ShiftType, OperatorShift, VirtualRoundLog
+)
+
+# --- Formularios de Registros del Operador ---
 
 class UpdateLogForm(forms.ModelForm):
     class Meta:
@@ -12,36 +18,19 @@ class UpdateLogForm(forms.ModelForm):
             'message': forms.Textarea(attrs={'rows': 4, 'placeholder': 'Describa la novedad...'}),
         }
 
-class EmailApprovalForm(forms.ModelForm):
-    class Meta:
-        model = Email
-        fields = ['observations'] # Por ahora, solo permitimos editar las observaciones
-        widgets = {
-            'observations': forms.Textarea(attrs={'rows': 10}),
-        }
 class EmailForm(forms.ModelForm):
     def __init__(self, *args, **kwargs):
-        # Ya no necesitamos la lógica del 'operator' aquí
         super(EmailForm, self).__init__(*args, **kwargs)
-
         self.fields['updates'].label = "Novedades a Incluir"
-        
-        # --- ESTA ES LA LÓGICA CLAVE ---
-        # Si el formulario se está enviando (es un POST y tiene datos)
+        # Lógica para que la validación funcione con checkboxes dinámicos
         if self.data:
             try:
-                # Tomamos el ID de la empresa que se envió en el formulario
                 company_id = int(self.data.get('company'))
-                # Actualizamos la lista de opciones válidas para el campo 'updates'
-                # para que la validación funcione correctamente.
                 self.fields['updates'].queryset = UpdateLog.objects.filter(
                     installation__company_id=company_id
                 )
             except (ValueError, TypeError):
-                # Si algo falla, usamos un queryset vacío para evitar más errores
                 self.fields['updates'].queryset = UpdateLog.objects.none()
-        # Si es una petición GET (la primera vez que se carga la página),
-        # la lista de novedades empieza vacía.
         else:
             self.fields['updates'].queryset = UpdateLog.objects.none()
 
@@ -52,6 +41,25 @@ class EmailForm(forms.ModelForm):
             'updates': forms.CheckboxSelectMultiple,
             'observations': forms.Textarea(attrs={'rows': 5, 'placeholder': 'Añada observaciones adicionales aquí...'}),
         }
+
+class VirtualRoundCompletionForm(forms.ModelForm):
+    checked_installations = forms.ModelMultipleChoiceField(
+        queryset=Installation.objects.all(),
+        widget=forms.CheckboxSelectMultiple,
+        label="Marque las instalaciones que fueron revisadas durante la ronda:"
+    )
+    class Meta:
+        model = VirtualRoundLog
+        fields = ['checked_installations']
+
+
+# --- Formularios de Gestión del Administrador ---
+
+class EmailApprovalForm(forms.ModelForm):
+    class Meta:
+        model = Email
+        fields = ['observations']
+        widgets = {'observations': forms.Textarea(attrs={'rows': 10})}
 
 class OperatorCreationForm(UserCreationForm):
     class Meta(UserCreationForm.Meta):
@@ -76,7 +84,15 @@ class InstallationForm(forms.ModelForm):
 class ChecklistItemForm(forms.ModelForm):
     class Meta:
         model = ChecklistItem
-        fields = ['description']
+        fields = ['description', 'phase', 'trigger_offset_minutes']
+        labels = {
+            'description': 'Descripción de la Tarea',
+            'phase': 'Fase del Turno',
+            'trigger_offset_minutes': 'Minutos desde el inicio para activar alerta',
+        }
+        widgets = {
+            'description': forms.TextInput(attrs={'placeholder': 'Ej: Revisar cámaras del sector A'}),
+        }
 
 class MonitoredServiceForm(forms.ModelForm):
     class Meta:
@@ -86,4 +102,39 @@ class MonitoredServiceForm(forms.ModelForm):
             'name': 'Nombre del Servicio',
             'ip_address': 'Dirección IP o Dominio',
             'is_active': '¿Activar monitoreo para este servicio?'
+        }
+
+class ShiftTypeForm(forms.ModelForm):
+    class Meta:
+        model = ShiftType
+        fields = ['name', 'start_time', 'end_time', 'duration_hours']
+        labels = {
+            'name': 'Nombre del Turno',
+            'start_time': 'Hora de Inicio',
+            'end_time': 'Hora de Término',
+            'duration_hours': 'Duración (horas)',
+        }
+        widgets = {
+            'start_time': forms.TimeInput(attrs={'type': 'time'}),
+            'end_time': forms.TimeInput(attrs={'type': 'time'}),
+        }
+
+class OperatorShiftForm(forms.ModelForm):
+    def __init__(self, *args, **kwargs):
+        super(OperatorShiftForm, self).__init__(*args, **kwargs)
+        # --- LÓGICA AÑADIDA ---
+        # Filtramos el campo 'operator' para que solo muestre usuarios
+        # que NO son superusuarios (es decir, solo operadores).
+        self.fields['operator'].queryset = User.objects.filter(is_superuser=False)
+
+    class Meta:
+        model = OperatorShift
+        fields = ['operator', 'shift_type', 'date']
+        labels = {
+            'operator': 'Operador',
+            'shift_type': 'Turno',
+            'date': 'Fecha',
+        }
+        widgets = {
+            'date': forms.DateInput(attrs={'type': 'date'}),
         }

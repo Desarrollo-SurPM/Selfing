@@ -1,0 +1,29 @@
+{% extends 'base.html' %}
+
+{% block title %}Confirmar Eliminación de Tipo de Turno{% endblock %}
+
+{% block content %}
+<div class="container">
+    <div class="row justify-content-center">
+        <div class="col-lg-6">
+            <div class="card shadow-sm text-center">
+                <div class="card-header bg-danger text-white">
+                    <h2 class="h4 mb-0">¿Estás seguro?</h2>
+                </div>
+                <div class="card-body">
+                    <p class="lead">Estás a punto de eliminar permanentemente el tipo de turno:</p>
+                    <h3 class="mb-4"><strong>"{{ shift_type.name }}"</strong></h3>
+                    <p class="text-danger"><i class="fas fa-exclamation-triangle me-2"></i>Esta acción no se puede deshacer.</p>
+                    <form method="post">
+                        {% csrf_token %}
+                        <div class="d-grid gap-2 d-md-flex justify-content-md-center">
+                            <a href="{% url 'manage_shift_types' %}" class="btn btn-secondary">Cancelar</a>
+                            <button type="submit" class="btn btn-danger">Sí, eliminar</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

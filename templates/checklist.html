@@ -1,6 +1,6 @@
 {% extends 'base.html' %}
 
-{% block title %}Checklist de Tareas{% endblock %}
+{% block title %}Checklist de Tareas del Turno{% endblock %}
 
 {% block content %}
 <div class="container">
@@ -11,31 +11,50 @@
                     <h2 class="h4 mb-0">Checklist de Tareas del Turno</h2>
                 </div>
                 <div class="card-body">
-                    <p class="text-muted">Marca las tareas a medida que las vayas completando. Las tareas ya realizadas hoy aparecerán marcadas.</p>
+                    <p class="text-muted">Marque las tareas a medida que las vaya completando. Las tareas ya realizadas en su turno aparecerán marcadas.</p>
+                    
                     <form method="post">
                         {% csrf_token %}
-                        <ul class="list-group list-group-flush">
-                            {% for item in items %}
-                            <li class="list-group-item px-0">
-                                <div class="form-check fs-5">
-                                    <input class="form-check-input" 
-                                           type="checkbox" 
-                                           name="items" 
-                                           value="{{ item.id }}" 
-                                           id="item-{{ item.id }}"
-                                           {% if item.id in completed_ids %}checked disabled{% endif %}>
-                                    <label class="form-check-label {% if item.id in completed_ids %}text-decoration-line-through text-muted{% endif %}" 
-                                           for="item-{{ item.id }}">
-                                        {{ item.description }}
-                                    </label>
+                        <div class="accordion" id="checklistAccordion">
+                            
+                            {% for phase_name, items in checklist_data.items %}
+                            <div class="accordion-item">
+                                <h2 class="accordion-header" id="heading-{{ forloop.counter }}">
+                                    <button class="accordion-button" type="button" data-bs-toggle="collapse" data-bs-target="#collapse-{{ forloop.counter }}" aria-expanded="true" aria-controls="collapse-{{ forloop.counter }}">
+                                        <strong>{{ phase_name }}</strong>
+                                    </button>
+                                </h2>
+                                <div id="collapse-{{ forloop.counter }}" class="accordion-collapse collapse show" aria-labelledby="heading-{{ forloop.counter }}">
+                                    <div class="accordion-body">
+                                        <ul class="list-group list-group-flush">
+                                            {% for item in items %}
+                                            <li class="list-group-item px-0">
+                                                <div class="form-check fs-5">
+                                                    <input class="form-check-input" 
+                                                           type="checkbox" 
+                                                           name="items" 
+                                                           value="{{ item.id }}" 
+                                                           id="item-{{ item.id }}"
+                                                           {% if item.id in completed_ids %}checked disabled{% endif %}>
+                                                    <label class="form-check-label {% if item.id in completed_ids %}text-decoration-line-through text-muted{% endif %}" 
+                                                           for="item-{{ item.id }}">
+                                                        {{ item.description }}
+                                                    </label>
+                                                </div>
+                                            </li>
+                                            {% endfor %}
+                                        </ul>
+                                    </div>
                                 </div>
-                            </li>
+                            </div>
                             {% endfor %}
-                        </ul>
+
+                        </div>
+                        
                         <div class="d-grid gap-2 mt-4">
-    <button type="submit" class="btn btn-primary btn-lg">Guardar Tareas Completadas</button>
-    <a href="{% url 'operator_dashboard' %}" class="btn btn-outline-secondary">Volver al Panel</a>
-</div>
+                            <button type="submit" class="btn btn-primary btn-lg">Guardar Tareas Completadas</button>
+                            <a href="{% url 'operator_dashboard' %}" class="btn btn-outline-secondary">Volver al Panel</a>
+                        </div>
                     </form>
                 </div>
             </div>

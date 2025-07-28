@@ -9,12 +9,54 @@
         h1, h2, h3 { color: #333; }
         h1 { font-size: 24pt; text-align: center; }
         h2 { font-size: 16pt; border-bottom: 1px solid #ccc; padding-bottom: 5px; margin-top: 25px; }
-        table { width: 100%; border-collapse: collapse; margin-top: 15px; }
-        th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
-        th { background-color: #f2f2f2; }
-        .footer { position: fixed; bottom: 0; left: 0; right: 0; text-align: center; font-size: 9pt; color: #777; }
-        .signature { margin-top: 80px; text-align: center; font-size: 12pt; }
-        .signature-line { border-top: 1px solid #000; width: 250px; margin: 0 auto; padding-top: 5px; }
+        h3 { font-size: 13pt; margin-top: 20px; }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 15px;
+        }
+
+        th, td {
+            border: 1px solid #ddd;
+            padding: 8px;
+            text-align: left;
+            word-break: break-word;
+            white-space: normal;
+        }
+
+        th {
+            background-color: #f2f2f2;
+        }
+
+        hr {
+            border: none;
+            border-top: 1px solid #ddd;
+            margin: 10px 0;
+        }
+
+        .footer {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            text-align: center;
+            font-size: 9pt;
+            color: #777;
+        }
+
+        .signature {
+            margin-top: 80px;
+            text-align: center;
+            font-size: 12pt;
+        }
+
+        .signature-line {
+            border-top: 1px solid #000;
+            width: 250px;
+            margin: 0 auto;
+            padding-top: 5px;
+        }
     </style>
 </head>
 <body>
@@ -34,17 +76,21 @@
     {% else %}
         <p>No se completaron tareas del checklist en este turno.</p>
     {% endif %}
-    
-    <h2>Rondas Virtuales Confirmadas</h2>
+
+    <h2>Rondas Virtuales Realizadas</h2>
     {% if rondas_virtuales %}
-        <ul>
         {% for ronda in rondas_virtuales %}
-            <li>Ronda confirmada a las <strong>{{ ronda.completed_at|date:"H:i:s" }} hrs.</strong></li>
+            <p>
+                <strong>Hora de Inicio:</strong> {{ ronda.start_time|date:"H:i:s" }}<br>
+                <strong>Hora de Fin:</strong> {{ ronda.end_time|date:"H:i:s" }}<br>
+                <strong>Duración:</strong> {{ ronda.duration_seconds|floatformat:0 }} segundos
+            </p>
+            <hr>
         {% endfor %}
-        </ul>
     {% else %}
-        <p>No se confirmaron rondas virtuales en este turno.</p>
+        <p>No se realizaron rondas virtuales en este turno.</p>
     {% endif %}
+
     <h2>Bitácora de Novedades</h2>
     {% if updates_log %}
         <table>
