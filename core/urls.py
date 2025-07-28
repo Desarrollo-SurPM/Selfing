@@ -58,6 +58,7 @@ urlpatterns = [
     path('turn/end/', views.end_turn_preview, name='end_turn_preview'),
     path('turn/sign/<int:report_id>/', views.sign_turn_report, name='sign_turn_report'),
 
+    path('shift/start/', views.start_shift, name='start_shift'),
     # Rondas Virtuales
     path('round/start/', views.start_virtual_round, name='start_virtual_round'),
     path('round/finish/<int:round_id>/', views.finish_virtual_round, name='finish_virtual_round'),

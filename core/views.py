@@ -10,6 +10,7 @@ from io import BytesIO
 from django.core.files.base import ContentFile
 from django import forms
 from datetime import timedelta
+from django.contrib.auth import logout
 
 from .models import (
     Company, Installation, OperatorProfile, ShiftType, OperatorShift,
@@ -25,22 +26,15 @@ from .forms import (
 def is_supervisor(user):
     return user.is_superuser
 
+# core/views.py
+
 @login_required
 def home(request):
+    """ Redirige al usuario a su dashboard correspondiente sin iniciar el turno. """
     if is_supervisor(request.user):
         return redirect('admin_dashboard')
-    
-    # Lógica para registrar el inicio del turno del operador
-    today = timezone.now().date()
-    # Busca un turno asignado para hoy que aún no haya comenzado oficialmente
-    active_shift = OperatorShift.objects.filter(operator=request.user, date=today, actual_start_time__isnull=True).first()
-    
-    if active_shift:
-        active_shift.actual_start_time = timezone.now()
-        active_shift.save()
-        TraceabilityLog.objects.create(user=request.user, action="Inició turno.")
-        
-    return redirect('operator_dashboard')
+    else:
+        return redirect('operator_dashboard')
 
 # --- VISTAS DE ADMINISTRADOR ---
 
@@ -76,8 +70,6 @@ def admin_dashboard(request):
     }
     return render(request, 'admin_dashboard.html', context)
 
-# --- (Vistas CRUD para Operadores, Empresas, Instalaciones, Checklist, Monitoreo, etc.) ---
-# (Estas vistas no cambian funcionalmente, solo se lista el código para asegurar que esté completo)
 
 @login_required
 @user_passes_test(is_supervisor)
@@ -340,24 +332,154 @@ def delete_shift_type(request, type_id):
     if request.method == 'POST': shift_type.delete(); return redirect('manage_shift_types')
     return render(request, 'shift_type_confirm_delete.html', {'shift_type': shift_type})
 # --- VISTAS DE OPERADOR ---
+@login_required
+def operator_dashboard(request):
+    active_shift = get_active_shift(request.user)
+    
+    # --- LÓGICA DE PROGRESO CORREGIDA Y MÁS ROBUSTA ---
+    progress_tasks = {
+        'rondas': {'completed': False, 'text': 'Realizar Rondas Virtuales'},
+        'bitacora': {'completed': False, 'text': 'Anotar en Bitácora'},
+        'correos': {'completed': False, 'text': 'Enviar Correos de Novedades'}
+    }
+    completed_tasks_count = 0
+    total_tasks = 3 # Total de pilares del turno
+
+    # Solo calculamos el progreso si el turno ha iniciado
+    if active_shift and active_shift.actual_start_time:
+        # 1. Comprobar si se ha realizado al menos UNA ronda virtual
+        if VirtualRoundLog.objects.filter(operator_shift=active_shift).exists():
+            progress_tasks['rondas']['completed'] = True
+            completed_tasks_count += 1
+
+        # 2. Comprobar si se ha anotado al menos UNA novedad en la bitácora
+        if UpdateLog.objects.filter(operator_shift=active_shift).exists():
+            progress_tasks['bitacora']['completed'] = True
+            completed_tasks_count += 1
+            
+        # 3. Comprobar si se han enviado TODOS los correos necesarios
+        companies_with_updates = Company.objects.filter(installations__updatelog__operator_shift=active_shift).distinct()
+        
+        # Si no hubo novedades, la tarea de correos se considera completada por defecto
+        if not companies_with_updates.exists():
+            progress_tasks['correos']['completed'] = True
+            completed_tasks_count += 1
+        else:
+            sent_emails = Email.objects.filter(operator=request.user, created_at__gte=active_shift.actual_start_time)
+            sent_email_company_ids = sent_emails.values_list('company_id', flat=True)
+            
+            missing_emails = False
+            for company in companies_with_updates:
+                if company.id not in sent_email_company_ids:
+                    missing_emails = True
+                    break
+            
+            if not missing_emails:
+                progress_tasks['correos']['completed'] = True
+                completed_tasks_count += 1
+
+    progress_percentage = int((completed_tasks_count / total_tasks) * 100) if total_tasks > 0 else 0
+
+    context = {
+        'active_shift': active_shift,
+        'progress_tasks': progress_tasks,
+        'progress_percentage': progress_percentage,
+        'service_status_list': [], # Se llenará más abajo
+        'active_round_id': request.session.get('active_round_id'),
+    }
+    
+    # Lógica para panel de servicios (sin cambios)
+    monitored_services = MonitoredService.objects.filter(is_active=True)
+    status_list = []
+    for service in monitored_services:
+        latest_log = service.logs.order_by('-timestamp').first()
+        status_list.append({ 'id': service.id, 'name': service.name, 'status': latest_log.is_up if latest_log else None })
+    context['service_status_list'] = status_list
+
+    return render(request, 'operator_dashboard.html', context)
+
 
 def get_active_shift(user):
     """Función auxiliar para obtener el turno activo de un operador."""
     return OperatorShift.objects.filter(operator=user, date=timezone.now().date()).first()
 
 @login_required
-def operator_dashboard(request):
+def start_shift(request):
+    if request.method == 'POST':
+        today = timezone.now().date()
+        # Busca un turno asignado para hoy que aún no haya comenzado
+        active_shift = OperatorShift.objects.filter(
+            operator=request.user, 
+            date=today, 
+            actual_start_time__isnull=True
+        ).first()
+        
+        if active_shift:
+            active_shift.actual_start_time = timezone.now()
+            active_shift.save()
+            TraceabilityLog.objects.create(user=request.user, action="Inició turno.")
+    
+    return redirect('operator_dashboard')
+
+# --- VISTA DEL DASHBOARD DEL OPERADOR COMPLETAMENTE REESCRITA ---
+
+    active_shift = get_active_shift(request.user)
+    
+    # --- Lógica para el nuevo cálculo de progreso ---
+    progress_tasks = {'rondas': False, 'bitacora': False, 'correos': False}
+    total_progress = 0
+    
+    # Solo calculamos el progreso si el turno ha iniciado
+    if active_shift and active_shift.actual_start_time:
+        # 1. Comprobar si se ha realizado al menos una ronda virtual
+        if VirtualRoundLog.objects.filter(operator_shift=active_shift).exists():
+            progress_tasks['rondas'] = True
+            total_progress += 33.33
+
+        # 2. Comprobar si se ha anotado al menos una novedad en la bitácora
+        if UpdateLog.objects.filter(operator_shift=active_shift).exists():
+            progress_tasks['bitacora'] = True
+            total_progress += 33.33
+            
+        # 3. Comprobar si se han enviado todos los correos necesarios
+        companies_with_updates = Company.objects.filter(installations__updatelog__operator_shift=active_shift).distinct()
+        
+        # Si no hubo novedades, la tarea de correos se considera completada por defecto
+        if not companies_with_updates.exists():
+            progress_tasks['correos'] = True
+            total_progress += 33.34
+        else:
+            sent_emails = Email.objects.filter(operator=request.user, created_at__gte=active_shift.actual_start_time)
+            sent_email_company_ids = sent_emails.values_list('company_id', flat=True)
+            
+            missing_emails = False
+            for company in companies_with_updates:
+                if company.id not in sent_email_company_ids:
+                    missing_emails = True
+                    break
+            
+            if not missing_emails:
+                progress_tasks['correos'] = True
+                total_progress += 33.34
+
+    context = {
+        'active_shift': active_shift,
+        'progress_tasks': progress_tasks,
+        'progress_percentage': int(total_progress),
+        'service_status_list': [], # Se llenará más abajo
+        'active_round_id': request.session.get('active_round_id'),
+    }
+    
+    # --- Lógica para panel de servicios (sin cambios) ---
     monitored_services = MonitoredService.objects.filter(is_active=True)
     status_list = []
     for service in monitored_services:
         latest_log = service.logs.order_by('-timestamp').first()
         status_list.append({ 'id': service.id, 'name': service.name, 'status': latest_log.is_up if latest_log else None })
-    
-    context = {
-        'service_status_list': status_list,
-        'active_round_id': request.session.get('active_round_id')
-    }
+    context['service_status_list'] = status_list
+
     return render(request, 'operator_dashboard.html', context)
+
 
 @login_required
 def checklist_view(request):
@@ -595,23 +717,55 @@ def finish_virtual_round(request, round_id):
 @login_required
 def sign_turn_report(request, report_id):
     report = get_object_or_404(TurnReport, id=report_id, operator=request.user)
+    
+    # Buscamos el turno activo asociado a este reporte
+    active_shift = get_active_shift(request.user)
+
     if request.method == 'POST':
-        report.is_signed = True; report.signed_at = timezone.now(); report.save()
+        # 1. Marca el reporte como firmado
+        report.is_signed = True
+        report.signed_at = timezone.now()
+        report.save()
+        
+        # 2. --- ESTA ES LA LÓGICA CLAVE QUE FALTABA ---
+        #    Marca el turno como finalizado
+        if active_shift:
+            active_shift.actual_end_time = timezone.now()
+            active_shift.save()
+
         TraceabilityLog.objects.create(user=request.user, action="Firmó y finalizó su reporte de turno.")
-        from django.contrib.auth import logout
+        
+        # 3. Cierra la sesión del usuario
         logout(request)
         return redirect('login')
+
     return render(request, 'turn_report_preview.html', {'report': report})
 
 # --- VISTAS AJAX ---
 @login_required
 def get_updates_for_company(request, company_id):
-    installations = Installation.objects.filter(company_id=company_id, updatelog__isnull=False).distinct()
+    # Obtenemos el turno activo del operador que hace la petición
+    active_shift = get_active_shift(request.user)
+    if not active_shift:
+        return JsonResponse({'grouped_updates': []})
+
+    # Buscamos instalaciones de la empresa que tengan novedades DE ESTE TURNO
+    installations_with_updates = Installation.objects.filter(
+        company_id=company_id,
+        updatelog__operator_shift=active_shift
+    ).distinct()
+
     response_data = []
-    for inst in installations:
-        updates = UpdateLog.objects.filter(installation=inst).order_by('-created_at')
+    for installation in installations_with_updates:
+        # Filtramos las novedades por instalación Y por el turno activo
+        updates = UpdateLog.objects.filter(
+            installation=installation, 
+            operator_shift=active_shift
+        ).order_by('-created_at')
+        
         updates_list = [{'id': u.id, 'text': f"{u.created_at.strftime('%d/%m %H:%M')} - {u.message}"} for u in updates]
-        response_data.append({'installation_name': inst.name, 'updates': updates_list})
+        response_data.append({'installation_name': installation.name, 'updates': updates_list})
+        
     return JsonResponse({'grouped_updates': response_data})
 
 @login_required

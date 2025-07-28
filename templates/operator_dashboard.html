@@ -1,5 +1,5 @@
 {% extends 'base.html' %}
-
+{% load static %} 
 {% block title %}Panel del Operador{% endblock %}
 
 {% block content %}
@@ -7,80 +7,91 @@
     <div class="d-flex justify-content-between align-items-center mb-4 border-bottom pb-3 flex-wrap">
         <div>
             <h2 class="h3">Bienvenido, {{ user.username }}</h2>
-            <p class="text-muted mb-0">Elija una opción para continuar su turno.</p>
+            {% if active_shift and active_shift.actual_start_time %}
+                <p class="text-muted mb-0">Turno Activo: {{ active_shift.shift_type.name }} (Iniciado a las {{ active_shift.actual_start_time|date:"H:i" }} hrs)</p>
+            {% elif active_shift %}
+                <p class="text-info mb-0">Tienes un turno asignado para hoy: {{ active_shift.shift_type.name }}.</p>
+            {% else %}
+                <p class="text-danger mb-0">No tienes un turno activo asignado para hoy.</p>
+            {% endif %}
         </div>
-        <div id="finish-round-container" {% if not request.session.active_round_id %}style="display: none;"{% endif %}>
-        <a href="{% if request.session.active_round_id %}{% url 'finish_virtual_round' request.session.active_round_id %}{% endif %}" id="finish-round-link" class="btn btn-danger btn-lg">
-            <i class="fas fa-stop-circle me-2"></i>Finalizar Ronda en Curso
-        </a>
-    </div>
-        <div>
-        <a href="{% url 'end_turn_preview' %}" class="btn btn-danger">
-            <i class="fas fa-power-off me-2"></i>Finalizar Turno y Generar Reporte
-        </a>
-    </div>
+        <div id="finish-round-container" {% if not active_round_id %}style="display: none;"{% endif %}>
+             <a href="{% if active_round_id %}{% url 'finish_virtual_round' active_round_id %}{% endif %}" id="finish-round-link" class="btn btn-danger btn-lg">
+                <i class="fas fa-stop-circle me-2"></i>Finalizar Ronda en Curso
+            </a>
+        </div>
     </div>
 
-    <div class="row g-4">
+    {% if not active_shift or not active_shift.actual_start_time %}
+        <div class="text-center p-5 bg-light rounded shadow-sm">
+            <h1 class="display-4">Turno Pendiente</h1>
+            <p class="lead">Presiona el botón para registrar el inicio de tu jornada de trabajo.</p>
+            {% if active_shift %}
+            <form method="post" action="{% url 'start_shift' %}">
+                {% csrf_token %}
+                <button type="submit" class="btn btn-primary btn-lg"><i class="fas fa-play-circle me-2"></i>Iniciar Turno</button>
+            </form>
+            {% else %}
+            <p class="text-muted">Contacta a tu supervisor para que te asigne un turno.</p>
+            {% endif %}
+        </div>
 
-        <div class="col-lg-8">
-            <div class="row g-4">
-                <div class="col-md-4">
-                    <a href="{% url 'checklist' %}" class="card-link">
-                        <div class="card h-100 card-option text-center shadow-sm">
-                            <div class="card-body">
-                                <i class="fas fa-clipboard-check fa-4x text-primary mb-3"></i>
-                                <h3 class="h5 card-title">Checklist</h3>
-                                <p class="card-text small text-muted">Ver y registrar tareas del turno.</p>
-                            </div>
-                        </div>
-                    </a>
+    {% elif active_shift.actual_end_time %}
+        <div class="text-center p-5 bg-light rounded shadow-sm">
+            <h1 class="display-4 text-success">Turno Finalizado</h1>
+            <p class="lead">Ya has completado y firmado tu turno para el día de hoy.</p>
+            <p class="text-muted">Tu reporte ha sido enviado a supervisión.</p>
+        </div>
+        
+    {% else %}
+        <div class="row g-4">
+            <div class="col-lg-8">
+                <h4 class="mb-3">Progreso del Turno</h4>
+                <div class="progress mb-4" style="height: 25px;">
+                    <div class="progress-bar" role="progressbar" style="width: {{ progress_percentage }}%;" aria-valuenow="{{ progress_percentage }}">{{ progress_percentage }}%</div>
                 </div>
-                <div class="col-md-4">
-                    <a href="{% url 'update_log' %}" class="card-link">
-                        <div class="card h-100 card-option text-center shadow-sm">
-                            <div class="card-body">
-                                <i class="fas fa-book fa-4x text-primary mb-3"></i>
-                                <h3 class="h5 card-title">Bitácora</h3>
-                                <p class="card-text small text-muted">Anotar novedades por instalación.</p>
-                            </div>
-                        </div>
+                
+                <ul class="list-group">
+                    {% for task_key, task_data in progress_tasks.items %}
+                    <li class="list-group-item d-flex justify-content-between align-items-center">
+                        {{ task_data.text }}
+                        {% if task_data.completed %}
+                            <span class="badge bg-success"><i class="fas fa-check me-1"></i>Completado</span>
+                        {% else %}
+                            <span class="badge bg-secondary">Pendiente</span>
+                        {% endif %}
+                    </li>
+                    {% endfor %}
+                </ul>
+
+                <div class="mt-4 pt-4 border-top">
+                    <h5 class="mb-3">Acciones Rápidas</h5>
+                    <a href="{% url 'checklist' %}" class="btn btn-primary">Ir al Checklist</a>
+                    <a href="{% url 'update_log' %}" class="btn btn-info">Anotar en Bitácora</a>
+                    <a href="{% url 'email_form' %}" class="btn btn-success">Generar Correo</a>
+                    
+                    {% if progress_percentage >= 99 %}
+                    <a href="{% url 'end_turn_preview' %}" class="btn btn-danger">
+                        <i class="fas fa-power-off me-2"></i>Finalizar Turno y Generar Reporte
                     </a>
+                    {% endif %}
                 </div>
-                <div class="col-md-4">
-                    <a href="{% url 'email_form' %}" class="card-link">
-                        <div class="card h-100 card-option text-center shadow-sm">
-                            <div class="card-body">
-                                <i class="fas fa-envelope-open-text fa-4x text-primary mb-3"></i>
-                                <h3 class="h5 card-title">Generar Correo</h3>
-                                <p class="card-text small text-muted">Enviar reporte a supervisión.</p>
-                            </div>
-                        </div>
-                    </a>
+            </div>
+
+            <div class="col-lg-4">
+                <div class="card text-center shadow-sm mb-4">
+                    <div class="card-header">Próxima Ronda Virtual</div>
+                    <div class="card-body"><h3 class="display-5 fw-bold" id="round-countdown">--:--</h3></div>
+                </div>
+                <div class="card shadow-sm" id="service-status-panel">
+                    <div class="card-header">Estado de Servicios Críticos</div>
                 </div>
             </div>
         </div>
-
-        <div class="col-lg-4">
-            <div class="card text-center shadow-sm mb-4">
-                <div class="card-header">
-                    Próxima Ronda Virtual
-                </div>
-                <div class="card-body">
-                    <h3 class="display-5 fw-bold" id="round-countdown">--:--</h3>
-                </div>
-            </div>
-            
-            <div class="card shadow-sm" id="service-status-panel">
-                <div class="card-header">
-                    Estado de Servicios Críticos
-                </div>
-                </div>
-        </div>
-    </div>
+    {% endif %}
 </div>
 
-<div class="modal fade" id="roundNotificationModal" tabindex="-1" aria-labelledby="modalLabel" aria-hidden="true">
+<div class="modal fade" id="roundNotificationModal" tabindex="-1">
     <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content">
             <div class="modal-header bg-primary text-white">
@@ -89,97 +100,98 @@
             </div>
             <div class="modal-body fs-5 text-center">
                 <p>Es hora de realizar la ronda virtual por todas las cámaras.</p>
-                <p>Por favor, confirme que ha completado la tarea.</p>
+                <p>Por favor, confirme para iniciar el registro de la ronda.</p>
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Más Tarde</button>
-                <button type="button" class="btn btn-primary" id="confirmRoundButton">Aceptar y Registrar</button>
+                <button type="button" class="btn btn-primary" id="confirmRoundButton">Iniciar Ronda</button>
             </div>
         </div>
     </div>
 </div>
 {% endblock %}
 
+
 {% block extra_js %}
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     function getCsrfToken() {
-        const tokenElement = document.querySelector('input[name="csrfmiddlewaretoken"]');
+        const tokenElement = document.querySelector('form input[name="csrfmiddlewaretoken"]');
         return tokenElement ? tokenElement.value : '';
     }
 
     const countdownElement = document.getElementById('round-countdown');
-    const roundModal = new bootstrap.Modal(document.getElementById('roundNotificationModal'));
-    const confirmButton = document.getElementById('confirmRoundButton');
-    let countdownInterval;
+    const roundModalElement = document.getElementById('roundNotificationModal');
+    
+    if (roundModalElement && countdownElement) {
+        const roundModal = new bootstrap.Modal(roundModalElement);
+        const alertSound = new Audio("{% static 'sounds/alarm.mp3' %}");
+        const confirmButton = document.getElementById('confirmRoundButton');
+        let countdownInterval;
 
-    // --- LÓGICA DEL CONTADOR DE RONDA (Funcionalidad intacta) ---
-    function startCountdown() {
-        clearInterval(countdownInterval);
-        countdownInterval = setInterval(function() {
-            const now = new Date();
-            const minutes = now.getMinutes();
-            const seconds = now.getSeconds();
-            const minutesRemaining = 59 - minutes;
-            const secondsRemaining = 59 - seconds;
-            countdownElement.textContent = `${String(minutesRemaining).padStart(2, '0')}:${String(secondsRemaining).padStart(2, '0')}`;
-            // Para pruebas: se activa cada minuto
-            if (seconds === 0) { 
-                roundModal.show();
-            }
-        }, 1000);
-    }
-    startCountdown();
-
-    // --- 👇 INICIO DE LA LÓGICA MODIFICADA 👇 ---
-    if (confirmButton) {
-        confirmButton.addEventListener('click', function() {
-            // AHORA LLAMA A LA NUEVA URL PARA INICIAR LA RONDA
-            const url = "{% url 'start_virtual_round' %}"; 
-            const csrfToken = getCsrfToken();
-            if (!csrfToken) { console.error("Token CSRF no encontrado."); return; }
-
-            fetch(url, { 
-                method: 'POST', 
-                headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken }, 
-                body: JSON.stringify({}) 
-            })
-            .then(response => { if (!response.ok) throw new Error('Error de red.'); return response.json(); })
-            .then(data => {
-                if (data.status === 'success') {
-                    alert('Ronda virtual iniciada. No olvide finalizarla al terminar la revisión.');
-                    roundModal.hide();
-                    // Recargamos la página para que el servidor muestre el botón "Finalizar Ronda"
-                    window.location.reload(); 
-                } else {
-                    alert('Hubo un error al iniciar la ronda.');
+        function startCountdown() {
+            clearInterval(countdownInterval);
+            countdownInterval = setInterval(function() {
+                const now = new Date();
+                const minutes = now.getMinutes();
+                const seconds = now.getSeconds();
+                const minutesRemaining = 59 - minutes;
+                const secondsRemaining = 59 - seconds;
+                countdownElement.textContent = `${String(minutesRemaining).padStart(2, '0')}:${String(secondsRemaining).padStart(2, '0')}`;
+                
+                if (seconds === 0) { 
+                    alertSound.play().catch(e => console.error("Error al reproducir sonido:", e));
+                    roundModal.show();
                 }
-            })
-            .catch(error => { alert('Hubo un error al iniciar la ronda.'); console.error(error); });
-        });
-    }
-    // --- 👆 FIN DE LA LÓGICA MODIFICADA 👆 ---
+            }, 1000);
+        }
+        startCountdown();
 
-    // --- LÓGICA DE ACTUALIZACIÓN DE SERVICIOS (Funcionalidad intacta) ---
+        if (confirmButton) {
+            confirmButton.addEventListener('click', function() {
+                const url = "{% url 'start_virtual_round' %}"; 
+                const csrfToken = getCsrfToken();
+                if (!csrfToken) { console.error("Token CSRF no encontrado."); return; }
+
+                fetch(url, { 
+                    method: 'POST', 
+                    headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken }, 
+                    body: JSON.stringify({}) 
+                })
+                .then(response => { if (!response.ok) throw new Error('Error de red.'); return response.json(); })
+                .then(data => {
+                    if (data.status === 'success') {
+                        alert('Ronda virtual iniciada. No olvide finalizarla al terminar la revisión.');
+                        roundModal.hide();
+                        window.location.reload(); 
+                    } else {
+                        alert('Hubo un error al iniciar la ronda: ' + data.message);
+                    }
+                })
+                .catch(error => { alert('Hubo un error al iniciar la ronda.'); console.error(error); });
+            });
+        }
+    }
+
     const statusPanel = document.getElementById('service-status-panel');
-
-    function updateServiceStatus() {
-        const url = `{% url 'ajax_get_service_status' %}?timestamp=${new Date().getTime()}`;
-        
-        fetch(url)
-            .then(response => response.text())
-            .then(html => {
-                const listContainer = statusPanel.querySelector('.list-group');
-                if (listContainer) {
-                    listContainer.outerHTML = html;
-                } else {
-                    statusPanel.querySelector('.card-header').insertAdjacentHTML('afterend', html);
-                }
-            })
-            .catch(error => console.error('Error al actualizar servicios:', error));
+    if (statusPanel) {
+        function updateServiceStatus() {
+            const url = `{% url 'ajax_get_service_status' %}?timestamp=${new Date().getTime()}`;
+            fetch(url)
+                .then(response => response.text())
+                .then(html => {
+                    const listContainer = statusPanel.querySelector('.list-group');
+                    if (listContainer) {
+                        listContainer.outerHTML = html;
+                    } else {
+                        statusPanel.querySelector('.card-header').insertAdjacentHTML('afterend', html);
+                    }
+                })
+                .catch(error => console.error('Error al actualizar servicios:', error));
+        }
+        updateServiceStatus();
+        setInterval(updateServiceStatus, 20000);
     }
-    updateServiceStatus();
-    setInterval(updateServiceStatus, 20000);
 });
 </script>
 {% endblock %}
