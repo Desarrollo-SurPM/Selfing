@@ -91,6 +91,25 @@
     {% endif %}
 </div>
 
+<div class="modal fade" id="checklistAlertModal" tabindex="-1" aria-labelledby="checklistAlertLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header bg-info text-white">
+                <h5 class="modal-title" id="checklistAlertLabel"><i class="fas fa-tasks me-2"></i>Recordatorio de Tarea</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+            </div>
+            <div class="modal-body fs-5 text-center">
+                <p>Es momento de realizar la siguiente tarea del checklist:</p>
+                <h4 class="fw-bold" id="checklistAlertTask"></h4>
+            </div>
+            <div class="modal-footer">
+                <a href="{% url 'checklist' %}" class="btn btn-primary">Ir al Checklist</a>
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Entendido</button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <div class="modal fade" id="roundNotificationModal" tabindex="-1" aria-labelledby="modalLabel" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content">
@@ -176,6 +195,37 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
 
+     {% if active_shift and active_shift.actual_start_time %}
+        const checklistAlertModalElement = document.getElementById('checklistAlertModal');
+        if (checklistAlertModalElement) {
+            const checklistAlertModal = new bootstrap.Modal(checklistAlertModalElement);
+            const alertSound = new Audio("{% static 'sounds/alarm.mp3' %}");
+
+            // Obtenemos las tareas pendientes que pasamos desde la vista
+            const pendingTasks = JSON.parse('{{ pending_checklist_json|safe }}');
+            
+            const shiftStartTime = new Date("{{ active_shift.actual_start_time.isoformat }}");
+
+            pendingTasks.forEach(task => {
+                // Calculamos la hora exacta de la alarma para cada tarea
+                const alertTime = new Date(shiftStartTime.getTime() + task.offset_minutes * 60000);
+                const now = new Date();
+                
+                // Calculamos cuántos milisegundos faltan para la alarma
+                const timeToAlert = alertTime.getTime() - now.getTime();
+
+                if (timeToAlert > 0) {
+                    // Si el tiempo es en el futuro, programamos la alarma
+                    setTimeout(function() {
+                        // Personalizamos el mensaje del modal y lo mostramos
+                        document.getElementById('checklistAlertTask').textContent = task.description;
+                        alertSound.play();
+                        checklistAlertModal.show();
+                    }, timeToAlert);
+                }
+            });
+        }
+    {% endif %}
     // Lógica de actualización de servicios
     const statusPanel = document.getElementById('service-status-panel');
     if (statusPanel) {

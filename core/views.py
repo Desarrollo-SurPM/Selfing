@@ -11,6 +11,7 @@ from django.core.files.base import ContentFile
 from django import forms
 from datetime import timedelta
 from django.contrib.auth import logout
+import json
 
 from .models import (
     Company, Installation, OperatorProfile, ShiftType, OperatorShift,
@@ -389,12 +390,28 @@ def operator_dashboard(request):
 
     progress_percentage = int((completed_tasks_count / total_tasks) * 100) if total_tasks > 0 else 0
 
+    pending_checklist_items = []
+    if active_shift and active_shift.actual_start_time:
+        completed_in_shift_ids = ChecklistLog.objects.filter(
+            operator_shift=active_shift
+        ).values_list('item_id', flat=True)
+        
+        # Obtenemos solo las tareas que AÚN NO se han completado
+        pending_items = ChecklistItem.objects.exclude(id__in=completed_in_shift_ids)
+        
+        for item in pending_items:
+            pending_checklist_items.append({
+                'description': item.description,
+                'offset_minutes': item.trigger_offset_minutes
+            })
+
     context = {
         'active_shift': active_shift,
         'progress_tasks': progress_tasks,
         'progress_percentage': progress_percentage,
         'service_status_list': [], # Se llenará más abajo
         'active_round_id': request.session.get('active_round_id'),
+        'pending_checklist_json': json.dumps(pending_checklist_items),
     }
     
     # Lógica para panel de servicios (sin cambios)
