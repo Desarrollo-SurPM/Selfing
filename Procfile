@@ -1,0 +1,1 @@
+web: gunicorn seguridad_platform.wsgi

@@ -1,42 +1,524 @@
 {% extends 'base.html' %}
 
-{% block title %}Gestionar Operadores{% endblock %}
+{% block title %}Gestionar Operadores - SELFING{% endblock %}
 
 {% block content %}
-<div class="d-flex justify-content-between align-items-center mb-3">
-    <h2>Gestión de Operadores</h2>
-    <a href="{% url 'create_operator' %}" class="btn btn-success">Añadir Operador</a>
+<style>
+    /* Page Header */
+    .page-header {
+        background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+        color: white;
+        padding: 2rem;
+        border-radius: 15px;
+        margin-bottom: 2rem;
+        box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+    }
+    
+    .page-header h2 {
+        margin: 0;
+        font-weight: 700;
+        font-size: 1.75rem;
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+    }
+    
+    .page-header p {
+        margin: 0.5rem 0 0 0;
+        opacity: 0.9;
+    }
+    
+    /* Search and Filter Bar */
+    .toolbar {
+        background: white;
+        padding: 1.5rem;
+        border-radius: 15px;
+        box-shadow: 0 5px 20px rgba(0,0,0,0.08);
+        margin-bottom: 2rem;
+    }
+    
+    .search-box {
+        position: relative;
+    }
+    
+    .search-box input {
+        padding-left: 3rem;
+        border: 2px solid #e3e6f0;
+        border-radius: 10px;
+        transition: all 0.3s ease;
+    }
+    
+    .search-box input:focus {
+        border-color: #4e73df;
+        box-shadow: 0 0 0 0.2rem rgba(78, 115, 223, 0.1);
+    }
+    
+    .search-box i {
+        position: absolute;
+        left: 1rem;
+        top: 50%;
+        transform: translateY(-50%);
+        color: #858796;
+    }
+    
+    /* Table Styles */
+    .table-container {
+        background: white;
+        border-radius: 15px;
+        box-shadow: 0 5px 20px rgba(0,0,0,0.08);
+        overflow: hidden;
+    }
+    
+    .table {
+        margin-bottom: 0;
+    }
+    
+    .table thead {
+        background: #f8f9fa;
+    }
+    
+    .table thead th {
+        border: none;
+        padding: 1.25rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        font-size: 0.85rem;
+        letter-spacing: 0.5px;
+        color: #5a5c69;
+    }
+    
+    .table tbody td {
+        padding: 1.25rem;
+        vertical-align: middle;
+        border-top: 1px solid #e3e6f0;
+    }
+    
+    .table tbody tr {
+        transition: all 0.3s ease;
+    }
+    
+    .table tbody tr:hover {
+        background: #f8f9fc;
+        transform: translateX(5px);
+    }
+    
+    /* User Avatar */
+    .user-avatar {
+        width: 40px;
+        height: 40px;
+        border-radius: 50%;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        color: white;
+        font-weight: 600;
+        font-size: 1.1rem;
+        margin-right: 1rem;
+    }
+    
+    .user-info {
+        display: flex;
+        align-items: center;
+    }
+    
+    .user-details {
+        line-height: 1.3;
+    }
+    
+    .user-details .username {
+        font-weight: 600;
+        color: #2c3e50;
+    }
+    
+    .user-details .role {
+        font-size: 0.85rem;
+        color: #858796;
+    }
+    
+    /* Status Badge */
+    .status-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+        padding: 0.5rem 1rem;
+        border-radius: 50px;
+        font-size: 0.85rem;
+        font-weight: 500;
+    }
+    
+    .status-badge.active {
+        background: rgba(28, 200, 138, 0.1);
+        color: #1cc88a;
+    }
+    
+    .status-badge.active i {
+        font-size: 0.6rem;
+    }
+    
+    .status-badge.inactive {
+        background: rgba(231, 74, 59, 0.1);
+        color: #e74a3b;
+    }
+    
+    /* Action Buttons */
+    .action-buttons {
+        display: flex;
+        gap: 0.5rem;
+    }
+    
+    .btn-action {
+        width: 35px;
+        height: 35px;
+        border-radius: 8px;
+        border: none;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        transition: all 0.3s ease;
+        font-size: 0.9rem;
+    }
+    
+    .btn-edit {
+        background: rgba(246, 194, 62, 0.1);
+        color: #f6c23e;
+    }
+    
+    .btn-edit:hover {
+        background: #f6c23e;
+        color: white;
+        transform: translateY(-2px);
+        box-shadow: 0 5px 15px rgba(246, 194, 62, 0.3);
+    }
+    
+    .btn-delete {
+        background: rgba(231, 74, 59, 0.1);
+        color: #e74a3b;
+    }
+    
+    .btn-delete:hover {
+        background: #e74a3b;
+        color: white;
+        transform: translateY(-2px);
+        box-shadow: 0 5px 15px rgba(231, 74, 59, 0.3);
+    }
+    
+    /* Add Button */
+    .btn-add {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        border: none;
+        padding: 0.75rem 1.5rem;
+        border-radius: 10px;
+        color: white;
+        font-weight: 500;
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+        transition: all 0.3s ease;
+    }
+    
+    .btn-add:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 10px 25px rgba(102, 126, 234, 0.3);
+    }
+    
+    /* Back Button */
+    .btn-back {
+        background: #858796;
+        border: none;
+        padding: 0.75rem 1.5rem;
+        border-radius: 10px;
+        color: white;
+        font-weight: 500;
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+        transition: all 0.3s ease;
+        text-decoration: none;
+    }
+    
+    .btn-back:hover {
+        background: #6e7280;
+        color: white;
+        transform: translateX(-5px);
+        text-decoration: none;
+    }
+    
+    /* Empty State */
+    .empty-state {
+        text-align: center;
+        padding: 5rem 2rem;
+    }
+    
+    .empty-state i {
+        font-size: 4rem;
+        color: #d1d3e2;
+        margin-bottom: 1rem;
+    }
+    
+    .empty-state h4 {
+        color: #5a5c69;
+        margin-bottom: 0.5rem;
+    }
+    
+    .empty-state p {
+        color: #858796;
+    }
+    
+    /* Stats Cards */
+    .stats-row {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 1rem;
+        margin-bottom: 2rem;
+    }
+    
+    .stat-card {
+        background: white;
+        padding: 1.5rem;
+        border-radius: 15px;
+        box-shadow: 0 5px 20px rgba(0,0,0,0.08);
+        text-align: center;
+        transition: all 0.3s ease;
+    }
+    
+    .stat-card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 10px 30px rgba(0,0,0,0.15);
+    }
+    
+    .stat-card i {
+        font-size: 2rem;
+        margin-bottom: 0.5rem;
+    }
+    
+    .stat-card.total i {
+        color: #4e73df;
+    }
+    
+    .stat-card.active i {
+        color: #1cc88a;
+    }
+    
+    .stat-card.inactive i {
+        color: #e74a3b;
+    }
+    
+    .stat-value {
+        font-size: 2rem;
+        font-weight: 700;
+        margin-bottom: 0.25rem;
+    }
+    
+    .stat-label {
+        color: #858796;
+        font-size: 0.85rem;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+    
+    /* Loading Animation */
+    @keyframes pulse {
+        0% { opacity: 1; }
+        50% { opacity: 0.4; }
+        100% { opacity: 1; }
+    }
+    
+    .loading {
+        animation: pulse 1.5s ease-in-out infinite;
+    }
+</style>
+
+<div class="page-header">
+    <div class="d-flex justify-content-between align-items-center">
+        <div>
+            <h2><i class="fas fa-user-shield"></i>Gestión de Operadores</h2>
+            <p>Administra los operadores del sistema de seguridad</p>
+        </div>
+        <a href="{% url 'create_operator' %}" class="btn btn-add">
+            <i class="fas fa-plus-circle"></i>
+            Añadir Operador
+        </a>
+    </div>
 </div>
 
-<table class="table table-striped table-hover">
-    <thead>
-        <tr>
-            <th>Usuario</th>
-            <th>Nombre</th>
-            <th>Email</th>
-            <th>Activo</th>
-            <th>Acciones</th>
-        </tr>
-    </thead>
-    <tbody>
-        {% for op in operators %}
-        <tr>
-            <td>{{ op.username }}</td>
-            <td>{{ op.get_full_name }}</td>
-            <td>{{ op.email }}</td>
-            <td>{% if op.is_active %}Sí{% else %}No{% endif %}</td>
-            <td>
-                <a href="{% url 'edit_operator' op.id %}" class="btn btn-sm btn-warning">Editar</a>
-                <a href="{% url 'delete_operator' op.id %}" class="btn btn-sm btn-danger">Eliminar</a>
-            </td>
-        </tr>
-        {% empty %}
-        <tr>
-            <td colspan="5" class="text-center">No hay operadores registrados.</td>
-        </tr>
-        {% endfor %}
-    </tbody>
-</table>
+<!-- Stats Cards -->
+<div class="stats-row">
+    <div class="stat-card total">
+        <i class="fas fa-users"></i>
+        <div class="stat-value">{{ operators|length }}</div>
+        <div class="stat-label">Total Operadores</div>
+    </div>
+    <div class="stat-card active">
+        <i class="fas fa-user-check"></i>
+        <div class="stat-value" id="activeCount">0</div>
+        <div class="stat-label">Activos</div>
+    </div>
+    <div class="stat-card inactive">
+        <i class="fas fa-user-times"></i>
+        <div class="stat-value" id="inactiveCount">0</div>
+        <div class="stat-label">Inactivos</div>
+    </div>
+</div>
 
-<a href="{% url 'admin_dashboard' %}" class="btn btn-secondary mt-3">Volver al Dashboard</a>
+<!-- Search and Filter Bar -->
+<div class="toolbar">
+    <div class="row align-items-center">
+        <div class="col-md-6">
+            <div class="search-box">
+                <i class="fas fa-search"></i>
+                <input type="text" class="form-control" id="searchInput" placeholder="Buscar por nombre, usuario o email...">
+            </div>
+        </div>
+        <div class="col-md-6 text-md-end mt-3 mt-md-0">
+            <div class="btn-group" role="group">
+                <button type="button" class="btn btn-outline-secondary active" data-filter="all">
+                    <i class="fas fa-list"></i> Todos
+                </button>
+                <button type="button" class="btn btn-outline-success" data-filter="active">
+                    <i class="fas fa-check-circle"></i> Activos
+                </button>
+                <button type="button" class="btn btn-outline-danger" data-filter="inactive">
+                    <i class="fas fa-times-circle"></i> Inactivos
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Table -->
+<div class="table-container">
+    <table class="table" id="operatorsTable">
+        <thead>
+            <tr>
+                <th>Operador</th>
+                <th>Email</th>
+                <th>Estado</th>
+                <th class="text-center">Acciones</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for op in operators %}
+            <tr data-status="{% if op.is_active %}active{% else %}inactive{% endif %}">
+                <td>
+                    <div class="user-info">
+                        <div class="user-avatar">
+                            {{ op.username|first|upper }}
+                        </div>
+                        <div class="user-details">
+                            <div class="username">{{ op.username }}</div>
+                            <div class="role">{{ op.get_full_name|default:"Sin nombre completo" }}</div>
+                        </div>
+                    </div>
+                </td>
+                <td>
+                    <a href="mailto:{{ op.email }}" class="text-decoration-none">
+                        <i class="fas fa-envelope me-2 text-muted"></i>{{ op.email }}
+                    </a>
+                </td>
+                <td>
+                    {% if op.is_active %}
+                        <span class="status-badge active">
+                            <i class="fas fa-circle"></i>
+                            Activo
+                        </span>
+                    {% else %}
+                        <span class="status-badge inactive">
+                            <i class="fas fa-circle"></i>
+                            Inactivo
+                        </span>
+                    {% endif %}
+                </td>
+                <td>
+                    <div class="action-buttons justify-content-center">
+                        <a href="{% url 'edit_operator' op.id %}" class="btn-action btn-edit" title="Editar">
+                            <i class="fas fa-edit"></i>
+                        </a>
+                        <a href="{% url 'delete_operator' op.id %}" class="btn-action btn-delete" title="Eliminar" onclick="return confirm('¿Estás seguro de eliminar este operador?')">
+                            <i class="fas fa-trash"></i>
+                        </a>
+                    </div>
+                </td>
+            </tr>
+            {% empty %}
+            <tr>
+                <td colspan="4">
+                    <div class="empty-state">
+                        <i class="fas fa-user-slash"></i>
+                        <h4>No hay operadores registrados</h4>
+                        <p>Comienza agregando tu primer operador al sistema</p>
+                        <a href="{% url 'create_operator' %}" class="btn btn-add mt-3">
+                            <i class="fas fa-plus-circle"></i>
+                            Añadir Primer Operador
+                        </a>
+                    </div>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<div class="mt-4">
+    <a href="{% url 'admin_dashboard' %}" class="btn btn-back">
+        <i class="fas fa-arrow-left"></i>
+        Volver al Dashboard
+    </a>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Search functionality
+    const searchInput = document.getElementById('searchInput');
+    const table = document.getElementById('operatorsTable');
+    const rows = table.getElementsByTagName('tbody')[0].getElementsByTagName('tr');
+    
+    searchInput.addEventListener('keyup', function() {
+        const searchTerm = this.value.toLowerCase();
+        
+        Array.from(rows).forEach(row => {
+            const text = row.textContent.toLowerCase();
+            row.style.display = text.includes(searchTerm) ? '' : 'none';
+        });
+    });
+    
+    // Filter functionality
+    const filterButtons = document.querySelectorAll('[data-filter]');
+    
+    filterButtons.forEach(button => {
+        button.addEventListener('click', function() {
+            // Update active button
+            filterButtons.forEach(btn => btn.classList.remove('active'));
+            this.classList.add('active');
+            
+            const filter = this.getAttribute('data-filter');
+            
+            Array.from(rows).forEach(row => {
+                if (filter === 'all') {
+                    row.style.display = '';
+                } else {
+                    const status = row.getAttribute('data-status');
+                    row.style.display = status === filter ? '' : 'none';
+                }
+            });
+        });
+    });
+    
+    // Animate numbers in stats
+    const statValues = document.querySelectorAll('.stat-value');
+    statValues.forEach(stat => {
+        const finalValue = parseInt(stat.textContent) || 0;
+        let currentValue = 0;
+        const increment = finalValue / 20;
+        const timer = setInterval(() => {
+            currentValue += increment;
+            if (currentValue >= finalValue) {
+                currentValue = finalValue;
+                clearInterval(timer);
+            }
+            stat.textContent = Math.floor(currentValue);
+        }, 50);
+    });
+});
+</script>
 {% endblock %}
