@@ -12,8 +12,7 @@ db.sqlite3
 .env
 
 # Archivos estáticos y de medios recolectados por Django
-/static/
-/media/
+
 
 # Archivos del sistema operativo y del editor
 .DS_Store
