@@ -82,50 +82,68 @@ class InstallationForm(forms.ModelForm):
         fields = ['company', 'name', 'address']
 
 class ChecklistItemForm(forms.ModelForm):
-    # This will render as a list of checkboxes for selecting days of the week
+    """
+    Formulario para crear y editar ítems del checklist, con widgets
+    personalizados para una mejor experiencia de usuario.
+    """
+    # Usamos MultipleChoiceField con checkboxes para seleccionar los días.
     dias_aplicables = forms.MultipleChoiceField(
         choices=ChecklistItem.DIAS_SEMANA,
-        widget=forms.CheckboxSelectMultiple(attrs={'class': 'checkbox-horizontal'}),
+        widget=forms.CheckboxSelectMultiple,
         required=False,
-        label="Días aplicables (dejar en blanco si aplica para todos)"
+        label="Días de la Semana Aplicables",
+        help_text="Marcar los días en que aplica. Dejar todos sin marcar para que aplique siempre."
     )
 
-    # This will render as a list of checkboxes for selecting shift types
+    # Usamos ModelMultipleChoiceField con checkboxes para los tipos de turno.
     turnos_aplicables = forms.ModelMultipleChoiceField(
         queryset=ShiftType.objects.all(),
-        widget=forms.CheckboxSelectMultiple(attrs={'class': 'checkbox-horizontal'}),
+        widget=forms.CheckboxSelectMultiple,
         required=False,
-        label="Turnos aplicables (dejar en blanco si aplica para todos)"
+        label="Tipos de Turno Aplicables",
+        help_text="Marcar los turnos en que aplica. Dejar sin marcar para que aplique a todos."
     )
 
     class Meta:
         model = ChecklistItem
-        # Use the new fields in the form
-        fields = ['description', 'phase', 'order', 'dias_aplicables', 'turnos_aplicables']
-        widgets = {
-            'description': forms.Textarea(attrs={'rows': 3}),
+        # Lista de campos que se mostrarán en el formulario, en el orden deseado.
+        fields = [
+            'description',
+            'phase',
+            'dias_aplicables',
+            'turnos_aplicables',
+            'alarm_trigger_delay', # <-- Aquí está el campo de la alarma
+            'order',
+        ]
+        # Añadimos ayuda contextual para el campo de la alarma.
+        help_texts = {
+            'alarm_trigger_delay': "Formato: HH:MM:SS. Por ejemplo, para 1 hora y 30 minutos, ingrese '01:30:00'.",
         }
-        labels = {
-            'description': 'Descripción de la Tarea',
-            'phase': 'Fase del Turno',
-            'order': 'Orden',
+        # Añadimos un placeholder para guiar al usuario.
+        widgets = {
+            'alarm_trigger_delay': forms.TextInput(attrs={'placeholder': 'HH:MM:SS'}),
         }
 
-    # Converts the saved string (e.g., "0,5") into a list for editing
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        if self.instance and self.instance.dias_aplicables:
+        # Si estamos editando una instancia que ya existe, precargamos
+        # los días que estaban guardados como texto.
+        if self.instance and self.instance.pk and self.instance.dias_aplicables:
             self.fields['dias_aplicables'].initial = self.instance.dias_aplicables.split(',')
 
-    # Converts the list of selected checkboxes (e.g., ['0', '5']) into a string for saving
     def save(self, commit=True):
+        # Obtenemos la instancia del formulario sin guardarla aún en la BD.
         instance = super().save(commit=False)
-        dias = self.cleaned_data.get('dias_aplicables')
-        instance.dias_aplicables = ','.join(dias) if dias else ''
         
+        # Procesamos los datos del campo de días para guardarlos como una cadena.
+        selected_days = self.cleaned_data.get('dias_aplicables')
+        instance.dias_aplicables = ",".join(selected_days) if selected_days else ""
+        
+        # Si el formulario se guarda con commit=True (comportamiento por defecto),
+        # guardamos la instancia principal y luego sus relaciones ManyToMany.
         if commit:
             instance.save()
-            self.save_m2m() # Required for ManyToMany relationships
+            self.save_m2m() # Guarda la data de 'turnos_aplicables'
             
         return instance
 

@@ -7,18 +7,15 @@
 <link rel="stylesheet" href="{% static 'css/manage_pages.css' %}">
 <style>
     /* Estilo para el cursor mientras se arrastra */
-    .sortable-ghost {
-        opacity: 0.4;
-        background-color: #c8ebfb;
-    }
-    /* Estilo para la fila que se está moviendo */
-    .sortable-chosen {
-        cursor: grabbing;
-    }
-    /* Añadir cursor de movimiento a las filas */
-    #checklistTable tbody tr {
-        cursor: grab;
-    }
+    .sortable-ghost { opacity: 0.4; background-color: #c8ebfb; }
+    .sortable-chosen { cursor: grabbing; }
+    #checklistTable tbody tr { cursor: grab; }
+    
+    /* Estilos para las "píldoras" de fase */
+    .phase-badge { padding: 0.3em 0.8em; border-radius: 50px; font-size: 0.8rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; }
+    .phase-badge.start { background-color: rgba(28, 200, 138, 0.1); color: #1cc88a; }
+    .phase-badge.during { background-color: rgba(78, 115, 223, 0.1); color: #4e73df; }
+    .phase-badge.end { background-color: rgba(231, 74, 59, 0.1); color: #e74a3b; }
 </style>
 {% endblock %}
 
@@ -27,45 +24,21 @@
     <div class="d-flex justify-content-between align-items-center">
         <div>
             <h2><i class="fas fa-list-check"></i>Gestión de Tareas del Checklist</h2>
-            <p>Configura las tareas que los operadores deben completar durante sus turnos. <strong>Arrastra las filas para reordenarlas.</strong></p>
+            <p>Configura las tareas de los operadores. <strong>Arrastra las filas para reordenarlas.</strong></p>
         </div>
         <a href="{% url 'create_checklist_item' %}" class="btn btn-add">
-            <i class="fas fa-plus-circle"></i>
-            Añadir Tarea
+            <i class="fas fa-plus-circle"></i> Añadir Tarea
         </a>
     </div>
 </div>
 
 <div class="stats-row">
-    <div class="stat-card total">
-        <div class="stat-icon">
-            <i class="fas fa-tasks"></i>
-        </div>
-        <div class="stat-value">{{ items|length }}</div>
-        <div class="stat-label">Total Tareas</div>
-    </div>
-    <div class="stat-card inicio">
-        <div class="stat-icon">
-            <i class="fas fa-play-circle"></i>
-        </div>
-        <div class="stat-value" id="inicioCount">0</div>
-        <div class="stat-label">Inicio Turno</div>
-    </div>
-    <div class="stat-card durante">
-        <div class="stat-icon">
-            <i class="fas fa-clock"></i>
-        </div>
-        <div class="stat-value" id="duranteCount">0</div>
-        <div class="stat-label">Durante Turno</div>
-    </div>
-    <div class="stat-card fin">
-        <div class="stat-icon">
-            <i class="fas fa-stop-circle"></i>
-        </div>
-        <div class="stat-value" id="finCount">0</div>
-        <div class="stat-label">Fin Turno</div>
-    </div>
+    <div class="stat-card total"><div class="stat-icon"><i class="fas fa-tasks"></i></div><div class="stat-value">{{ items|length }}</div><div class="stat-label">Total Tareas</div></div>
+    <div class="stat-card inicio"><div class="stat-icon"><i class="fas fa-play-circle"></i></div><div class="stat-value" id="startCount">0</div><div class="stat-label">Inicio Turno</div></div>
+    <div class="stat-card durante"><div class="stat-icon"><i class="fas fa-clock"></i></div><div class="stat-value" id="duringCount">0</div><div class="stat-label">Durante Turno</div></div>
+    <div class="stat-card fin"><div class="stat-icon"><i class="fas fa-stop-circle"></i></div><div class="stat-value" id="endCount">0</div><div class="stat-label">Fin Turno</div></div>
 </div>
+
 <div class="toolbar">
     <div class="row align-items-center">
         <div class="col-md-6">
@@ -76,23 +49,15 @@
         </div>
         <div class="col-md-6 text-md-end mt-3 mt-md-0">
             <div class="filter-pills">
-                <span class="filter-pill active" data-filter="all">
-                    <i class="fas fa-list me-1"></i>Todas
-                </span>
-                <span class="filter-pill" data-filter="inicio">
-                    <i class="fas fa-play-circle me-1"></i>Inicio
-                </span>
-                <span class="filter-pill" data-filter="durante">
-                    <i class="fas fa-clock me-1"></i>Durante
-                </span>
-                <span class="filter-pill" data-filter="fin">
-                    <i class="fas fa-stop-circle me-1"></i>Fin
-                </span>
+                {# --- CORRECCIÓN: Se usan los valores 'start', 'during', 'end' para los filtros --- #}
+                <span class="filter-pill active" data-filter="all"><i class="fas fa-list me-1"></i>Todas</span>
+                <span class="filter-pill" data-filter="start"><i class="fas fa-play-circle me-1"></i>Inicio</span>
+                <span class="filter-pill" data-filter="during"><i class="fas fa-clock me-1"></i>Durante</span>
+                <span class="filter-pill" data-filter="end"><i class="fas fa-stop-circle me-1"></i>Fin</span>
             </div>
         </div>
     </div>
 </div>
-
 
 <div class="table-container">
     <table class="table" id="checklistTable">
@@ -101,47 +66,29 @@
                 <th style="width: 50px;">#</th>
                 <th>Tarea</th>
                 <th>Fase del Turno</th>
-                <th>Tiempo de Alerta</th>
+                <th>Tiempo de Alarma</th>
                 <th class="text-center">Acciones</th>
             </tr>
         </thead>
         <tbody id="sortable-checklist">
             {% for item in items %}
-            <tr data-id="{{ item.id }}" data-phase="{{ item.phase|lower }}">
-                <td class="text-center text-muted">
-                    <i class="fas fa-arrows-alt-v me-2"></i>
-                </td>
+            {# --- CORRECCIÓN: Se usa item.phase directamente, que ya es 'start', 'during', o 'end' --- #}
+            <tr data-id="{{ item.id }}" data-phase="{{ item.phase }}">
+                <td class="text-center text-muted"><i class="fas fa-arrows-alt-v me-2"></i></td>
+                <td>{{ item.description }}</td>
+                <td><span class="phase-badge {{ item.phase }}">{{ item.get_phase_display }}</span></td>
                 <td>
-                    <div class="task-info">
-                        <div class="task-icon">
-                            <i class="fas fa-clipboard-check"></i>
-                        </div>
-                        <div class="task-details">
-                            <div class="task-description">{{ item.description }}</div>
-                        </div>
-                    </div>
+                    {# --- CORRECCIÓN: Se muestra el campo correcto 'alarm_trigger_delay' --- #}
+                    {% if item.alarm_trigger_delay %}
+                        <span class="fw-bold"><i class="fas fa-bell text-warning me-2"></i>{{ item.alarm_trigger_delay }}</span>
+                    {% else %}
+                        <span class="text-muted">Sin alarma</span>
+                    {% endif %}
                 </td>
-                <td>
-                    <span class="phase-badge {{ item.phase|lower }}">
-                        {% if item.phase == 'INICIO' %}<i class="fas fa-play-circle"></i>
-                        {% elif item.phase == 'DURANTE' %}<i class="fas fa-clock"></i>
-                        {% else %}<i class="fas fa-stop-circle"></i>{% endif %}
-                        {{ item.get_phase_display }}
-                    </span>
-                </td>
-                <td>
-                    <div class="alert-time">
-                        <i class="fas fa-bell"></i>
-                        <div>
-                            <span class="time-value">{{ item.trigger_offset_minutes }}</span>
-                            <span class="text-muted">minutos</span>
-                        </div>
-                    </div>
-                </td>
-                <td>
+                <td class="text-center">
                     <div class="action-buttons justify-content-center">
                         <a href="{% url 'edit_checklist_item' item.id %}" class="btn-action btn-edit" title="Editar"><i class="fas fa-edit"></i></a>
-                        <a href="{% url 'delete_checklist_item' item.id %}" class="btn-action btn-delete" title="Eliminar" onclick="return confirm('¿Estás seguro de eliminar esta tarea?')"><i class="fas fa-trash"></i></a>
+                        <a href="{% url 'delete_checklist_item' item.id %}" class="btn-action btn-delete" title="Eliminar"><i class="fas fa-trash"></i></a>
                     </div>
                 </td>
             </tr>
@@ -151,7 +98,6 @@
                     <div class="empty-state">
                         <i class="fas fa-clipboard-list"></i>
                         <h4>No hay tareas definidas</h4>
-                        <p>Comienza agregando tareas para que los operadores las completen.</p>
                         <a href="{% url 'create_checklist_item' %}" class="btn btn-add mt-3"><i class="fas fa-plus-circle"></i> Añadir Primera Tarea</a>
                     </div>
                 </td>
@@ -164,88 +110,64 @@
 <div class="mt-4">
     <a href="{% url 'admin_dashboard' %}" class="btn btn-back"><i class="fas fa-arrow-left"></i> Volver al Dashboard</a>
 </div>
-
 {% endblock %}
-
 
 {% block extra_js %}
 {{ block.super }}
 <script src="https://cdn.jsdelivr.net/npm/sortablejs@latest/Sortable.min.js"></script>
-
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    // (El script para los contadores y filtros no cambia)
+    // --- CORRECCIÓN: Se usan los valores correctos 'start', 'during', 'end' para los contadores ---
     const items = [
         {% for item in items %}
-        { phase: "{{ item.phase|lower }}" }{% if not forloop.last %},{% endif %}
+        { phase: "{{ item.phase }}" }{% if not forloop.last %},{% endif %}
         {% endfor %}
     ];
-    const phaseCounts = {
-        inicio: items.filter(item => item.phase === 'inicio').length,
-        durante: items.filter(item => item.phase === 'durante').length,
-        fin: items.filter(item => item.phase === 'fin').length
-    };
-    document.getElementById('inicioCount').textContent = phaseCounts.inicio;
-    document.getElementById('duranteCount').textContent = phaseCounts.durante;
-    document.getElementById('finCount').textContent = phaseCounts.fin;
+    document.getElementById('startCount').textContent = items.filter(item => item.phase === 'start').length;
+    document.getElementById('duringCount').textContent = items.filter(item => item.phase === 'during').length;
+    document.getElementById('endCount').textContent = items.filter(item => item.phase === 'end').length;
     
-    // Search and Filter functionality (no changes here)
+    // El resto del script para búsqueda y filtros no necesita cambios
     const searchInput = document.getElementById('searchInput');
-    const table = document.getElementById('checklistTable');
-    const rows = table.getElementsByTagName('tbody')[0].getElementsByTagName('tr');
+    const rows = document.querySelectorAll('#checklistTable tbody tr');
     searchInput.addEventListener('keyup', function() {
         const searchTerm = this.value.toLowerCase();
-        Array.from(rows).forEach(row => {
+        rows.forEach(row => {
             row.style.display = row.textContent.toLowerCase().includes(searchTerm) ? '' : 'none';
         });
     });
+
     const filterPills = document.querySelectorAll('.filter-pill');
     filterPills.forEach(pill => {
         pill.addEventListener('click', function() {
             filterPills.forEach(p => p.classList.remove('active'));
             this.classList.add('active');
             const filter = this.getAttribute('data-filter');
-            Array.from(rows).forEach(row => {
-                if (filter === 'all') row.style.display = '';
-                else row.style.display = row.getAttribute('data-phase') === filter ? '' : 'none';
+            rows.forEach(row => {
+                if (filter === 'all' || row.dataset.phase === filter) {
+                    row.style.display = '';
+                } else {
+                    row.style.display = 'none';
+                }
             });
         });
     });
 
-
-    // 2. Lógica para la reordenación
+    // Lógica para reordenar (sin cambios)
     const sortableList = document.getElementById('sortable-checklist');
     if (sortableList) {
         new Sortable(sortableList, {
-            animation: 150, // Animación suave al soltar
-            ghostClass: 'sortable-ghost', // Clase CSS para el elemento fantasma
-            chosenClass: 'sortable-chosen', // Clase CSS para el elemento seleccionado
-
-            // Se ejecuta cuando el usuario termina de arrastrar y suelta el elemento
+            animation: 150,
             onEnd: function (evt) {
-                // Creamos un array con los IDs de los items en el nuevo orden
                 const itemOrder = Array.from(sortableList.querySelectorAll('tr')).map(row => row.dataset.id);
-
-                // Enviamos el nuevo orden al servidor
                 fetch("{% url 'update_checklist_order' %}", {
                     method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'X-CSRFToken': '{{ csrf_token }}' // Token de seguridad de Django
-                    },
+                    headers: { 'Content-Type': 'application/json', 'X-CSRFToken': '{{ csrf_token }}' },
                     body: JSON.stringify({ 'order': itemOrder })
                 })
                 .then(response => response.json())
-                .then(data => {
-                    if(data.status === 'success') {
-                        console.log('Orden guardado correctamente.');
-                        // Opcional: Mostrar una notificación de éxito
-                    } else {
-                        console.error('Error al guardar el orden.');
-                        // Opcional: Mostrar una notificación de error
-                    }
-                })
-                .catch(error => console.error('Error de red:', error));
+                .then(data => console.log(data.message || data.error))
+                .catch(error => console.error('Error:', error));
             }
         });
     }

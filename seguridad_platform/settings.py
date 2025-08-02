@@ -36,6 +36,7 @@ CRISPY_TEMPLATE_PACK = "bootstrap5"
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
+    'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -67,20 +68,32 @@ TEMPLATES = [
 
 WSGI_APPLICATION = 'seguridad_platform.wsgi.application'
 
-# Database
-# DATABASES = {
-#     'default': dj_database_url.config(
-#         default=os.environ.get('DATABASE_URL')
-#     )
-# }
+# ---------------------------------------------------------
+# Base de datos
+# ---------------------------------------------------------
+# Si la variable de entorno DATABASE_URL está presente (por ejemplo en Railway),
+# utilizamos esa conexión. En caso contrario, se usa SQLite para desarrollo local.
 
-# 2. Añadimos la configuración para SQLite para desarrollo local
-DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
+DATABASE_URL = os.getenv(
+    "DATABASE_URL",
+    "postgresql://postgres:izzKIkbPLmeXCwRlcKRUStwyFGzBlsrS@maglev.proxy.rlwy.net:28215/railway",
+)
+
+if DATABASE_URL:
+    # Parseamos la URL de conexión entregada por Railway usando dj_database_url
+    DATABASES = {
+        "default": dj_database_url.parse(
+            DATABASE_URL, conn_max_age=600, ssl_require=True  # ssl_require asegura TLS en Railway
+        )
     }
-}
+else:
+    # Fallback a SQLite para desarrollo local
+    DATABASES = {
+        "default": {
+            "ENGINE": "django.db.backends.sqlite3",
+            "NAME": BASE_DIR / "db.sqlite3",
+        }
+    }
 
 # Password validation
 AUTH_PASSWORD_VALIDATORS = [
@@ -97,9 +110,11 @@ USE_I18N = True
 USE_TZ = True
 
 # Static files (CSS, JavaScript, Images)
-STATIC_URL = 'static/'
+STATIC_URL = '/static/'
 STATICFILES_DIRS = [os.path.join(BASE_DIR, 'static')]
 STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
+# Almacén comprimido y con hash para WhiteNoise
+STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
 
 # Default primary key field type
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'

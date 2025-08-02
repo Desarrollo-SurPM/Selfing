@@ -1,52 +1,169 @@
 {% extends 'base.html' %}
 {% load static %}
+{% load custom_filters %}
 
-{% block title %}Checklist de Turno{% endblock %}
+{% block title %}Checklist de Turno Interactivo{% endblock %}
 
 {% block content %}
-<div class="container">
-    <div class="d-flex justify-content-between align-items-center mb-4">
-        <h2 class="h3 text-secondary"><i class="fas fa-tasks me-2"></i>Checklist de Tareas del Turno</h2>
-        <a href="{% url 'operator_dashboard' %}" class="btn btn-outline-secondary">
+{# --- INICIO: Estilos y Librerías para el Checklist Interactivo --- #}
+{# Estas librerías son necesarias para la nueva apariencia. Se cargan desde un CDN para facilidad de uso. #}
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+    /* Usar la fuente Inter como predeterminada, pero solo dentro de este bloque de contenido */
+    .checklist-container {
+        font-family: 'Inter', sans-serif;
+    }
+    /* Estilo personalizado para la transición del tachado */
+    .task-label {
+        transition: all 0.3s ease-in-out;
+        position: relative;
+    }
+    .task-label::after {
+        content: '';
+        position: absolute;
+        top: 50%;
+        left: 0;
+        width: 0;
+        height: 2px;
+        background-color: currentColor;
+        transition: width 0.3s ease-in-out;
+    }
+    .task-completed .task-label::after {
+        width: 100%;
+    }
+</style>
+{# --- FIN: Estilos y Librerías --- #}
+
+<div class="container mx-auto p-4 sm:p-6 lg:p-8 max-w-4xl checklist-container">
+    
+    <!-- Encabezado -->
+    <div class="flex justify-between items-center mb-6">
+        <h1 class="text-2xl sm:text-3xl font-bold text-gray-700">
+            <i class="fas fa-tasks me-2 text-blue-500"></i>Checklist de Tareas del Turno
+        </h1>
+        {# Usamos la etiqueta 'url' de Django para el enlace de "Volver" #}
+        <a href="{% url 'operator_dashboard' %}" class="inline-flex items-center px-4 py-2 bg-white border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-100 transition-colors">
             <i class="fas fa-arrow-left me-2"></i>Volver
         </a>
     </div>
 
-    <form method="post">
-        {% csrf_token %}
-        <div class="card shadow-sm">
-            <div class="card-body">
-                {% for item in checklist_items %}
-                    {% with log=completed_logs_dict|get_item:item.id %}
-                    <div class="p-3 border rounded mb-3 {% if log %}bg-light{% endif %}">
-                        <div class="form-check">
-                            <input class="form-check-input" type="checkbox" name="items" value="{{ item.id }}" id="item_{{ item.id }}" {% if log %}checked disabled{% endif %}>
-                            <label class="form-check-label h5 {% if log %}text-muted text-decoration-line-through{% endif %}" for="item_{{ item.id }}">
-                                {{ item.description }}
-                            </label>
-                        </div>
-                        
-                        <div class="mt-2" style="margin-left: 2.5rem;">
-                            <input type="text" name="observacion_{{ item.id }}" class="form-control form-control-sm" 
-                                   placeholder="Añadir observación (opcional)..." 
-                                   value="{% if log.observacion %}{{ log.observacion }}{% endif %}" 
-                                   {% if log %}disabled{% endif %}>
-                        </div>
-                    </div>
-                    {% endwith %}
-                {% empty %}
-                    <div class="text-center p-5">
-                        <i class="fas fa-check-double fa-3x text-muted mb-3"></i>
-                        <h4 class="text-muted">No hay tareas de checklist para tu turno actual.</h4>
-                    </div>
-                {% endfor %}
+    <!-- Contenedor del Checklist -->
+    <div class="bg-white rounded-xl shadow-md overflow-hidden">
+        {# El formulario y el token CSRF son necesarios para enviar los datos de forma segura #}
+        <form id="checklist-form" method="post">
+            {% csrf_token %}
+            <div id="checklist-container" class="p-4 sm:p-6">
+                <!-- Las tareas se insertarán aquí dinámicamente desde el contexto de Django -->
             </div>
-            <div class="card-footer text-end bg-light">
-                <button type="submit" class="btn btn-primary px-4">
+            
+            <div class="px-6 py-4 bg-gray-50 border-t border-gray-200 flex justify-end">
+                <button id="save-button" type="submit" class="w-full sm:w-auto bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-6 rounded-lg transition-transform transform hover:scale-105 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
                     <i class="fas fa-save me-2"></i>Guardar Checklist
                 </button>
             </div>
-        </div>
-    </form>
+        </form>
+    </div>
+
+    <!-- Mensaje para cuando no hay tareas -->
+    <div id="empty-state" class="text-center p-10 mt-6 bg-white rounded-xl shadow-md" style="display: none;">
+        <i class="fas fa-check-double fa-4x text-gray-300 mb-4"></i>
+        <h4 class="text-xl font-semibold text-gray-500">No hay tareas para tu turno.</h4>
+        <p class="text-gray-400 mt-2">¡Buen trabajo! Parece que todo está en orden.</p>
+    </div>
+
 </div>
+
+{# --- INICIO: Lógica JavaScript --- #}
+{# Pasamos los datos de Django a JavaScript de forma segura usando la etiqueta json_script #}
+{{ tasks_for_js|json_script:"tasks-data" }}
+
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    // Obtenemos los datos de las tareas desde el script JSON que Django generó
+    const initialTasks = JSON.parse(document.getElementById('tasks-data').textContent);
+    
+    const checklistContainer = document.getElementById('checklist-container');
+    const emptyState = document.getElementById('empty-state');
+    const checklistForm = document.getElementById('checklist-form');
+
+    // Función para renderizar una tarea individual (sin cambios)
+    function renderTask(task) {
+        const isCompleted = task.completed;
+        const taskWrapper = document.createElement('div');
+        taskWrapper.className = `task-item p-4 border rounded-lg mb-3 transition-all duration-300 ${isCompleted ? 'bg-green-50 border-green-200' : 'bg-white border-gray-200'}`;
+        taskWrapper.dataset.taskId = task.id;
+
+        // Se crea un input oculto para cada observación para que el formulario lo envíe
+        taskWrapper.innerHTML = `
+            <div class="flex items-start">
+                <input 
+                    class="form-check-input h-6 w-6 mt-1 text-blue-600 border-gray-300 rounded focus:ring-blue-500 cursor-pointer" 
+                    type="checkbox" 
+                    name="items"
+                    value="${task.id}" 
+                    id="item_${task.id}"
+                    ${isCompleted ? 'checked' : ''}
+                    ${isCompleted ? 'disabled' : ''}
+                >
+                <div class="ml-4 flex-grow">
+                    <label 
+                        class="task-label text-lg font-medium ${isCompleted ? 'text-gray-400 task-completed' : 'text-gray-800'}" 
+                        for="item_${task.id}"
+                    >
+                        ${task.description}
+                    </label>
+                    <div class="mt-2">
+                        <input 
+                            type="text" 
+                            name="observacion_${task.id}" 
+                            class="observation-input form-control w-full px-3 py-2 text-sm text-gray-700 bg-gray-50 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 transition" 
+                            placeholder="Añadir observación (opcional)..." 
+                            value="${task.observation}"
+                            ${isCompleted ? 'readonly' : ''}
+                        >
+                    </div>
+                </div>
+            </div>
+        `;
+        return taskWrapper;
+    }
+
+    // Función para cargar y mostrar todas las tareas
+    function loadTasks() {
+        checklistContainer.innerHTML = '';
+        if (initialTasks.length === 0) {
+            emptyState.style.display = 'block';
+            document.querySelector('.bg-white.rounded-xl').style.display = 'none';
+        } else {
+            initialTasks.forEach(task => {
+                const taskElement = renderTask(task);
+                checklistContainer.appendChild(taskElement);
+            });
+        }
+    }
+
+    // Manejar el evento de cambio en los checkboxes para la interactividad visual
+    checklistContainer.addEventListener('change', function(e) {
+        if (e.target.type === 'checkbox') {
+            const taskWrapper = e.target.closest('.task-item');
+            const label = taskWrapper.querySelector('.task-label');
+            const observationInput = taskWrapper.querySelector('.observation-input');
+            const isChecked = e.target.checked;
+
+            taskWrapper.classList.toggle('bg-green-50', isChecked);
+            taskWrapper.classList.toggle('border-green-200', isChecked);
+            label.classList.toggle('text-gray-400', isChecked);
+            label.classList.toggle('task-completed', isChecked);
+        }
+    });
+
+    // Carga inicial de las tareas
+    loadTasks();
+});
+</script>
+{# --- FIN: Lógica JavaScript --- #}
 {% endblock %}
