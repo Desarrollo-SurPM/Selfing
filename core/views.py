@@ -113,11 +113,23 @@ def delete_operator(request, user_id):
     if request.method == 'POST': op.delete(); return redirect('manage_operators')
     return render(request, 'operator_confirm_delete.html', {'operator': op})
 
+
 @login_required
 @user_passes_test(is_supervisor)
 def manage_companies(request):
     companies = Company.objects.all()
-    return render(request, 'manage_companies.html', {'companies': companies})
+    
+    # --- 👇 LÍNEA NUEVA AÑADIDA 👇 ---
+    # Contamos todos los objetos de Instalación que existen en la base de datos
+    total_installations = Installation.objects.count()
+    # --- 👆 FIN DE LA LÍNEA NUEVA 👆 ---
+
+    context = {
+        'companies': companies,
+        'total_installations': total_installations, # <-- Pasamos el nuevo dato a la plantilla
+    }
+    
+    return render(request, 'manage_companies.html', context)
 
 @login_required
 @user_passes_test(is_supervisor)
