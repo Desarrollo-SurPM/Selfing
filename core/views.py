@@ -462,6 +462,114 @@ def get_active_shift(user):
 # --- VISTAS DE OPERADOR ---
 
 @login_required
+def start_shift(request):
+    """
+    Vista que maneja la ACCIÓN de iniciar un turno.
+    """
+    if request.method == 'POST':
+        # Busca el turno asignado más próximo que aún no ha comenzado.
+        # Es la lógica más segura para evitar iniciar un turno equivocado.
+        shift_to_start = OperatorShift.objects.filter(
+            operator=request.user,
+            actual_start_time__isnull=True,
+            actual_end_time__isnull=True
+        ).order_by('date', 'shift_type__start_time').first()
+
+        if shift_to_start:
+            shift_to_start.actual_start_time = timezone.now()
+            shift_to_start.save()
+            messages.success(request, f"Turno '{shift_to_start.shift_type.name}' iniciado correctamente.")
+        else:
+            messages.error(request, "No se pudo encontrar un turno pendiente para iniciar.")
+
+    return redirect('operator_dashboard')
+
+
+    if request.method == 'POST':
+        today = timezone.now().date()
+        # Busca un turno asignado para hoy que aún no haya comenzado
+        active_shift = OperatorShift.objects.filter(
+            operator=request.user,
+            date=today,
+            actual_start_time__isnull=True
+        ).first()
+
+        if active_shift:
+            active_shift.actual_start_time = timezone.now()
+            active_shift.save()
+            TraceabilityLog.objects.create(user=request.user, action="Inició turno.")
+
+    return redirect('operator_dashboard')
+
+
+@login_required
+def operator_dashboard(request):
+    active_shift = get_active_shift(request.user)
+    
+    # Preparamos un contexto base
+    context = {'active_shift': active_shift}
+
+    # Si el turno ya ha sido iniciado, calculamos todo el progreso y las tareas.
+    if active_shift and active_shift.actual_start_time:
+        progress_tasks = {}
+        completed_tasks_count = 0
+        total_tasks = 3 
+        
+        # 1. Lógica de Progreso
+        total_rondas_requeridas = 7
+        rondas_completadas = VirtualRoundLog.objects.filter(operator_shift=active_shift).count()
+        progress_tasks['rondas'] = {'completed': (rondas_completadas >= total_rondas_requeridas), 'text': f"Rondas ({rondas_completadas}/{total_rondas_requeridas})"}
+        if progress_tasks['rondas']['completed']: completed_tasks_count += 1
+
+        empresas_con_instalaciones = Company.objects.filter(installations__isnull=False).distinct()
+        ids_empresas_con_log = UpdateLog.objects.filter(operator_shift=active_shift).values_list('installation__company_id', flat=True).distinct()
+        progress_tasks['bitacora'] = {'completed': (len(ids_empresas_con_log) >= empresas_con_instalaciones.count()), 'text': f"Bitácora ({len(ids_empresas_con_log)}/{empresas_con_instalaciones.count()})"}
+        if progress_tasks['bitacora']['completed']: completed_tasks_count += 1
+        
+        todas_las_empresas = Company.objects.all()
+        ids_empresas_con_correo = Email.objects.filter(operator=request.user, created_at__gte=active_shift.actual_start_time).values_list('company_id', flat=True)
+        progress_tasks['correos'] = {'completed': (len(ids_empresas_con_correo) >= todas_las_empresas.count()), 'text': f"Correos ({len(ids_empresas_con_correo)}/{todas_las_empresas.count()})"}
+        if progress_tasks['correos']['completed']: completed_tasks_count += 1
+        
+        context['progress_percentage'] = int((completed_tasks_count / total_tasks) * 100) if total_tasks > 0 else 0
+        context['progress_tasks'] = progress_tasks
+        
+        # 2. Lógica de Alarma
+        applicable_items = get_applicable_checklist_items(active_shift)
+        completed_in_shift_ids = ChecklistLog.objects.filter(operator_shift=active_shift).values_list('item_id', flat=True)
+        pending_items = applicable_items.exclude(id__in=completed_in_shift_ids)
+        pending_alarms_data = []
+        for item in pending_items:
+            if item.alarm_trigger_delay:
+                due_time = active_shift.actual_start_time + item.alarm_trigger_delay
+                pending_alarms_data.append({'id': item.id, 'description': item.description, 'due_time': due_time.isoformat()})
+        context['pending_alarms_json'] = json.dumps(pending_alarms_data)
+
+        # 3. Lógica de Logs del Turno
+        processed_logs = []
+        traceability_logs_qs = TraceabilityLog.objects.filter(user=request.user, timestamp__gte=active_shift.actual_start_time).order_by('-timestamp')
+        for log in traceability_logs_qs:
+            action_text = log.action
+            match = re.search(r'Duración: (\d+)s', log.action)
+            if match:
+                seconds = int(match.group(1))
+                if seconds < 60: formatted_duration = f"{seconds} seg"
+                elif seconds < 3600: minutes, rem_seconds = divmod(seconds, 60); formatted_duration = f"{minutes} min {rem_seconds} seg"
+                else: hours, rem_seconds = divmod(seconds, 3600); rem_minutes, _ = divmod(rem_seconds, 60); formatted_duration = f"{hours}h {rem_minutes} min"
+                action_text = log.action.replace(f"Duración: {seconds}s", f"Duración: {formatted_duration}")
+            processed_logs.append({'action': action_text, 'timestamp': log.timestamp})
+        context['traceability_logs'] = processed_logs
+        
+        # 4. Lógica del Temporizador de Rondas
+        last_round = VirtualRoundLog.objects.filter(operator_shift=active_shift).order_by('-start_time').first()
+        base_time = last_round.start_time if last_round else active_shift.actual_start_time
+        context['next_round_due_time'] = (base_time + timedelta(minutes=60)).isoformat()
+        
+        context['active_round_id'] = request.session.get('active_round_id')
+
+    return render(request, 'operator_dashboard.html', context)
+
+@login_required
 def my_logbook_view(request):
     """
     Muestra al operador un resumen de sus novedades.
@@ -574,8 +682,7 @@ def get_applicable_checklist_items(active_shift):
 
     return ChecklistItem.objects.filter(turnos_filter, dias_filter).distinct()
 
-@login_required
-def operator_dashboard(request):
+
     active_shift = get_active_shift(request.user)
     
     # Valores iniciales
@@ -651,45 +758,6 @@ def operator_dashboard(request):
     
     return render(request, 'operator_dashboard.html', context)
 
-@login_required
-def start_shift(request):
-    """
-    Vista que maneja la ACCIÓN de iniciar un turno.
-    """
-    if request.method == 'POST':
-        # Busca el turno asignado más próximo que aún no ha comenzado.
-        # Es la lógica más segura para evitar iniciar un turno equivocado.
-        shift_to_start = OperatorShift.objects.filter(
-            operator=request.user,
-            actual_start_time__isnull=True,
-            actual_end_time__isnull=True
-        ).order_by('date', 'shift_type__start_time').first()
-
-        if shift_to_start:
-            shift_to_start.actual_start_time = timezone.now()
-            shift_to_start.save()
-            messages.success(request, f"Turno '{shift_to_start.shift_type.name}' iniciado correctamente.")
-        else:
-            messages.error(request, "No se pudo encontrar un turno pendiente para iniciar.")
-
-    return redirect('operator_dashboard')
-
-
-    if request.method == 'POST':
-        today = timezone.now().date()
-        # Busca un turno asignado para hoy que aún no haya comenzado
-        active_shift = OperatorShift.objects.filter(
-            operator=request.user,
-            date=today,
-            actual_start_time__isnull=True
-        ).first()
-
-        if active_shift:
-            active_shift.actual_start_time = timezone.now()
-            active_shift.save()
-            TraceabilityLog.objects.create(user=request.user, action="Inició turno.")
-
-    return redirect('operator_dashboard')
 
 
 @login_required

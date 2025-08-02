@@ -1,12 +1,12 @@
-{# desarrollo-surpm/selfing/Selfing-mejorasorden/templates/operator_dashboard.html #}
 {% extends 'base.html' %}
 {% load static %}
-{% block extra_css %}
-{% endblock extra_css %}
+
 {% block title %}Panel del Operador{% endblock %}
 
 {% block content %}
-<div class="container-fluid">
+<div class="container-fluid py-4">
+
+    {# --- Encabezado --- #}
     <div class="d-flex justify-content-between align-items-center mb-4 pb-3 border-bottom flex-wrap">
         <div>
             <h2 class="h3 text-secondary">Bienvenido, {{ user.username }}</h2>
@@ -18,122 +18,169 @@
                 <p class="text-danger mb-0">No tienes un turno activo asignado para hoy.</p>
             {% endif %}
         </div>
-        <div id="finish-round-container" {% if not active_round_id %}style="display: none;"{% endif %}>
-             <a href="{% if active_round_id %}{% url 'finish_virtual_round' active_round_id %}{% endif %}" id="finish-round-link" class="btn btn-danger btn-lg shadow-sm">
-                <i class="fas fa-stop-circle me-2"></i>Finalizar Ronda en Curso
-            </a>
-        </div>
     </div>
 
-    {% if not active_shift or not active_shift.actual_start_time %}
-        <div class="text-center p-5 bg-light rounded shadow-lg animate__animated animate__fadeIn">
-            <h1 class="display-4 text-dark mb-4">¡Listo para Empezar!</h1>
-            <p class="lead text-muted">Presiona el botón para registrar el inicio de tu jornada de trabajo y acceder a tus herramientas.</p>
-            {% if active_shift %}
-            <form method="post" action="{% url 'start_shift' %}">
-                {% csrf_token %}
-                <button type="submit" class="btn btn-success btn-lg mt-3 shadow-sm animate__animated animate__pulse animate__infinite"><i class="fas fa-play-circle me-2"></i>Iniciar Turno</button>
-            </form>
-            {% else %}
-            <p class="text-danger mt-3 mb-0">Contacta a tu supervisor para que te asigne un turno.</p>
-            {% endif %}
-        </div>
 
-    {% elif active_shift.actual_end_time %}
-        <div class="text-center p-5 bg-light rounded shadow-lg animate__animated animate__fadeIn">
-            <h1 class="display-4 text-success mb-4">¡Turno Finalizado!</h1>
-            <p class="lead text-muted">Has completado y firmado tu turno para el día de hoy. Tu reporte ha sido enviado a supervisión.</p>
-            <p class="text-muted mt-4">Gracias por tu servicio.</p>
-        </div>
+    {# --- Lógica Principal de la Plantilla --- #}
+
+    {% if active_shift %}
+        
+        {% if active_shift.actual_start_time %}
+            {# --- ESTADO 1: El turno ya está iniciado, mostrar el panel de control --- #}
+            <div class="row g-4">
+                <div class="col-lg-8">
+                    <div class="card shadow-sm mb-4">
+                        <div class="card-header bg-light"><h5 class="mb-0 text-secondary"><i class="fas fa-chart-line me-2"></i>Progreso del Turno</h5></div>
+                        <div class="card-body">
+                            <div class="progress mb-4" style="height: 28px; border-radius: 8px;">
+                                <div class="progress-bar bg-primary" role="progressbar" style="width: {{ progress_percentage }}%;" aria-valuenow="{{ progress_percentage }}" aria-valuemin="0" aria-valuemax="100">
+                                    <span class="fw-bold">{{ progress_percentage }}%</span>
+                                </div>
+                            </div>
+                            <ul class="list-group list-group-flush border rounded">
+                                {% for task_key, task_data in progress_tasks.items %}
+                                <li class="list-group-item d-flex justify-content-between align-items-center py-3">
+                                    <span class="fs-5 {% if task_data.completed %}text-success text-decoration-line-through{% else %}text-muted{% endif %}">
+                                        <i class="fas {% if task_data.completed %}fa-check-circle{% else %}fa-circle{% endif %} me-3"></i>{{ task_data.text }}
+                                    </span>
+                                    {% if task_data.completed %}<span class="badge bg-success rounded-pill px-3 py-2">Completado</span>{% else %}<span class="badge bg-secondary rounded-pill px-3 py-2">Pendiente</span>{% endif %}
+                                </li>
+                                {% endfor %}
+                            </ul>
+                            <div class="mt-4 pt-4 border-top text-center">
+                                <h5 class="mb-3 text-secondary">Acciones Rápidas</h5>
+                                <div class="d-grid gap-2 d-md-flex justify-content-center flex-wrap">
+                                    <a href="{% url 'checklist' %}" class="btn btn-primary btn-lg shadow-sm mb-2"><i class="fas fa-list-check me-2"></i>Ir al Checklist</a>
+                                    <a href="{% url 'update_log' %}" class="btn btn-info btn-lg shadow-sm mb-2"><i class="fas fa-edit me-2"></i>Anotar en Bitácora</a>
+                                    <a href="{% url 'my_logbook' %}" class="btn btn-secondary btn-lg shadow-sm mb-2"><i class="fas fa-book me-2"></i>Ver Mi Bitácora</a>
+                                    <a href="{% url 'email_form' %}" class="btn btn-success btn-lg shadow-sm mb-2"><i class="fas fa-paper-plane me-2"></i>Generar Correo</a>
+                                    {% if progress_percentage >= 99 %}
+                                    <a href="{% url 'end_turn_preview' %}" class="btn btn-danger btn-lg shadow-sm mb-2 animate__animated animate__heartBeat animate__infinite"><i class="fas fa-power-off me-2"></i>Finalizar Turno</a>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-lg-4">
+                    <div class="card text-center shadow-sm mb-4 border-primary">
+                        <div class="card-header bg-primary text-white">Próxima Ronda Virtual</div>
+                        <div class="card-body"><h3 class="display-2 fw-bold text-primary" id="dashboard-round-countdown">--:--</h3></div>
+                        {# --- CORRECCIÓN AQUÍ: Se restauró el pie de página con los botones de la ronda --- #}
+                        <div class="card-footer bg-light">
+                            {% if not active_round_id %}
+                                <form method="post" action="{% url 'start_virtual_round' %}" class="d-grid">
+                                    {% csrf_token %}
+                                    <button type="submit" class="btn btn-primary">
+                                        <i class="fas fa-play-circle me-2"></i>Iniciar Ronda Manualmente
+                                    </button>
+                                </form>
+                            {% else %}
+                                 <a href="{% url 'finish_virtual_round' active_round_id %}" class="btn btn-danger btn-lg shadow-sm">
+                                     <i class="fas fa-stop-circle me-2"></i>Finalizar Ronda en Curso
+                                 </a>
+                            {% endif %}
+                        </div>
+                    </div>
+                    <div class="card shadow-sm border-info">
+                        <div class="card-header bg-light text-secondary"><h5 class="mb-0"><i class="fas fa-history me-2"></i>Tu Actividad Reciente</h5></div>
+                        <ul class="list-group list-group-flush activity-panel">
+                            {% for log in traceability_logs|slice:":5" %}<li class="list-group-item"><small>{{ log.action }} <span class="text-muted">- {{ log.timestamp|timesince }} atrás</span></small></li>{% empty %}<li class="list-group-item text-center text-muted py-3">No tienes actividad reciente.</li>{% endfor %}
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        {% else %}
+            {# --- ESTADO 2: Turno asignado, pero no iniciado --- #}
+            <div class="text-center p-5 bg-light rounded shadow-lg animate__animated animate__fadeIn">
+                <h1 class="display-4 text-dark mb-4">¡Listo para Empezar!</h1>
+                <p class="lead text-muted">Presiona el botón para registrar el inicio de tu jornada de trabajo.</p>
+                <form method="post" action="{% url 'start_shift' %}">
+                    {% csrf_token %}
+                    <button type="submit" class="btn btn-success btn-lg mt-3 shadow-sm animate__animated animate__pulse animate__infinite"><i class="fas fa-play-circle me-2"></i>Iniciar Turno</button>
+                </form>
+            </div>
+        {% endif %}
 
     {% else %}
-        <div class="row g-4">
-            <div class="col-lg-8">
-                <div class="card shadow-sm mb-4">
-                    <div class="card-header bg-light">
-                        <h5 class="mb-0 text-secondary"><i class="fas fa-chart-line me-2"></i>Progreso del Turno</h5>
-                    </div>
-                    <div class="card-body">
-                        <div class="progress mb-4" style="height: 28px; border-radius: 8px;">
-                            <div class="progress-bar bg-primary" role="progressbar" style="width: {{ progress_percentage }}%;" aria-valuenow="{{ progress_percentage }}" aria-valuemin="0" aria-valuemax="100">
-                                <span class="fw-bold">{{ progress_percentage }}%</span>
-                            </div>
-                        </div>
-                        <ul class="list-group list-group-flush border rounded">
-                            {% for task_key, task_data in progress_tasks.items %}
-                            <li class="list-group-item d-flex justify-content-between align-items-center py-3">
-                                <span class="fs-5 {% if task_data.completed %}text-success text-decoration-line-through{% else %}text-muted{% endif %}">
-                                    <i class="fas {% if task_data.completed %}fa-check-circle{% else %}fa-circle{% endif %} me-3"></i>
-                                    {{ task_data.text }}
-                                </span>
-                                {% if task_data.completed %}
-                                    <span class="badge bg-success rounded-pill px-3 py-2">Completado</span>
-                                {% else %}
-                                    <span class="badge bg-secondary rounded-pill px-3 py-2">Pendiente</span>
-                                {% endif %}
-                            </li>
-                            {% endfor %}
-                        </ul>
-                        <div class="mt-4 pt-4 border-top text-center">
-                            <h5 class="mb-3 text-secondary">Acciones Rápidas</h5>
-                            <div class="d-grid gap-2 d-md-flex justify-content-center">
-                                <a href="{% url 'checklist' %}" class="btn btn-primary btn-lg shadow-sm"><i class="fas fa-list-check me-2"></i>Ir al Checklist</a>
-                                <a href="{% url 'update_log' %}" class="btn btn-info btn-lg shadow-sm"><i class="fas fa-edit me-2"></i>Anotar en Bitácora</a>
-                                <a href="{% url 'my_logbook' %}" class="btn btn-secondary btn-lg shadow-sm"><i class="fas fa-book me-2"></i>Ver Mi Bitácora</a>
-                                <a href="{% url 'email_form' %}" class="btn btn-success btn-lg shadow-sm"><i class="fas fa-paper-plane me-2"></i>Generar Correo</a>
-                                {% if progress_percentage >= 99 %}
-                                <a href="{% url 'end_turn_preview' %}" class="btn btn-danger btn-lg shadow-sm animate__animated animate__heartBeat animate__infinite">
-                                    <i class="fas fa-power-off me-2"></i>Finalizar Turno y Reporte
-                                </a>
-                                {% endif %}
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <div class="col-lg-4">
-                <div class="card text-center shadow-sm mb-4 border-primary">
-                    <div class="card-header bg-primary text-white">Próxima Ronda Virtual</div>
-                    <div class="card-body">
-                        <h3 class="display-2 fw-bold text-primary" id="dashboard-round-countdown">--:--</h3>
-                    </div>
-                    <div class="card-footer bg-light">
-                        {% if not active_round_id %}
-                            <form method="post" action="{% url 'start_virtual_round' %}" class="d-grid">
-                                {% csrf_token %}
-                                <button type="submit" class="btn btn-primary">
-                                    <i class="fas fa-play-circle me-2"></i>Iniciar Ronda Manualmente
-                                </button>
-                            </form>
-                        {% else %}
-                             <a href="{% url 'finish_virtual_round' active_round_id %}" class="btn btn-danger btn-lg shadow-sm">
-                                <i class="fas fa-stop-circle me-2"></i>Finalizar Ronda en Curso
-                            </a>
-                        {% endif %}
-                    </div>
-                </div>
-                <div class="card shadow-sm mb-4 border-secondary" id="service-status-panel">
-                    <div class="card-header bg-light text-secondary">Estado de Servicios Críticos</div>
-                </div>
-                <div class="card shadow-sm border-info" id="activity-card">
-                    <div class="card-header bg-light text-secondary">
-                        <h5 class="mb-0"><i class="fas fa-history me-2"></i>Tu Actividad Reciente</h5>
-                    </div>
-                    <ul class="list-group list-group-flush activity-panel">
-                        {% for log in traceability_logs %}
-                        <li class="list-group-item">
-                            <small>{{ log.action }} <span class="text-muted">- {{ log.timestamp|timesince }} atrás</span></small>
-                        </li>
-                        {% empty %}
-                        <li class="list-group-item text-center text-muted py-3">No tienes actividad reciente.</li>
-                        {% endfor %}
-                    </ul>
-                </div>
-            </div>
+        {# --- ESTADO 3: No hay turno asignado --- #}
+        <div class="alert alert-warning text-center p-4">
+            <h4 class="alert-heading">Sin Turno Asignado</h4>
+            <p class="mb-0">No tienes un turno activo asignado para hoy. Por favor, contacta a tu supervisor.</p>
         </div>
     {% endif %}
+
 </div>
 
+<!-- Elementos para la Alarma (sin cambios) -->
+<audio id="task-alarm-sound" src="{% static 'sounds/alarm.mp3' %}" preload="auto"></audio>
+<div id="alarm-modal" class="modal fade" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-danger">
+            <div class="modal-header bg-danger text-white">
+                <h5 class="modal-title"><i class="fas fa-exclamation-triangle me-2"></i>¡Tarea Vencida!</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body text-center">
+                <p class="fs-5">La tarea "<strong id="overdue-task-description"></strong>" no se ha completado.</p>
+                <a href="{% url 'checklist' %}" class="btn btn-primary mt-3">Ir al Checklist</a>
+            </div>
+        </div>
+    </div>
+</div>
 {% endblock content %}
 
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const pendingAlarms = JSON.parse('{{ pending_alarms_json|default:"[]"|safe }}');
+    
+    if (pendingAlarms.length > 0) {
+        const alarmSound = document.getElementById('task-alarm-sound');
+        const alarmModal = new bootstrap.Modal(document.getElementById('alarm-modal'));
+        const overdueTaskDescription = document.getElementById('overdue-task-description');
+        let triggeredAlarms = new Set();
+        let isInitialCheck = true;
+
+        function checkAlarms() {
+            const now = new Date();
+
+            // Si es la primera vez que se ejecuta, imprime información de depuración
+            if (isInitialCheck) {
+                console.log("--- Verificación Inicial de Alarmas ---");
+                console.log("Hora Actual (Navegador):", now.toISOString());
+            }
+
+            pendingAlarms.forEach(task => {
+                if (triggeredAlarms.has(task.id)) return;
+                
+                const dueTime = new Date(task.due_time);
+
+                if (isInitialCheck) {
+                    console.log(`Tarea: '${task.description}' | Hora de Vencimiento: ${dueTime.toISOString()} | ¿Vencida?: ${now > dueTime}`);
+                }
+                
+                if (now > dueTime) {
+                    overdueTaskDescription.textContent = task.description;
+                    alarmSound.play().catch(e => console.error("Error al reproducir sonido:", e));
+                    alarmModal.show();
+                    triggeredAlarms.add(task.id);
+                }
+            });
+
+            if (isInitialCheck) {
+                console.log("--- Fin de la Verificación Inicial ---");
+                isInitialCheck = false;
+            }
+        }
+
+        // --- CAMBIO PRINCIPAL AQUÍ ---
+        // Espera 5 segundos antes de la primera verificación para evitar falsos positivos.
+        setTimeout(() => {
+            checkAlarms(); // Primera verificación después del periodo de gracia.
+            setInterval(checkAlarms, 120000); // Verificaciones posteriores cada 30 segundos.
+        }, 5000); // 5000 milisegundos = 5 segundos de espera.
+    }
+});
+</script>
+{% endblock extra_js %}
