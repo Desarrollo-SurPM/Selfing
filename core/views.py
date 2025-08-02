@@ -551,196 +551,105 @@ def my_logbook_view(request):
     
     return render(request, 'my_logbook.html', context)
 
+def get_applicable_checklist_items(active_shift):
+    """
+    Obtiene los ítems del checklist que aplican al turno y día actual.
+    """
+    # --- CORRECCIÓN AQUÍ ---
+    # Verificamos 'active_shift.shift_type' en lugar de 'active_shift.shift'
+    if not active_shift or not active_shift.shift_type:
+        return ChecklistItem.objects.none()
+
+    today_weekday = timezone.now().weekday()  # Lunes=0, Domingo=6
+    
+    # --- CORRECCIÓN AQUÍ ---
+    # Accedemos directamente a 'active_shift.shift_type'
+    current_shift_type = active_shift.shift_type
+
+    # Filtro por tipo de turno:
+    turnos_filter = Q(turnos_aplicables=current_shift_type) | Q(turnos_aplicables__isnull=True)
+
+    # Filtro por día de la semana:
+    dias_filter = Q(dias_aplicables__contains=str(today_weekday)) | Q(dias_aplicables__isnull=True) | Q(dias_aplicables='')
+
+    return ChecklistItem.objects.filter(turnos_filter, dias_filter).distinct()
 
 @login_required
 def operator_dashboard(request):
     active_shift = get_active_shift(request.user)
     
+    # Valores iniciales
     progress_tasks = {}
     completed_tasks_count = 0
     total_tasks = 3 
     next_round_due_time = None
+    pending_alarms_data = [] # Para las alarmas
+    processed_logs = [] # Para el historial
+    progress_percentage = 0
 
     if active_shift and active_shift.actual_start_time:
-        # --- Lógica de Progreso (sin cambios) ---
+        # --- 1. Lógica de Progreso (Tu código, sin cambios) ---
         total_rondas_requeridas = 7
         rondas_completadas = VirtualRoundLog.objects.filter(operator_shift=active_shift).count()
-        rondas_completas = rondas_completadas >= total_rondas_requeridas
-        progress_tasks['rondas'] = {'completed': rondas_completas, 'text': f"Realizar Rondas Virtuales ({rondas_completadas}/{total_rondas_requeridas})"}
-        if rondas_completas: completed_tasks_count += 1
+        progress_tasks['rondas'] = {'completed': (rondas_completadas >= total_rondas_requeridas), 'text': f"Realizar Rondas Virtuales ({rondas_completadas}/{total_rondas_requeridas})"}
+        if progress_tasks['rondas']['completed']: completed_tasks_count += 1
 
         empresas_con_instalaciones = Company.objects.filter(installations__isnull=False).distinct()
         ids_empresas_con_log = UpdateLog.objects.filter(operator_shift=active_shift).values_list('installation__company_id', flat=True).distinct()
-        bitacora_completa = len(ids_empresas_con_log) >= empresas_con_instalaciones.count()
-        progress_tasks['bitacora'] = {'completed': bitacora_completa, 'text': f"Anotar en Bitácora ({len(ids_empresas_con_log)}/{empresas_con_instalaciones.count()} empresas)"}
-        if bitacora_completa: completed_tasks_count += 1
+        progress_tasks['bitacora'] = {'completed': (len(ids_empresas_con_log) >= empresas_con_instalaciones.count()), 'text': f"Anotar en Bitácora ({len(ids_empresas_con_log)}/{empresas_con_instalaciones.count()})"}
+        if progress_tasks['bitacora']['completed']: completed_tasks_count += 1
         
         todas_las_empresas = Company.objects.all()
         ids_empresas_con_correo = Email.objects.filter(operator=request.user, created_at__gte=active_shift.actual_start_time).values_list('company_id', flat=True)
-        correos_completos = len(ids_empresas_con_correo) >= todas_las_empresas.count()
-        progress_tasks['correos'] = {'completed': correos_completos, 'text': f"Enviar Correos de Novedades ({len(ids_empresas_con_correo)}/{todas_las_empresas.count()} empresas)"}
-        if correos_completos: completed_tasks_count += 1
-            
-    progress_percentage = int((completed_tasks_count / total_tasks) * 100) if total_tasks > 0 else 0
-    
-    pending_checklist_items = []
-    processed_logs = []
-
-    if active_shift and active_shift.actual_start_time:
+        progress_tasks['correos'] = {'completed': (len(ids_empresas_con_correo) >= todas_las_empresas.count()), 'text': f"Enviar Correos ({len(ids_empresas_con_correo)}/{todas_las_empresas.count()})"}
+        if progress_tasks['correos']['completed']: completed_tasks_count += 1
+        
+        progress_percentage = int((completed_tasks_count / total_tasks) * 100) if total_tasks > 0 else 0
+        
+        # --- 2. Lógica de Alarma (Usando el nuevo filtrado) ---
+        applicable_items = get_applicable_checklist_items(active_shift)
         completed_in_shift_ids = ChecklistLog.objects.filter(operator_shift=active_shift).values_list('item_id', flat=True)
-        pending_items = ChecklistItem.objects.exclude(id__in=completed_in_shift_ids)
+        pending_items = applicable_items.exclude(id__in=completed_in_shift_ids)
+
         for item in pending_items:
-            pending_checklist_items.append({'description': item.description, 'offset_minutes': item.trigger_offset_minutes})
+            if item.alarm_trigger_delay:
+                due_time = active_shift.actual_start_time + item.alarm_trigger_delay
+                pending_alarms_data.append({
+                    'id': item.id,
+                    'description': item.description,
+                    'due_time': due_time.isoformat()
+                })
 
-        # --- 👇 CAMBIO AQUÍ: Obtenemos TODOS los logs del turno para el scroll 👇 ---
-        traceability_logs_qs = TraceabilityLog.objects.filter(
-            user=request.user,
-            timestamp__gte=active_shift.actual_start_time
-        ).order_by('-timestamp') # No limitamos aquí para que el scroll funcione
-
+        # --- 3. Lógica para obtener los logs del turno (Tu código, sin cambios) ---
+        traceability_logs_qs = TraceabilityLog.objects.filter(user=request.user, timestamp__gte=active_shift.actual_start_time).order_by('-timestamp')
         for log in traceability_logs_qs:
             action_text = log.action
             match = re.search(r'Duración: (\d+)s', log.action)
             if match:
                 seconds = int(match.group(1))
                 if seconds < 60: formatted_duration = f"{seconds} seg"
-                elif seconds < 3600:
-                    minutes = seconds // 60; rem_seconds = seconds % 60
-                    formatted_duration = f"{minutes} min {rem_seconds} seg"
-                else:
-                    hours = seconds // 3600; rem_minutes = (seconds % 3600) // 60
-                    formatted_duration = f"{hours}h {rem_minutes} min"
+                elif seconds < 3600: minutes, rem_seconds = divmod(seconds, 60); formatted_duration = f"{minutes} min {rem_seconds} seg"
+                else: hours, rem_seconds = divmod(seconds, 3600); rem_minutes, _ = divmod(rem_seconds, 60); formatted_duration = f"{hours}h {rem_minutes} min"
                 action_text = log.action.replace(f"Duración: {seconds}s", f"Duración: {formatted_duration}")
             processed_logs.append({'action': action_text, 'timestamp': log.timestamp})
         
-        # --- Lógica del Temporizador (verificada) ---
-        ROUND_INTERVAL_MINUTES = 60
+        # --- 4. Lógica del Temporizador de Rondas (Tu código, sin cambios) ---
         last_round = VirtualRoundLog.objects.filter(operator_shift=active_shift).order_by('-start_time').first()
-        
         base_time = last_round.start_time if last_round else active_shift.actual_start_time
-        next_round_due_time = (base_time + timedelta(minutes=ROUND_INTERVAL_MINUTES)).isoformat()
+        next_round_due_time = (base_time + timedelta(minutes=60)).isoformat()
         
     context = {
         'active_shift': active_shift,
         'progress_tasks': progress_tasks,
         'progress_percentage': progress_percentage,
         'active_round_id': request.session.get('active_round_id'),
-        'pending_checklist_json': json.dumps(pending_checklist_items),
-        'traceability_logs': processed_logs, # Pasamos todos los logs
+        'traceability_logs': processed_logs,
         'next_round_due_time': next_round_due_time,
+        # **Importante**: Se pasa el JSON correcto para las alarmas
+        'pending_alarms_json': json.dumps(pending_alarms_data), 
     }
     
     return render(request, 'operator_dashboard.html', context)
-    active_shift = get_active_shift(request.user)
-    
-    progress_tasks = {}
-    completed_tasks_count = 0
-    total_tasks = 3 
-
-    if active_shift and active_shift.actual_start_time:
-        # ... (La lógica de Rondas y Bitácora no cambia) ...
-        total_rondas_requeridas = 7
-        rondas_completadas = VirtualRoundLog.objects.filter(operator_shift=active_shift).count()
-        rondas_completas = rondas_completadas >= total_rondas_requeridas
-        progress_tasks['rondas'] = {
-            'completed': rondas_completas,
-            'text': f"Realizar Rondas Virtuales ({rondas_completadas}/{total_rondas_requeridas})"
-        }
-        if rondas_completas:
-            completed_tasks_count += 1
-
-        empresas_con_instalaciones = Company.objects.filter(installations__isnull=False).distinct()
-        total_empresas_requeridas = empresas_con_instalaciones.count()
-        ids_empresas_con_log = UpdateLog.objects.filter(operator_shift=active_shift).values_list('installation__company_id', flat=True).distinct()
-        bitacora_completa = len(ids_empresas_con_log) >= total_empresas_requeridas
-        progress_tasks['bitacora'] = {
-            'completed': bitacora_completa,
-            'text': f"Anotar en Bitácora ({len(ids_empresas_con_log)}/{total_empresas_requeridas} empresas)"
-        }
-        if bitacora_completa:
-            completed_tasks_count += 1
-
-        # --- INICIO DE LA SECCIÓN CORREGIDA ---
-        
-        # 3. Validación estricta de Correos (un correo por cada empresa)
-        # Se elimina el filtro .filter(is_active=True)
-        todas_las_empresas = Company.objects.all() 
-        total_empresas_correo = todas_las_empresas.count()
-        ids_empresas_con_correo = Email.objects.filter(
-            operator=request.user, 
-            created_at__gte=active_shift.actual_start_time
-        ).values_list('company_id', flat=True)
-        correos_completos = len(ids_empresas_con_correo) >= total_empresas_correo
-        progress_tasks['correos'] = {
-            'completed': correos_completos,
-            'text': f"Enviar Correos de Novedades ({len(ids_empresas_con_correo)}/{total_empresas_correo} empresas)"
-        }
-        if correos_completos:
-            completed_tasks_count += 1
-            
-    progress_percentage = int((completed_tasks_count / total_tasks) * 100) if total_tasks > 0 else 0
-    
-    # --- FIN DE LA SECCIÓN CORREGIDA ---
-
-    # El resto de la función no cambia...
-    pending_checklist_items = []
-    if active_shift and active_shift.actual_start_time:
-        completed_in_shift_ids = ChecklistLog.objects.filter(operator_shift=active_shift).values_list('item_id', flat=True)
-        pending_items = ChecklistItem.objects.exclude(id__in=completed_in_shift_ids)
-        for item in pending_items:
-            pending_checklist_items.append({
-                'description': item.description,
-                'offset_minutes': item.trigger_offset_minutes
-            })
-
-    # --- INICIO MEJORA #4 Y #7 ---
-    processed_logs = []
-    if active_shift and active_shift.actual_start_time:
-        # 1. Obtener TODOS los logs del turno actual
-        traceability_logs_qs = TraceabilityLog.objects.filter(
-            user=request.user,
-            timestamp__gte=active_shift.actual_start_time
-        ).order_by('-timestamp')
-
-        # 2. Procesar cada log para formatear la duración
-        for log in traceability_logs_qs:
-            action_text = log.action
-            # Buscar el patrón de duración en el texto de la acción
-            match = re.search(r'Duración: (\d+)s', log.action)
-            if match:
-                seconds = int(match.group(1))
-                if seconds < 60:
-                    formatted_duration = f"{seconds} segundos"
-                elif seconds < 3600:
-                    minutes = seconds // 60
-                    rem_seconds = seconds % 60
-                    formatted_duration = f"{minutes} min {rem_seconds} seg"
-                else:
-                    hours = seconds // 3600
-                    rem_minutes = (seconds % 3600) // 60
-                    formatted_duration = f"{hours}h {rem_minutes} min"
-                
-                # Reemplazar la duración original con la formateada
-                action_text = log.action.replace(f"Duración: {seconds}s", f"Duración: {formatted_duration}")
-
-            processed_logs.append({'action': action_text, 'timestamp': log.timestamp})
-    
-    else:
-        # Si no hay turno activo, la lista de logs está vacía
-        processed_logs = []
-    # --- FIN MEJORA #4 Y #7 ---
-
-    context = {
-        'active_shift': active_shift,
-        'progress_tasks': progress_tasks,
-        'progress_percentage': progress_percentage,
-        'active_round_id': request.session.get('active_round_id'),
-        'pending_checklist_json': json.dumps(pending_checklist_items),
-        'traceability_logs': processed_logs, # Usar la lista procesada
-    }
-    
-    return render(request, 'operator_dashboard.html', context)
-
 
 @login_required
 def start_shift(request):
@@ -861,182 +770,89 @@ def update_log_view(request):
 def checklist_view(request):
     active_shift = get_active_shift(request.user)
 
-    if not active_shift or not active_shift.actual_start_time:
-        messages.error(request, "Debes iniciar un turno activo para ver el checklist.")
+    if not active_shift:
         return redirect('operator_dashboard')
 
-    # --- LÓGICA MEJORADA PARA FILTRAR TAREAS ---
-    hoy_dia_semana = str(timezone.now().weekday()) # 0=Lunes, 6=Domingo
-    turno_actual_tipo = active_shift.shift_type
-
-    # 1. Obtenemos solo las tareas que aplican para HOY
-    items_del_dia = ChecklistItem.objects.filter(
-        Q(dias_aplicables__isnull=True) | Q(dias_aplicables__exact='') | Q(dias_aplicables__contains=hoy_dia_semana)
-    )
-
-    # 2. De esas, filtramos solo las que aplican para ESTE TURNO
-    items_finales = items_del_dia.filter(
-        Q(turnos_aplicables__isnull=True) | Q(turnos_aplicables=turno_actual_tipo)
-    ).distinct()
-    # --- FIN DE LA LÓGICA DE FILTRADO ---
-
-    # Manejo del guardado de tareas y observaciones
     if request.method == 'POST':
-        completed_item_ids = request.POST.getlist('items')
+        selected_item_ids = request.POST.getlist('items')
+        for item_id in selected_item_ids:
+            if not ChecklistLog.objects.filter(item_id=item_id, operator_shift=active_shift).exists():
+                item = ChecklistItem.objects.get(id=item_id)
+                observacion = request.POST.get(f'observacion_{item_id}', '')
+                ChecklistLog.objects.create(item=item, operator_shift=active_shift, observacion=observacion)
         
-        for item_id in completed_item_ids:
-            observacion_texto = request.POST.get(f'observacion_{item_id}', '').strip()
-            
-            ChecklistLog.objects.update_or_create(
-                operator_shift=active_shift,
-                item_id=item_id,
-                defaults={'observacion': observacion_texto if observacion_texto else None}
-            )
-        messages.success(request, "Checklist actualizado con éxito.")
+        # --- CAMBIO AQUÍ ---
+        # --- CAMBIO AQUÍ ---
+                # 2. Crea un registro en el historial de "Actividad Reciente".
+                TraceabilityLog.objects.create(
+                    user=request.user,
+                    action=f"Tarea de checklist completada: '{item.description}'"
+                )
+        # Redirigir al panel de operador después de guardar.
         return redirect('operator_dashboard')
 
-    # Obtenemos los logs para saber qué tareas ya se completaron
-    logs_del_turno = ChecklistLog.objects.filter(operator_shift=active_shift)
-    completed_logs_dict = {log.item_id: log for log in logs_del_turno}
+    # --- Lógica para la petición GET (sin cambios) ---
+    checklist_items = get_applicable_checklist_items(active_shift)
+    completed_logs_dict = {log.item.id: log for log in ChecklistLog.objects.filter(operator_shift=active_shift)}
+
+    tasks_for_js = [
+        {
+            'id': item.id,
+            'description': item.description,
+            'completed': bool(completed_logs_dict.get(item.id)),
+            'observation': completed_logs_dict.get(item.id).observacion if completed_logs_dict.get(item.id) else ''
+        }
+        for item in checklist_items
+    ]
 
     context = {
-        'checklist_items': items_finales,
+        'checklist_items': checklist_items,
         'completed_logs_dict': completed_logs_dict,
+        'tasks_for_js': tasks_for_js,
     }
-    
     return render(request, 'checklist.html', context)
-    """
-    Vista final para el checklist, compatible con la plantilla de acordeón.
-    """
-    active_shift = get_active_shift(request.user)
-
-    if not active_shift or not active_shift.actual_start_time:
-        messages.error(request, "Debes iniciar un turno activo para ver el checklist.")
-        return redirect('operator_dashboard')
-
-    # Manejo del guardado de tareas (petición POST)
-    if request.method == 'POST':
-        completed_item_ids = request.POST.getlist('items') # Tu HTML usa name="items"
-        for item_id in completed_item_ids:
-            ChecklistLog.objects.get_or_create(
-                operator_shift=active_shift,
-                item_id=item_id
-            )
-        messages.success(request, "Checklist actualizado con éxito.")
-        return redirect('operator_dashboard')
-
-    # Lógica para preparar los datos para tu plantilla (petición GET)
-    completed_ids = ChecklistLog.objects.filter(
-        operator_shift=active_shift
-    ).values_list('item_id', flat=True)
-
-    # Creamos un diccionario ordenado para mantener la secuencia del turno
-    checklist_data = OrderedDict([
-        ('Inicio de Turno', []),
-        ('Durante el Turno', []),
-        ('Finalización de Turno', [])
-    ])
-
-    # Llenamos el diccionario con las tareas correspondientes
-    for item in ChecklistItem.objects.all():
-        phase_text = item.get_phase_display()
-        if phase_text in checklist_data:
-            checklist_data[phase_text].append(item)
-
-    # Eliminamos las secciones del acordeón que no tengan tareas
-    final_checklist_data = {
-        phase: items for phase, items in checklist_data.items() if items
-    }
-
-    context = {
-        'checklist_data': final_checklist_data,
-        'completed_ids': list(completed_ids),
-        'active_shift': active_shift
-    }
-    
-    return render(request, 'checklist.html', context)
-    """
-    Vista robusta para mostrar y gestionar las tareas del checklist.
-    """
-    # 1. Usamos la función robusta para obtener el turno.
-    active_shift = get_active_shift(request.user)
-
-    # 2. Validamos que el turno exista y haya comenzado.
-    if not active_shift or not active_shift.actual_start_time:
-        messages.error(request, "Debes iniciar un turno activo para ver el checklist.")
-        return redirect('operator_dashboard')
-
-    # 3. Si el turno es válido, procedemos a obtener las tareas.
-    
-    # Calculamos el tiempo transcurrido desde el inicio del turno en minutos.
-    time_since_shift_start = (timezone.now() - active_shift.actual_start_time).total_seconds() / 60
-    
-    # Obtenemos las tareas que ya deberían estar disponibles según el tiempo transcurrido.
-    available_items = ChecklistItem.objects.filter(
-        trigger_offset_minutes__lte=time_since_shift_start
-    )
-
-    # Obtenemos los IDs de las tareas que ya fueron completadas en ESTE turno.
-    completed_items_ids = ChecklistLog.objects.filter(operator_shift=active_shift).values_list('item_id', flat=True)
-    
-    # Filtramos para obtener solo las tareas que están disponibles pero aún no se han completado.
-    pending_items = available_items.exclude(id__in=completed_items_ids)
-
-    # 4. Manejamos el guardado de las tareas completadas (acción POST).
-    if request.method == 'POST':
-        # Obtenemos la lista de IDs de los items marcados como completados desde el formulario.
-        items_to_log_ids = request.POST.getlist('items_completed')
-        
-        for item_id in items_to_log_ids:
-            # Creamos un registro en ChecklistLog para cada tarea completada.
-            ChecklistLog.objects.create(
-                operator_shift=active_shift,
-                item_id=item_id
-            )
-        
-        messages.success(request, "Checklist actualizado con éxito.")
-        return redirect('operator_dashboard') # Redirigimos para un mejor flujo.
-
-    # 5. Preparamos el contexto y renderizamos la plantilla.
-    context = {
-        'pending_items': pending_items,
-        'active_shift': active_shift
-    }
-    
-    return render(request, 'checklist.html', context)
-    
-
-    # Buscamos el turno activo del operador para hoy
-    active_shift = OperatorShift.objects.filter(
-        operator=request.user,
-        date=timezone.now().date()
-    ).first()
+    active_shift = OperatorShift.objects.filter(operator=request.user, actual_end_time__isnull=True).first()
 
     if not active_shift:
-        # Si no tiene turno, no puede registrar novedades
         return redirect('operator_dashboard')
 
     if request.method == 'POST':
-        form = UpdateLogForm(request.POST)
-        if form.is_valid():
-            log = form.save(commit=False)
-            # --- ESTA ES LA LÍNEA CLAVE QUE FALTABA ---
-            # Asignamos el turno activo al nuevo registro de novedad.
-            log.operator_shift = active_shift
+        selected_item_ids = request.POST.getlist('items')
+        for item_id in selected_item_ids:
+            # Solo procesamos ítems que no hayan sido ya registrados en este turno.
+            if not ChecklistLog.objects.filter(item_id=item_id, operator_shift=active_shift).exists():
+                item = ChecklistItem.objects.get(id=item_id)
+                observacion = request.POST.get(f'observacion_{item_id}', '')
+                ChecklistLog.objects.create(
+                    item=item,
+                    operator_shift=active_shift,
+                    observacion=observacion
+                )
+        return redirect('checklist')
 
-            log.save()
-            TraceabilityLog.objects.create(user=request.user, action=f"Registró novedad para {log.installation}")
-            return redirect('operator_dashboard')
-    else:
-        form = UpdateLogForm()
+    # --- Lógica de GET Actualizada ---
+    # Usamos la misma función para obtener los ítems que aplican al turno.
+    checklist_items = get_applicable_checklist_items(active_shift)
+    
+    completed_logs = ChecklistLog.objects.filter(operator_shift=active_shift)
+    completed_logs_dict = {log.item.id: log for log in completed_logs}
 
-    companies_with_installations = Company.objects.prefetch_related('installations')
+    tasks_for_js = []
+    for item in checklist_items:
+        log = completed_logs_dict.get(item.id)
+        tasks_for_js.append({
+            'id': item.id,
+            'description': item.description,
+            'completed': bool(log),
+            'observation': log.observacion if log else ''
+        })
 
     context = {
-        'form': form,
-        'companies': companies_with_installations
+        'checklist_items': checklist_items,
+        'completed_logs_dict': completed_logs_dict,
+        'tasks_for_js': tasks_for_js,
     }
-    return render(request, 'update_log.html', context)
+    return render(request, 'checklist.html', context)
 
 
 @login_required

@@ -1,16 +1,80 @@
 {% extends 'base.html' %}
 {% load crispy_forms_tags %}
 
-{% block title %}{{ title }}{% endblock %}
+{% block title %}
+    {% if object %}
+        Editar Ítem de Checklist
+    {% else %}
+        Agregar Ítem de Checklist
+    {% endif %}
+{% endblock %}
 
 {% block content %}
-<h2>{{ title }}</h2>
-<hr>
+<div class="container mt-4">
+    <div class="card shadow-sm">
+        <div class="card-header bg-light">
+            <h2 class="h4 mb-0">
+                {% if object %}
+                    <i class="fas fa-edit me-2"></i>Editar Ítem de Checklist
+                {% else %}
+                    <i class="fas fa-plus-circle me-2"></i>Agregar Ítem de Checklist
+                {% endif %}
+            </h2>
+        </div>
+        <div class="card-body">
+            <form method="post">
+                {% csrf_token %}
+                
+                {# Renderiza el formulario completo con Crispy. Esto es más robusto y evita el error. #}
+                {{ form|crispy }}
 
-<form method="post">
-    {% csrf_token %}
-    {{ form|crispy }}
-    <button type="submit" class="btn btn-primary mt-3">Guardar Tarea</button>
-    <a href="{% url 'manage_checklist_items' %}" class="btn btn-secondary mt-3">Cancelar</a>
-</form>
+                <div class="mt-4 d-flex justify-content-end">
+                    {# CORRECCIÓN: Se usa el nombre de URL correcto 'manage_checklist_items' #}
+                    <a href="{% url 'manage_checklist_items' %}" class="btn btn-secondary me-2">
+                        <i class="fas fa-times me-2"></i>Cancelar
+                    </a>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-save me-2"></i>Guardar Cambios
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Encuentra el contenedor del campo 'days_of_week'. Crispy Forms usualmente
+    // lo envuelve en un div con un id como 'div_id_days_of_week'.
+    const daysOfWeekContainer = document.getElementById('div_id_days_of_week');
+    
+    if (daysOfWeekContainer) {
+        // Encuentra el elemento de la etiqueta <label> dentro del contenedor.
+        const label = daysOfWeekContainer.querySelector('label');
+        
+        if (label) {
+            // Crea el botón 'Seleccionar Todos'.
+            const selectAllButton = document.createElement('button');
+            selectAllButton.type = 'button';
+            selectAllButton.id = 'select-all-days';
+            selectAllButton.className = 'btn btn-sm btn-outline-secondary ms-3';
+            selectAllButton.innerHTML = '<i class="fas fa-check-double me-1"></i>Seleccionar Todos';
+            
+            // Inserta el botón justo después de la etiqueta.
+            label.insertAdjacentElement('afterend', selectAllButton);
+
+            // Añade el evento de clic al nuevo botón.
+            selectAllButton.addEventListener('click', function() {
+                // Encuentra todos los checkboxes dentro de este contenedor.
+                const dayCheckboxes = daysOfWeekContainer.querySelectorAll('input[type="checkbox"]');
+                dayCheckboxes.forEach(function(checkbox) {
+                    checkbox.checked = true;
+                });
+            });
+        }
+    }
+});
+</script>
 {% endblock %}

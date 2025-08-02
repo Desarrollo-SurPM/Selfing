@@ -41,38 +41,65 @@ class OperatorShift(models.Model):
         return f"Turno de {self.operator.username} el {self.date.strftime('%Y-%m-%d')} ({self.shift_type.name})"
 
 class ChecklistItem(models.Model):
-    description = models.CharField(max_length=255, verbose_name="Descripción de la Tarea")
-    phase = models.CharField(max_length=20, choices=[('start', 'Inicio de Turno'), ('during', 'Durante el Turno'), ('end', 'Finalización de Turno')], default='during')
-    order = models.PositiveIntegerField(default=0)
+    """
+    Representa una tarea individual dentro de la lista de verificación de un operador.
+    """
+    # --- Campos de Identificación de la Tarea ---
+    description = models.CharField(
+        max_length=255,
+        verbose_name="Descripción de la Tarea"
+    )
+    phase = models.CharField(
+        max_length=20,
+        choices=[
+            ('start', 'Inicio de Turno'),
+            ('during', 'Durante el Turno'),
+            ('end', 'Finalización de Turno')
+        ],
+        default='during',
+        verbose_name="Fase del Turno"
+    )
+    order = models.PositiveIntegerField(
+        default=0,
+        verbose_name="Orden de Visualización",
+        help_text="Un número más bajo se muestra primero."
+    )
 
-    # --- 👇 CAMPOS NUEVOS AÑADIDOS 👇 ---
+    # --- Campos de Programación y Aplicabilidad ---
     DIAS_SEMANA = [
         (0, 'Lunes'), (1, 'Martes'), (2, 'Miércoles'), (3, 'Jueves'),
         (4, 'Viernes'), (5, 'Sábado'), (6, 'Domingo')
     ]
-
     dias_aplicables = models.CharField(
-        max_length=20, blank=True, null=True,
-        help_text="Días de la semana en que aplica la tarea (ej: 0,5 para Lunes y Sábado). Dejar en blanco para todos los días."
+        max_length=50,
+        blank=True,
+        null=True,
+        verbose_name="Días de la Semana Aplicables",
+        help_text="Marcar los días en que aplica. Dejar todos sin marcar para que aplique siempre."
     )
     turnos_aplicables = models.ManyToManyField(
-        ShiftType, blank=True,
-        help_text="Turnos en los que aplica la tarea. Dejar en blanco para todos los turnos."
+        'ShiftType', # Usa el string para evitar importaciones circulares
+        blank=True,
+        verbose_name="Tipos de Turno Aplicables",
+        help_text="Marcar los turnos en que aplica. Dejar sin marcar para que aplique a todos."
     )
-    # --- 👆 FIN DE LOS CAMPOS NUEVOS 👆 ---
+
+    # --- Funcionalidad de Alarma ---
+    alarm_trigger_delay = models.DurationField(
+        null=True,
+        blank=True,
+        verbose_name="Alarma de Tarea Pendiente",
+        help_text="Establecer un tiempo para la alarma (ej: '1:30' para 1 hora y 30 mins) si la tarea no se completa. Se calcula desde el inicio del turno."
+    )
 
     class Meta:
-        ordering = ['order']
-
-    def __str__(self):
-        return self.description
-    
-    class Meta:
-        # Ordenar por el nuevo campo 'order' por defecto
-        ordering = ['order']
+        ordering = ['phase', 'order']
+        verbose_name = "Ítem de Checklist"
+        verbose_name_plural = "Ítems de Checklist"
 
     def __str__(self):
         return f"[{self.get_phase_display()}] {self.description}"
+
 
 # core/models.py
 
