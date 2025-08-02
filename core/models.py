@@ -55,10 +55,16 @@ class ChecklistItem(models.Model):
         default=0,
         help_text="Minutos desde el inicio del turno para que esta tarea sea relevante."
     )
+    # Campo para la reordenación
+    order = models.PositiveIntegerField(default=0, help_text="Posición de la tarea en la lista")
+    
+    class Meta:
+        # Ordenar por el nuevo campo 'order' por defecto
+        ordering = ['order']
+
     def __str__(self):
         return f"[{self.get_phase_display()}] {self.description}"
 
-# --- 👇 CAMBIO #1 👇 ---
 class ChecklistLog(models.Model):
     # Se asocia a un turno específico para saber a qué jornada pertenece.
     operator_shift = models.ForeignKey(OperatorShift, on_delete=models.CASCADE, related_name='checklist_logs')
@@ -87,6 +93,7 @@ class UpdateLog(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     def __str__(self):
         return f"Novedad para {self.installation.name} por {self.operator_shift.operator.username}"
+
 
 # --- (El resto de los modelos no tienen cambios) ---
 class Email(models.Model):

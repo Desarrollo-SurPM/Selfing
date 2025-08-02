@@ -25,6 +25,8 @@ urlpatterns = [
 
     # Gestión de Checklist
     path('dashboard/checklist-items/', views.manage_checklist_items, name='manage_checklist_items'),
+    path('checklist/', views.checklist_view, name='checklist_view'),
+    path('checklist/update_order/', views.update_checklist_order, name='update_checklist_order'),
     path('dashboard/checklist-items/add/', views.create_checklist_item, name='create_checklist_item'),
     path('dashboard/checklist-items/edit/<int:item_id>/', views.edit_checklist_item, name='edit_checklist_item'),
     path('dashboard/checklist-items/delete/<int:item_id>/', views.delete_checklist_item, name='delete_checklist_item'),
@@ -64,6 +66,10 @@ urlpatterns = [
     # Rondas Virtuales
     path('round/start/', views.start_virtual_round, name='start_virtual_round'),
     path('round/finish/<int:round_id>/', views.finish_virtual_round, name='finish_virtual_round'),
+    path('round/finish/', views.finish_virtual_round, name='finish_virtual_round'),
+
+    # Alarma
+    path('api/check_alarms/', views.check_pending_alarms, name='check_pending_alarms'),
 
     # --- Rutas AJAX ---
     path('ajax/get-updates/<int:company_id>/', views.get_updates_for_company, name='ajax_get_updates'),

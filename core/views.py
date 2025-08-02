@@ -7,11 +7,14 @@ from django.template.loader import get_template
 from xhtml2pdf import pisa
 from django.contrib import messages
 from io import BytesIO
+from django.db import transaction
 from django.core.files.base import ContentFile
 from django import forms
 from datetime import timedelta, datetime
 from django.contrib.auth import logout
+from collections import OrderedDict
 import json
+from django.views.decorators.csrf import csrf_exempt 
 
 from .models import (
     Company, Installation, OperatorProfile, ShiftType, OperatorShift,
@@ -180,8 +183,10 @@ def delete_installation(request, installation_id):
 @login_required
 @user_passes_test(is_supervisor)
 def manage_checklist_items(request):
-    items = ChecklistItem.objects.all()
+    # --- 👇 CAMBIO AQUÍ: Nos aseguramos de que los items se obtengan en el orden correcto 👇 ---
+    items = ChecklistItem.objects.all() # El orden por defecto ya está en el modelo
     return render(request, 'manage_checklist.html', {'items': items})
+
 
 @login_required
 @user_passes_test(is_supervisor)
@@ -418,7 +423,25 @@ def get_shifts_for_calendar(request):
         })
     return JsonResponse(events, safe=False)
 
-
+def get_active_shift(user):
+    """Función robusta para obtener el turno activo más reciente de un operador."""
+    shift = OperatorShift.objects.filter(
+        operator=user,
+        actual_end_time__isnull=True
+    ).order_by('-date').first()
+    return shift
+    """
+    Función robusta para obtener el turno activo más reciente de un operador.
+    Busca el último turno asignado que aún no ha sido finalizado.
+    """
+    # Esta consulta ordena por fecha descendente, asegurando que siempre
+    # obtengamos el turno más nuevo, solucionando el problema de la medianoche.
+    shift = OperatorShift.objects.filter(
+        operator=user,
+        actual_end_time__isnull=True
+    ).order_by('-date').first()
+    
+    return shift
 # --- VISTAS DE OPERADOR ---
 
 @login_required
@@ -499,12 +522,30 @@ def operator_dashboard(request):
     return render(request, 'operator_dashboard.html', context)
 
 
-def get_active_shift(user):
-    """Función auxiliar para obtener el turno activo de un operador."""
-    return OperatorShift.objects.filter(operator=user, date=timezone.now().date()).first()
-
 @login_required
 def start_shift(request):
+    """
+    Vista que maneja la ACCIÓN de iniciar un turno.
+    """
+    if request.method == 'POST':
+        # Busca el turno asignado más próximo que aún no ha comenzado.
+        # Es la lógica más segura para evitar iniciar un turno equivocado.
+        shift_to_start = OperatorShift.objects.filter(
+            operator=request.user,
+            actual_start_time__isnull=True,
+            actual_end_time__isnull=True
+        ).order_by('date', 'shift_type__start_time').first()
+
+        if shift_to_start:
+            shift_to_start.actual_start_time = timezone.now()
+            shift_to_start.save()
+            messages.success(request, f"Turno '{shift_to_start.shift_type.name}' iniciado correctamente.")
+        else:
+            messages.error(request, "No se pudo encontrar un turno pendiente para iniciar.")
+
+    return redirect('operator_dashboard')
+
+
     if request.method == 'POST':
         today = timezone.now().date()
         # Busca un turno asignado para hoy que aún no haya comenzado
@@ -523,41 +564,181 @@ def start_shift(request):
 
 
 @login_required
-def checklist_view(request):
+def update_log_view(request):
+    """
+    Vista corregida y funcional para tu bitácora de tarjetas.
+    """
+    # 1. Validamos que el turno esté activo.
     active_shift = get_active_shift(request.user)
-    if not active_shift:
+    if not active_shift or not active_shift.actual_start_time:
+        messages.error(request, "Debes iniciar un turno activo para registrar novedades.")
         return redirect('operator_dashboard')
 
+    # 2. Manejamos el guardado del formulario cuando se envía.
     if request.method == 'POST':
-        item_ids = request.POST.getlist('items')
-        for item_id in item_ids:
-            item = get_object_or_404(ChecklistItem, id=item_id)
-            # Usamos get_or_create para evitar duplicados si se envía el formulario varias veces
-            ChecklistLog.objects.get_or_create(operator_shift=active_shift, item=item)
-            TraceabilityLog.objects.create(user=request.user, action=f"Completó checklist: {item.description}")
-        return redirect('checklist')
+        form = UpdateLogForm(request.POST)
+        if form.is_valid():
+            new_log = form.save(commit=False)
+            new_log.operator_shift = active_shift
+            new_log.save()
+            messages.success(request, 'Novedad registrada con éxito en la bitácora.')
+            return redirect('operator_dashboard')
+        else:
+            # Si el formulario no es válido, mostramos los errores.
+            messages.error(request, 'Hubo un error al guardar la novedad. Por favor, revisa los datos.')
 
-    # --- LÓGICA DE AGRUPACIÓN DE TAREAS ---
-
-    # Obtenemos las tareas ya completadas en este turno
-    completed_in_shift_ids = list(ChecklistLog.objects.filter(operator_shift=active_shift).values_list('item_id', flat=True))
-
-    # Agrupamos todas las tareas del checklist por su fase
-    checklist_items_by_phase = {}
-    for phase_code, phase_name in ChecklistItem.TurnPhase.choices:
-        items = ChecklistItem.objects.filter(phase=phase_code)
-        if items.exists():
-            checklist_items_by_phase[phase_name] = items
+    # 3. Preparamos los datos para mostrar la página por primera vez (GET).
+    form = UpdateLogForm()
+    
+    # Esta es la línea clave que faltaba:
+    # Obtenemos todas las empresas y le decimos a Django que también cargue
+    # todas sus instalaciones relacionadas en una sola consulta eficiente.
+    companies_with_installations = Company.objects.prefetch_related('installations')
 
     context = {
-        'checklist_data': checklist_items_by_phase,
-        'completed_ids': completed_in_shift_ids
+        'form': form,
+        'companies': companies_with_installations # Le pasamos las empresas a tu plantilla
     }
-    return render(request, 'checklist.html', context)
+    
+    return render(request, 'update_log.html', context)
+    """
+    Vista completa y funcional para registrar una novedad en la bitácora.
+    """
+    # 1. Usamos la función robusta para obtener el turno activo.
+    active_shift = get_active_shift(request.user)
 
+    # 2. Validamos que el turno exista y que ya haya comenzado.
+    #    Si no, redirigimos con un mensaje de error.
+    if not active_shift or not active_shift.actual_start_time:
+        messages.error(request, "Debes iniciar un turno activo para poder registrar novedades.")
+        return redirect('operator_dashboard')
+
+    # 3. Manejamos el envío del formulario (petición POST).
+    if request.method == 'POST':
+        form = UpdateLogForm(request.POST)
+        if form.is_valid():
+            # Creamos la entrada pero no la guardamos aún...
+            new_log = form.save(commit=False)
+            # ...porque necesitamos añadirle el turno activo del operador.
+            new_log.operator_shift = active_shift
+            new_log.save() # Ahora sí la guardamos.
+            
+            messages.success(request, 'Novedad registrada con éxito.')
+            return redirect('operator_dashboard') # Redirigimos al panel.
+    else:
+        # 4. Si es la primera vez que se carga la página (petición GET),
+        #    creamos un formulario vacío.
+        form = UpdateLogForm()
+
+    # 5. Preparamos el contexto con el formulario y renderizamos la plantilla.
+    context = {
+        'form': form
+    }
+    return render(request, 'update_log.html', context)
 
 @login_required
-def update_log_view(request):
+def checklist_view(request):
+    """
+    Vista final para el checklist, compatible con la plantilla de acordeón.
+    """
+    active_shift = get_active_shift(request.user)
+
+    if not active_shift or not active_shift.actual_start_time:
+        messages.error(request, "Debes iniciar un turno activo para ver el checklist.")
+        return redirect('operator_dashboard')
+
+    # Manejo del guardado de tareas (petición POST)
+    if request.method == 'POST':
+        completed_item_ids = request.POST.getlist('items') # Tu HTML usa name="items"
+        for item_id in completed_item_ids:
+            ChecklistLog.objects.get_or_create(
+                operator_shift=active_shift,
+                item_id=item_id
+            )
+        messages.success(request, "Checklist actualizado con éxito.")
+        return redirect('operator_dashboard')
+
+    # Lógica para preparar los datos para tu plantilla (petición GET)
+    completed_ids = ChecklistLog.objects.filter(
+        operator_shift=active_shift
+    ).values_list('item_id', flat=True)
+
+    # Creamos un diccionario ordenado para mantener la secuencia del turno
+    checklist_data = OrderedDict([
+        ('Inicio de Turno', []),
+        ('Durante el Turno', []),
+        ('Finalización de Turno', [])
+    ])
+
+    # Llenamos el diccionario con las tareas correspondientes
+    for item in ChecklistItem.objects.all():
+        phase_text = item.get_phase_display()
+        if phase_text in checklist_data:
+            checklist_data[phase_text].append(item)
+
+    # Eliminamos las secciones del acordeón que no tengan tareas
+    final_checklist_data = {
+        phase: items for phase, items in checklist_data.items() if items
+    }
+
+    context = {
+        'checklist_data': final_checklist_data,
+        'completed_ids': list(completed_ids),
+        'active_shift': active_shift
+    }
+    
+    return render(request, 'checklist.html', context)
+    """
+    Vista robusta para mostrar y gestionar las tareas del checklist.
+    """
+    # 1. Usamos la función robusta para obtener el turno.
+    active_shift = get_active_shift(request.user)
+
+    # 2. Validamos que el turno exista y haya comenzado.
+    if not active_shift or not active_shift.actual_start_time:
+        messages.error(request, "Debes iniciar un turno activo para ver el checklist.")
+        return redirect('operator_dashboard')
+
+    # 3. Si el turno es válido, procedemos a obtener las tareas.
+    
+    # Calculamos el tiempo transcurrido desde el inicio del turno en minutos.
+    time_since_shift_start = (timezone.now() - active_shift.actual_start_time).total_seconds() / 60
+    
+    # Obtenemos las tareas que ya deberían estar disponibles según el tiempo transcurrido.
+    available_items = ChecklistItem.objects.filter(
+        trigger_offset_minutes__lte=time_since_shift_start
+    )
+
+    # Obtenemos los IDs de las tareas que ya fueron completadas en ESTE turno.
+    completed_items_ids = ChecklistLog.objects.filter(operator_shift=active_shift).values_list('item_id', flat=True)
+    
+    # Filtramos para obtener solo las tareas que están disponibles pero aún no se han completado.
+    pending_items = available_items.exclude(id__in=completed_items_ids)
+
+    # 4. Manejamos el guardado de las tareas completadas (acción POST).
+    if request.method == 'POST':
+        # Obtenemos la lista de IDs de los items marcados como completados desde el formulario.
+        items_to_log_ids = request.POST.getlist('items_completed')
+        
+        for item_id in items_to_log_ids:
+            # Creamos un registro en ChecklistLog para cada tarea completada.
+            ChecklistLog.objects.create(
+                operator_shift=active_shift,
+                item_id=item_id
+            )
+        
+        messages.success(request, "Checklist actualizado con éxito.")
+        return redirect('operator_dashboard') # Redirigimos para un mejor flujo.
+
+    # 5. Preparamos el contexto y renderizamos la plantilla.
+    context = {
+        'pending_items': pending_items,
+        'active_shift': active_shift
+    }
+    
+    return render(request, 'checklist.html', context)
+    
+
     # Buscamos el turno activo del operador para hoy
     active_shift = OperatorShift.objects.filter(
         operator=request.user,
@@ -679,20 +860,44 @@ def end_turn_preview(request):
 
 @login_required
 def start_virtual_round(request):
-    active_shift = get_active_shift(request.user)
-    if not active_shift:
-        return JsonResponse({'status': 'error', 'message': 'No tienes un turno activo para iniciar una ronda.'}, status=403)
+    """
+    Inicia una nueva ronda virtual.
+    Maneja tanto peticiones AJAX (desde el modal) como POST directas (desde el botón manual).
+    """
+    # Verificamos si la petición es AJAX (del modal) o normal (del botón)
+    is_ajax = "application/json" in request.headers.get('Content-Type', '')
 
     if request.method == 'POST':
-        # Se asocia la ronda al TURNO ACTIVO, no solo al operador
-        new_round = VirtualRoundLog.objects.create(
-            operator_shift=active_shift,
-            start_time=timezone.now()
-        )
-        request.session['active_round_id'] = new_round.id
-        TraceabilityLog.objects.create(user=request.user, action="Inició ronda virtual.")
-        return JsonResponse({'status': 'success', 'message': 'Ronda iniciada.'})
-    return JsonResponse({'status': 'error'}, status=405)
+        active_shift = get_active_shift(request.user)
+        
+        # Lógica para prevenir rondas duplicadas
+        if 'active_round_id' in request.session:
+            message = 'Ya hay una ronda virtual en curso.'
+            if is_ajax:
+                return JsonResponse({'status': 'error', 'message': message}, status=400)
+            messages.warning(request, message)
+            return redirect('operator_dashboard')
+
+        # Lógica para iniciar la ronda
+        if active_shift and active_shift.actual_start_time:
+            new_round = VirtualRoundLog.objects.create(
+                operator_shift=active_shift,
+                start_time=timezone.now()
+            )
+            request.session['active_round_id'] = new_round.id
+            message = 'Ronda virtual iniciada con éxito.'
+            
+            if is_ajax:
+                return JsonResponse({'status': 'success', 'round_id': new_round.id})
+            messages.success(request, message)
+            return redirect('operator_dashboard')
+
+    # Si algo falla (no es POST o no hay turno)
+    message = 'No se pudo iniciar la ronda. No hay un turno activo.'
+    if is_ajax:
+        return JsonResponse({'status': 'error', 'message': message}, status=400)
+    messages.error(request, message)
+    return redirect('operator_dashboard')
 
 @login_required
 def finish_virtual_round(request, round_id):
@@ -823,3 +1028,85 @@ def get_service_status(request):
         latest_log = s.logs.order_by('-timestamp').first()
         status_list.append({'id': s.id, 'name': s.name, 'status': latest_log.is_up if latest_log else None})
     return render(request, '_service_status_panel.html', {'service_status_list': status_list})
+
+@login_required
+def check_pending_alarms(request):
+    """
+    Vista de API que le dice al frontend si debe mostrar una alarma.
+    """
+    active_shift = get_active_shift(request.user)
+    
+    response_data = {
+        'pending_checklist': False,
+        'pending_round': False
+    }
+
+    # Si no hay turno o no ha empezado, no hay alarmas que mostrar.
+    if not active_shift or not active_shift.actual_start_time:
+        return JsonResponse(response_data)
+
+    # Lógica para verificar si hay tareas de checklist pendientes
+    # Comparamos la cantidad de tareas que existen con las que se han completado.
+    total_items_count = ChecklistItem.objects.count()
+    completed_items_count = ChecklistLog.objects.filter(operator_shift=active_shift).count()
+
+    if total_items_count > completed_items_count:
+        response_data['pending_checklist'] = True
+
+    # Aquí irá la futura lógica para la alarma de la ronda virtual
+    
+    return JsonResponse(response_data)
+    """
+    Vista de API para que el frontend consulte si hay alarmas pendientes.
+    """
+    current_shift = OperatorShift.objects.filter(operator=request.user, actual_end_time__isnull=True).first()
+    
+    response_data = {
+        'pending_checklist': False,
+        'pending_round': False
+    }
+
+    if current_shift:
+        # Lógica para verificar checklist pendiente
+        now = timezone.now()
+        time_since_shift_start = (now - current_shift.actual_start_time).total_seconds() / 60
+        
+        available_items_count = ChecklistItem.objects.filter(trigger_offset_minutes__lte=time_since_shift_start).count()
+        completed_items_count = ChecklistLog.objects.filter(operator_shift=current_shift).count()
+
+        if available_items_count > completed_items_count:
+            response_data['pending_checklist'] = True
+
+        # Lógica para verificar ronda virtual (la implementaremos completamente más adelante)
+        # Por ahora, es un ejemplo. Podríamos basarlo en la última ronda.
+        last_round = VirtualRoundLog.objects.filter(operator_shift=current_shift).order_by('-start_time').first()
+        if not last_round:
+            # Si nunca ha hecho una ronda, podría ser una alarma
+            pass # Aquí iría la lógica de cuándo debe ser la primera ronda
+        else:
+            # Si ya hizo una, la siguiente podría ser X tiempo después
+            pass # Lógica para rondas periódicas
+
+    return JsonResponse(response_data)
+
+@csrf_exempt # Deshabilitamos CSRF para esta vista AJAX
+@login_required
+@user_passes_test(is_supervisor)
+@transaction.atomic # Asegura que todos los cambios se hagan correctamente o ninguno
+def update_checklist_order(request):
+    if request.method == 'POST':
+        try:
+            # Cargamos la lista de IDs desde el cuerpo de la petición
+            data = json.loads(request.body)
+            item_ids = data.get('order', [])
+            
+            # Recorremos la lista de IDs. El índice nos da el nuevo orden.
+            for index, item_id in enumerate(item_ids):
+                ChecklistItem.objects.filter(pk=item_id).update(order=index)
+                
+            return JsonResponse({'status': 'success', 'message': 'Orden actualizado correctamente.'})
+        except Exception as e:
+            # Si algo sale mal, devolvemos un error
+            return JsonResponse({'status': 'error', 'message': str(e)}, status=400)
+    
+    return JsonResponse({'status': 'error', 'message': 'Método no permitido'}, status=405)

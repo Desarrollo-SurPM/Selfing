@@ -1,11 +1,25 @@
 {% extends 'base.html' %}
+{% load static %}
 
 {% block title %}Gestionar Checklist - SELFING{% endblock %}
 
-
-
 {% block extra_css %}
 <link rel="stylesheet" href="{% static 'css/manage_pages.css' %}">
+<style>
+    /* Estilo para el cursor mientras se arrastra */
+    .sortable-ghost {
+        opacity: 0.4;
+        background-color: #c8ebfb;
+    }
+    /* Estilo para la fila que se está moviendo */
+    .sortable-chosen {
+        cursor: grabbing;
+    }
+    /* Añadir cursor de movimiento a las filas */
+    #checklistTable tbody tr {
+        cursor: grab;
+    }
+</style>
 {% endblock %}
 
 {% block content %}
@@ -13,7 +27,7 @@
     <div class="d-flex justify-content-between align-items-center">
         <div>
             <h2><i class="fas fa-list-check"></i>Gestión de Tareas del Checklist</h2>
-            <p>Configura las tareas que los operadores deben completar durante sus turnos</p>
+            <p>Configura las tareas que los operadores deben completar durante sus turnos. <strong>Arrastra las filas para reordenarlas.</strong></p>
         </div>
         <a href="{% url 'create_checklist_item' %}" class="btn btn-add">
             <i class="fas fa-plus-circle"></i>
@@ -22,7 +36,6 @@
     </div>
 </div>
 
-<!-- Stats Cards -->
 <div class="stats-row">
     <div class="stat-card total">
         <div class="stat-icon">
@@ -53,8 +66,6 @@
         <div class="stat-label">Fin Turno</div>
     </div>
 </div>
-
-<!-- Search and Filter Bar -->
 <div class="toolbar">
     <div class="row align-items-center">
         <div class="col-md-6">
@@ -82,20 +93,24 @@
     </div>
 </div>
 
-<!-- Table -->
+
 <div class="table-container">
     <table class="table" id="checklistTable">
         <thead>
             <tr>
+                <th style="width: 50px;">#</th>
                 <th>Tarea</th>
                 <th>Fase del Turno</th>
                 <th>Tiempo de Alerta</th>
                 <th class="text-center">Acciones</th>
             </tr>
         </thead>
-        <tbody>
+        <tbody id="sortable-checklist">
             {% for item in items %}
-            <tr data-phase="{{ item.phase|lower }}">
+            <tr data-id="{{ item.id }}" data-phase="{{ item.phase|lower }}">
+                <td class="text-center text-muted">
+                    <i class="fas fa-arrows-alt-v me-2"></i>
+                </td>
                 <td>
                     <div class="task-info">
                         <div class="task-icon">
@@ -103,19 +118,14 @@
                         </div>
                         <div class="task-details">
                             <div class="task-description">{{ item.description }}</div>
-                            <div class="task-id">ID: #{{ item.id }}</div>
                         </div>
                     </div>
                 </td>
                 <td>
                     <span class="phase-badge {{ item.phase|lower }}">
-                        {% if item.phase == 'inicio' %}
-                            <i class="fas fa-play-circle"></i>
-                        {% elif item.phase == 'durante' %}
-                            <i class="fas fa-clock"></i>
-                        {% else %}
-                            <i class="fas fa-stop-circle"></i>
-                        {% endif %}
+                        {% if item.phase == 'INICIO' %}<i class="fas fa-play-circle"></i>
+                        {% elif item.phase == 'DURANTE' %}<i class="fas fa-clock"></i>
+                        {% else %}<i class="fas fa-stop-circle"></i>{% endif %}
                         {{ item.get_phase_display }}
                     </span>
                 </td>
@@ -129,27 +139,20 @@
                     </div>
                 </td>
                 <td>
-                    <div class="action-buttons">
-                        <a href="{% url 'edit_checklist_item' item.id %}" class="btn-action btn-edit" title="Editar">
-                            <i class="fas fa-edit"></i>
-                        </a>
-                        <a href="{% url 'delete_checklist_item' item.id %}" class="btn-action btn-delete" title="Eliminar" onclick="return confirm('¿Estás seguro de eliminar esta tarea?')">
-                            <i class="fas fa-trash"></i>
-                        </a>
+                    <div class="action-buttons justify-content-center">
+                        <a href="{% url 'edit_checklist_item' item.id %}" class="btn-action btn-edit" title="Editar"><i class="fas fa-edit"></i></a>
+                        <a href="{% url 'delete_checklist_item' item.id %}" class="btn-action btn-delete" title="Eliminar" onclick="return confirm('¿Estás seguro de eliminar esta tarea?')"><i class="fas fa-trash"></i></a>
                     </div>
                 </td>
             </tr>
             {% empty %}
             <tr>
-                <td colspan="4">
+                <td colspan="5">
                     <div class="empty-state">
                         <i class="fas fa-clipboard-list"></i>
                         <h4>No hay tareas definidas</h4>
-                        <p>Comienza agregando tareas para que los operadores las completen durante sus turnos</p>
-                        <a href="{% url 'create_checklist_item' %}" class="btn btn-add mt-3">
-                            <i class="fas fa-plus-circle"></i>
-                            Añadir Primera Tarea
-                        </a>
+                        <p>Comienza agregando tareas para que los operadores las completen.</p>
+                        <a href="{% url 'create_checklist_item' %}" class="btn btn-add mt-3"><i class="fas fa-plus-circle"></i> Añadir Primera Tarea</a>
                     </div>
                 </td>
             </tr>
@@ -159,103 +162,93 @@
 </div>
 
 <div class="mt-4">
-    <a href="{% url 'admin_dashboard' %}" class="btn btn-back">
-        <i class="fas fa-arrow-left"></i>
-        Volver al Dashboard
-    </a>
+    <a href="{% url 'admin_dashboard' %}" class="btn btn-back"><i class="fas fa-arrow-left"></i> Volver al Dashboard</a>
 </div>
+
+{% endblock %}
+
+
+{% block extra_js %}
+{{ block.super }}
+<script src="https://cdn.jsdelivr.net/npm/sortablejs@latest/Sortable.min.js"></script>
 
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    // Count items by phase
+    // (El script para los contadores y filtros no cambia)
     const items = [
         {% for item in items %}
         { phase: "{{ item.phase|lower }}" }{% if not forloop.last %},{% endif %}
         {% endfor %}
     ];
-    
     const phaseCounts = {
         inicio: items.filter(item => item.phase === 'inicio').length,
         durante: items.filter(item => item.phase === 'durante').length,
         fin: items.filter(item => item.phase === 'fin').length
     };
+    document.getElementById('inicioCount').textContent = phaseCounts.inicio;
+    document.getElementById('duranteCount').textContent = phaseCounts.durante;
+    document.getElementById('finCount').textContent = phaseCounts.fin;
     
-    // Search functionality
+    // Search and Filter functionality (no changes here)
     const searchInput = document.getElementById('searchInput');
     const table = document.getElementById('checklistTable');
     const rows = table.getElementsByTagName('tbody')[0].getElementsByTagName('tr');
-    
     searchInput.addEventListener('keyup', function() {
         const searchTerm = this.value.toLowerCase();
-        
         Array.from(rows).forEach(row => {
-            const text = row.textContent.toLowerCase();
-            row.style.display = text.includes(searchTerm) ? '' : 'none';
+            row.style.display = row.textContent.toLowerCase().includes(searchTerm) ? '' : 'none';
         });
     });
-    
-    // Filter functionality
     const filterPills = document.querySelectorAll('.filter-pill');
-    
     filterPills.forEach(pill => {
         pill.addEventListener('click', function() {
-            // Update active pill
             filterPills.forEach(p => p.classList.remove('active'));
             this.classList.add('active');
-            
             const filter = this.getAttribute('data-filter');
-            
             Array.from(rows).forEach(row => {
-                if (filter === 'all') {
-                    row.style.display = '';
-                } else {
-                    const phase = row.getAttribute('data-phase');
-                    row.style.display = phase === filter ? '' : 'none';
-                }
+                if (filter === 'all') row.style.display = '';
+                else row.style.display = row.getAttribute('data-phase') === filter ? '' : 'none';
             });
         });
     });
-    
-    // Animate numbers
-    function animateValue(elementId, finalValue) {
-        const element = document.getElementById(elementId);
-        if (!element || finalValue === 0) {
-            if (element) element.textContent = '0';
-            return;
-        }
-        
-        let currentValue = 0;
-        const increment = finalValue / 20;
-        const timer = setInterval(() => {
-            currentValue += increment;
-            if (currentValue >= finalValue) {
-                currentValue = finalValue;
-                clearInterval(timer);
+
+
+    // 2. Lógica para la reordenación
+    const sortableList = document.getElementById('sortable-checklist');
+    if (sortableList) {
+        new Sortable(sortableList, {
+            animation: 150, // Animación suave al soltar
+            ghostClass: 'sortable-ghost', // Clase CSS para el elemento fantasma
+            chosenClass: 'sortable-chosen', // Clase CSS para el elemento seleccionado
+
+            // Se ejecuta cuando el usuario termina de arrastrar y suelta el elemento
+            onEnd: function (evt) {
+                // Creamos un array con los IDs de los items en el nuevo orden
+                const itemOrder = Array.from(sortableList.querySelectorAll('tr')).map(row => row.dataset.id);
+
+                // Enviamos el nuevo orden al servidor
+                fetch("{% url 'update_checklist_order' %}", {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': '{{ csrf_token }}' // Token de seguridad de Django
+                    },
+                    body: JSON.stringify({ 'order': itemOrder })
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if(data.status === 'success') {
+                        console.log('Orden guardado correctamente.');
+                        // Opcional: Mostrar una notificación de éxito
+                    } else {
+                        console.error('Error al guardar el orden.');
+                        // Opcional: Mostrar una notificación de error
+                    }
+                })
+                .catch(error => console.error('Error de red:', error));
             }
-            element.textContent = Math.floor(currentValue);
-        }, 50);
+        });
     }
-    
-    // Animate all stats
-    const totalValue = {{ items|length }};
-    const totalElement = document.querySelector('.stat-card.total .stat-value');
-    
-    if (totalValue > 0) {
-        let currentTotal = 0;
-        const totalIncrement = totalValue / 20;
-        const totalTimer = setInterval(() => {
-            currentTotal += totalIncrement;
-            if (currentTotal >= totalValue) {
-                currentTotal = totalValue;
-                clearInterval(totalTimer);
-            }
-            totalElement.textContent = Math.floor(currentTotal);
-        }, 50);
-    }
-    
-    animateValue('inicioCount', phaseCounts.inicio);
-    animateValue('duranteCount', phaseCounts.durante);
-    animateValue('finCount', phaseCounts.fin);
 });
 </script>
 {% endblock %}

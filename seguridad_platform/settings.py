@@ -59,6 +59,7 @@ TEMPLATES = [
                 'django.template.context_processors.request',
                 'django.contrib.auth.context_processors.auth',
                 'django.contrib.messages.context_processors.messages',
+                'core.context_processors.shift_context',
             ],
         },
     },
@@ -67,8 +68,18 @@ TEMPLATES = [
 WSGI_APPLICATION = 'seguridad_platform.wsgi.application'
 
 # Database
+# DATABASES = {
+#     'default': dj_database_url.config(
+#         default=os.environ.get('DATABASE_URL')
+#     )
+# }
+
+# 2. Añadimos la configuración para SQLite para desarrollo local
 DATABASES = {
-    'default': dj_database_url.config(default='postgresql://postgres:izzKIkbPLmeXCwRlcKRUStwyFGzBlsrS@maglev.proxy.rlwy.net:28215/railway')
+    'default': {
+        'ENGINE': 'django.db.backends.sqlite3',
+        'NAME': BASE_DIR / 'db.sqlite3',
+    }
 }
 
 # Password validation
