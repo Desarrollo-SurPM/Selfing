@@ -4,124 +4,111 @@
     <meta charset="UTF-8">
     <title>Reporte de Turno</title>
     <style>
-        @page { size: a4 portrait; margin: 2cm; }
-        body { font-family: sans-serif; font-size: 11pt; }
-        h1, h2, h3 { color: #333; }
-        h1 { font-size: 24pt; text-align: center; }
-        h2 { font-size: 16pt; border-bottom: 1px solid #ccc; padding-bottom: 5px; margin-top: 25px; }
-        h3 { font-size: 13pt; margin-top: 20px; }
+        /* Estilos generales del documento */
+        @page { size: a4 portrait; margin: 1.5cm; }
+        body { font-family: "Helvetica", "Arial", sans-serif; font-size: 10pt; color: #333; }
 
-        table {
-            width: 100%;
-            border-collapse: collapse;
-            margin-top: 15px;
-        }
+        /* Encabezado y Pie de página */
+        .header { text-align: center; border-bottom: 2px solid #003366; padding-bottom: 10px; }
+        .header h1 { margin: 0; font-size: 22pt; color: #003366; }
+        .header p { margin: 2px 0; font-size: 11pt; color: #444; }
+        .footer { position: fixed; bottom: -20px; left: 0; right: 0; text-align: center; font-size: 8pt; color: #888; }
+        
+        /* Secciones principales */
+        .section { margin-top: 25px; page-break-inside: avoid; }
+        .section-title { font-size: 15pt; color: #003366; border-bottom: 1px solid #999; padding-bottom: 4px; margin-bottom: 10px; }
+        
+        /* Estilos para la Bitácora (sin tablas) */
+        .company-group { margin-top: 15px; }
+        .company-title { font-size: 12pt; font-weight: bold; color: #333; margin-left: 5px; }
+        .installation-group { margin-top: 8px; margin-left: 20px; }
+        .installation-title { font-size: 11pt; font-weight: bold; color: #555; }
+        .log-list { list-style-type: none; padding-left: 15px; margin-top: 5px; }
+        .log-item { padding: 4px 0; border-bottom: 1px dotted #ccc; }
+        .log-item:last-child { border-bottom: none; }
+        .log-time { float: right; font-weight: bold; color: #666; }
 
-        th, td {
-            border: 1px solid #ddd;
-            padding: 8px;
-            text-align: left;
-            word-break: break-word;
-            white-space: normal;
-        }
+        /* Estilos para Rondas y Checklist */
+        .item-list { list-style-type: none; padding-left: 5px; margin: 0; }
+        .item-list li { padding: 5px 0; border-bottom: 1px dotted #ddd; }
+        .item-list li:last-child { border-bottom: none; }
+        .item-list strong { color: #003366; }
 
-        th {
-            background-color: #f2f2f2;
-        }
-
-        hr {
-            border: none;
-            border-top: 1px solid #ddd;
-            margin: 10px 0;
-        }
-
-        .footer {
-            position: fixed;
-            bottom: 0;
-            left: 0;
-            right: 0;
-            text-align: center;
-            font-size: 9pt;
-            color: #777;
-        }
-
-        .signature {
-            margin-top: 80px;
-            text-align: center;
-            font-size: 12pt;
-        }
-
-        .signature-line {
-            border-top: 1px solid #000;
-            width: 250px;
-            margin: 0 auto;
-            padding-top: 5px;
-        }
     </style>
 </head>
 <body>
-    <h1>Reporte de Turno</h1>
-
-    <h3>Operador: {{ operator.get_full_name|default:operator.username }}</h3>
-    <p><strong>Inicio del Turno:</strong> {{ start_time|date:"d/m/Y H:i" }}</p>
-    <p><strong>Fin del Turno:</strong> {{ end_time|date:"d/m/Y H:i" }}</p>
-
-    <h2>Checklist Completado</h2>
-    {% if completed_checklist %}
-        <ul>
-        {% for log in completed_checklist %}
-            <li>({{ log.completed_at|date:"H:i" }}) - {{ log.item.description }}</li>
-        {% endfor %}
-        </ul>
-    {% else %}
-        <p>No se completaron tareas del checklist en este turno.</p>
-    {% endif %}
-
-    <h2>Rondas Virtuales Realizadas</h2>
-    {% if rondas_virtuales %}
-        {% for ronda in rondas_virtuales %}
-            <p>
-                <strong>Hora de Inicio:</strong> {{ ronda.start_time|date:"H:i:s" }}<br>
-                <strong>Hora de Fin:</strong> {{ ronda.end_time|date:"H:i:s" }}<br>
-                <strong>Duración:</strong> {{ ronda.duration_seconds|floatformat:0 }} segundos
-            </p>
-            <hr>
-        {% endfor %}
-    {% else %}
-        <p>No se realizaron rondas virtuales en este turno.</p>
-    {% endif %}
-
-    <h2>Bitácora de Novedades</h2>
-    {% if updates_log %}
-        <table>
-            <thead>
-                <tr>
-                    <th>Hora</th>
-                    <th>Instalación</th>
-                    <th>Novedad</th>
-                </tr>
-            </thead>
-            <tbody>
-            {% for update in updates_log %}
-                <tr>
-                    <td>{{ update.created_at|date:"H:i" }}</td>
-                    <td>{{ update.installation.name }} ({{ update.installation.company.name }})</td>
-                    <td>{{ update.message }}</td>
-                </tr>
-            {% endfor %}
-            </tbody>
-        </table>
-    {% else %}
-        <p>No se registraron novedades en este turno.</p>
-    {% endif %}
-
-    <div class="signature">
-        <p>Aprobado y Firmado Digitalmente</p>
-        <p class="signature-line">{{ operator.get_full_name|default:operator.username }}</p>
+    <div class="header">
+        <h1>Reporte de Turno</h1>
+        <p><strong>Operador:</strong> {{ operator.get_full_name|default:operator.username }}</p>
+        <p><strong>Inicio:</strong> {{ start_time|date:"d/m/Y, H:i" }} | <strong>Fin:</strong> {{ end_time|date:"d/m/Y, H:i" }}</p>
     </div>
 
     <div class="footer">
-        Generado por Plataforma de Control Selfing - Página <pdf:page> de <pdf:pagenumber>
+        Generado por Plataforma SELFING
     </div>
+
+    <div class="section">
+        <h2 class="section-title">Bitácora de Novedades</h2>
+        {% if updates_log %}
+            {# Agrupamos primero por Empresa #}
+            {% regroup updates_log by installation.company.name as company_list %}
+            {% for company in company_list %}
+                <div class="company-group">
+                    <p class="company-title">■ Empresa: {{ company.grouper }}</p>
+                    
+                    {# Dentro de cada empresa, agrupamos por Instalación #}
+                    {% regroup company.list by installation.name as installation_list %}
+                    {% for installation in installation_list %}
+                        <div class="installation-group">
+                            <p class="installation-title">Instalación: {{ installation.grouper }}</p>
+                            <ul class="log-list">
+                                {# Finalmente, mostramos las novedades ordenadas por hora #}
+                                {% for update in installation.list|dictsort:"created_at" %}
+                                    <li class="log-item">
+                                        <span class="log-time">{{ update.created_at|date:"H:i" }} hrs</span>
+                                        - {{ update.message }}
+                                    </li>
+                                {% endfor %}
+                            </ul>
+                        </div>
+                    {% endfor %}
+                </div>
+            {% endfor %}
+        {% else %}
+            <p>No se registraron novedades en este turno.</p>
+        {% endif %}
+    </div>
+    
+    <div class="section">
+        <h2 class="section-title">Rondas Virtuales Realizadas</h2>
+        {% if rondas_virtuales %}
+            <ul class="item-list">
+                {% for ronda in rondas_virtuales %}
+                    <li>
+                        <strong>Ronda {{ forloop.counter }}:</strong> 
+                        Iniciada a las {{ ronda.start_time|date:"H:i:s" }}, 
+                        Finalizada a las {{ ronda.end_time|date:"H:i:s" }}.
+                        (<strong>Duración:</strong> {{ ronda.duration_seconds|floatformat:0 }} segundos)
+                    </li>
+                {% endfor %}
+            </ul>
+        {% else %}
+            <p>No se realizaron rondas virtuales en este turno.</p>
+        {% endif %}
+    </div>
+
+    <div class="section">
+        <h2 class="section-title">Checklist Completado</h2>
+        {% if completed_checklist %}
+            <ul class="item-list">
+            {% for log in completed_checklist|dictsort:"completed_at" %}
+                <li>(<strong>{{ log.completed_at|date:"H:i" }}</strong>) - {{ log.item.description }}</li>
+            {% endfor %}
+            </ul>
+        {% else %}
+            <p>No se completaron tareas del checklist en este turno.</p>
+        {% endif %}
+    </div>
+
 </body>
 </html>

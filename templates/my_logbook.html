@@ -1,0 +1,58 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Mi Bitácora de Turno{% endblock %}
+
+{% block content %}
+<div class="container">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2 class="h3 text-secondary">
+            <i class="fas fa-book me-2"></i> Mi Bitácora de Turno
+        </h2>
+        <a href="{% url 'operator_dashboard' %}" class="btn btn-outline-secondary">
+            <i class="fas fa-arrow-left me-2"></i>Volver al Dashboard
+        </a>
+    </div>
+
+    {% if logbook_data %}
+        <div class="card shadow-sm">
+            <div class="card-header bg-light">
+                <p class="mb-0 text-muted">Novedades registradas en tu turno.</p>
+            </div>
+            <div class="card-body">
+                {% for company_name, installations in logbook_data.items %}
+                    <div class="company-group mb-4">
+                        <h4 class="h5 text-primary border-bottom pb-2 mb-3">
+                            <i class="fas fa-building me-2"></i>Empresa: {{ company_name }}
+                        </h4>
+                        
+                        {% for installation_name, logs in installations.items %}
+                            <div class="installation-group ps-3 mb-3">
+                                <h6 class="text-dark fw-bold">
+                                    <i class="fas fa-map-marker-alt text-secondary me-2"></i>Instalación: {{ installation_name }}
+                                </h6>
+                                <ul class="list-group list-group-flush">
+                                    {% for log in logs %}
+                                        <li class="list-group-item border-0 py-1 d-flex justify-content-between align-items-center">
+                                            <span>- {{ log.message }}</span>
+                                            <span class="badge bg-secondary rounded-pill fw-normal">{{ log.created_at|date:"H:i" }} hrs</span>
+                                        </li>
+                                    {% endfor %}
+                                </ul>
+                            </div>
+                        {% endfor %}
+                    </div>
+                {% empty %}
+                     <p class="text-center text-muted p-3">No se encontraron empresas con novedades.</p>
+                {% endfor %}
+            </div>
+        </div>
+    {% else %}
+        <div class="text-center p-5 bg-light rounded shadow">
+            <h1 class="display-5 text-dark mb-4">Bitácora Vacía</h1>
+            <p class="lead text-muted">Aún no has registrado ninguna novedad durante tu turno actual.</p>
+            <a href="{% url 'update_log' %}" class="btn btn-primary mt-3">Registrar Novedad</a>
+        </div>
+    {% endif %}
+</div>
+{% endblock %}

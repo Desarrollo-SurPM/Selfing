@@ -1,601 +1,164 @@
 {% extends 'base.html' %}
+{% load static %}
 
-{% block title %}Dashboard de Administración - SELFING{% endblock %}
+{% block title %}Dashboard Administrador - SELFING{% endblock %}
+
+{% block extra_css %}
+    <link rel="stylesheet" href="{% static 'css/dashboard.css' %}">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+{% endblock %}
 
 {% block content %}
-<style>
-    /* Dashboard Styles */
-    .dashboard-header {
-        background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
-        color: white;
-        padding: 2rem;
-        border-radius: 15px;
-        margin-bottom: 2rem;
-        box-shadow: 0 10px 30px rgba(0,0,0,0.1);
-    }
-    
-    .dashboard-header h2 {
-        margin: 0;
-        font-weight: 700;
-        font-size: 2rem;
-    }
-    
-    .dashboard-header p {
-        margin: 0.5rem 0 0 0;
-        opacity: 0.9;
-    }
-    
-    /* Stats Cards */
-    .stat-card {
-        background: white;
-        border: none;
-        border-radius: 15px;
-        padding: 1.5rem;
-        height: 100%;
-        box-shadow: 0 5px 20px rgba(0,0,0,0.08);
-        transition: all 0.3s ease;
-        position: relative;
-        overflow: hidden;
-    }
-    
-    .stat-card::before {
-        content: '';
-        position: absolute;
-        top: 0;
-        left: 0;
-        right: 0;
-        height: 4px;
-        background: linear-gradient(90deg, var(--color-primary) 0%, var(--color-secondary) 100%);
-    }
-    
-    .stat-card.primary::before {
-        --color-primary: #4e73df;
-        --color-secondary: #224abe;
-    }
-    
-    .stat-card.warning::before {
-        --color-primary: #f6c23e;
-        --color-secondary: #dda20a;
-    }
-    
-    .stat-card.info::before {
-        --color-primary: #36b9cc;
-        --color-secondary: #258391;
-    }
-    
-    .stat-card.success::before {
-        --color-primary: #1cc88a;
-        --color-secondary: #13855c;
-    }
-    
-    .stat-card:hover {
-        transform: translateY(-5px);
-        box-shadow: 0 10px 30px rgba(0,0,0,0.15);
-    }
-    
-    .stat-icon {
-        width: 60px;
-        height: 60px;
-        border-radius: 15px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-size: 1.75rem;
-        margin-bottom: 1rem;
-    }
-    
-    .stat-card.primary .stat-icon {
-        background: rgba(78, 115, 223, 0.1);
-        color: #4e73df;
-    }
-    
-    .stat-card.warning .stat-icon {
-        background: rgba(246, 194, 62, 0.1);
-        color: #f6c23e;
-    }
-    
-    .stat-card.info .stat-icon {
-        background: rgba(54, 185, 204, 0.1);
-        color: #36b9cc;
-    }
-    
-    .stat-card.success .stat-icon {
-        background: rgba(28, 200, 138, 0.1);
-        color: #1cc88a;
-    }
-    
-    .stat-value {
-        font-size: 2.5rem;
-        font-weight: 700;
-        line-height: 1;
-        margin-bottom: 0.5rem;
-    }
-    
-    .stat-label {
-        color: #6c757d;
-        font-size: 0.9rem;
-        font-weight: 500;
-        text-transform: uppercase;
-        letter-spacing: 0.5px;
-    }
-    
-    /* Action Cards */
-    .action-card {
-        background: white;
-        border-radius: 15px;
-        box-shadow: 0 5px 20px rgba(0,0,0,0.08);
-        overflow: hidden;
-        margin-bottom: 2rem;
-    }
-    
-    .action-card-header {
-        background: #f8f9fa;
-        padding: 1.25rem 1.5rem;
-        border-bottom: 1px solid #e3e6f0;
-    }
-    
-    .action-card-header h5 {
-        margin: 0;
-        color: #5a5c69;
-        font-weight: 600;
-        display: flex;
-        align-items: center;
-        gap: 0.75rem;
-    }
-    
-    .action-card-header i {
-        color: #4e73df;
-    }
-    
-    .action-grid {
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-        gap: 1rem;
-        padding: 1.5rem;
-    }
-    
-    .action-btn {
-        background: #f8f9fa;
-        border: 2px solid transparent;
-        border-radius: 10px;
-        padding: 1rem;
-        text-align: center;
-        text-decoration: none;
-        color: #5a5c69;
-        font-weight: 500;
-        transition: all 0.3s ease;
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        gap: 0.5rem;
-    }
-    
-    .action-btn i {
-        font-size: 1.5rem;
-        margin-bottom: 0.25rem;
-    }
-    
-    .action-btn:hover {
-        transform: translateY(-3px);
-        box-shadow: 0 5px 15px rgba(0,0,0,0.1);
-        text-decoration: none;
-    }
-    
-    .action-btn.primary:hover {
-        background: #4e73df;
-        color: white;
-        border-color: #4e73df;
-    }
-    
-    .action-btn.info:hover {
-        background: #36b9cc;
-        color: white;
-        border-color: #36b9cc;
-    }
-    
-    .action-btn.secondary:hover {
-        background: #858796;
-        color: white;
-        border-color: #858796;
-    }
-    
-    .action-btn.dark:hover {
-        background: #5a5c69;
-        color: white;
-        border-color: #5a5c69;
-    }
-    
-    .action-btn.warning:hover {
-        background: #f6c23e;
-        color: white;
-        border-color: #f6c23e;
-    }
-    
-    .action-btn.success:hover {
-        background: #1cc88a;
-        color: white;
-        border-color: #1cc88a;
-    }
-    
-    /* Tables */
-    .data-table {
-        background: white;
-        border-radius: 15px;
-        box-shadow: 0 5px 20px rgba(0,0,0,0.08);
-        overflow: hidden;
-    }
-    
-    .data-table .table {
-        margin-bottom: 0;
-    }
-    
-    .data-table thead {
-        background: #f8f9fa;
-    }
-    
-    .data-table th {
-        border-top: none;
-        border-bottom: 2px solid #e3e6f0;
-        color: #5a5c69;
-        font-weight: 600;
-        text-transform: uppercase;
-        font-size: 0.85rem;
-        letter-spacing: 0.5px;
-        padding: 1rem;
-    }
-    
-    .data-table td {
-        padding: 1rem;
-        vertical-align: middle;
-    }
-    
-    .data-table tbody tr:hover {
-        background: #f8f9fa;
-    }
-    
-    /* Status Cards */
-    .status-card {
-        background: white;
-        border-radius: 15px;
-        box-shadow: 0 5px 20px rgba(0,0,0,0.08);
-        margin-bottom: 1.5rem;
-    }
-    
-    .status-card .list-group-item {
-        border: none;
-        padding: 1rem 1.5rem;
-        transition: all 0.3s ease;
-    }
-    
-    .status-card .list-group-item:hover {
-        background: #f8f9fa;
-        transform: translateX(5px);
-    }
-    
-    .status-badge {
-        display: inline-flex;
-        align-items: center;
-        gap: 0.25rem;
-        padding: 0.25rem 0.75rem;
-        border-radius: 20px;
-        font-size: 0.75rem;
-        font-weight: 500;
-    }
-    
-    .status-badge.active {
-        background: rgba(28, 200, 138, 0.1);
-        color: #1cc88a;
-    }
-    
-    .status-badge.pending {
-        background: rgba(246, 194, 62, 0.1);
-        color: #f6c23e;
-    }
-    
-    /* Animations */
-    @keyframes fadeInUp {
-        from {
-            opacity: 0;
-            transform: translateY(20px);
-        }
-        to {
-            opacity: 1;
-            transform: translateY(0);
-        }
-    }
-    
-    .stat-card, .action-card, .data-table, .status-card {
-        animation: fadeInUp 0.6s ease-out;
-        animation-fill-mode: both;
-    }
-    
-    .stat-card:nth-child(1) { animation-delay: 0.1s; }
-    .stat-card:nth-child(2) { animation-delay: 0.2s; }
-    .stat-card:nth-child(3) { animation-delay: 0.3s; }
-    .stat-card:nth-child(4) { animation-delay: 0.4s; }
-    
-    /* Activity Timeline */
-    .activity-item {
-        position: relative;
-        padding-left: 2rem;
-        padding-bottom: 1rem;
-        border-left: 2px solid #e3e6f0;
-    }
-    
-    .activity-item:last-child {
-        border-left: none;
-    }
-    
-    .activity-item::before {
-        content: '';
-        position: absolute;
-        left: -6px;
-        top: 0;
-        width: 10px;
-        height: 10px;
-        border-radius: 50%;
-        background: #4e73df;
-        border: 2px solid white;
-    }
-    
-    .time-label {
-        font-size: 0.75rem;
-        color: #858796;
-        text-transform: uppercase;
-        letter-spacing: 0.5px;
-    }
-</style>
+    <div class="dashboard-header">
+        <h2><i class="fas fa-tachometer-alt me-3"></i>Panel de Administración</h2>
+        <p>Bienvenido al centro de control de SELFING</p>
+    </div>
 
-<div class="dashboard-header">
-    <h2><i class="fas fa-tachometer-alt me-3"></i>Panel de Administración</h2>
-    <p>Bienvenido al centro de control de SELFING</p>
-</div>
-
-<div class="row g-4 mb-4">
-    <div class="col-xl-3 col-md-6">
-        <div class="stat-card primary">
-            <div class="stat-icon">
-                <i class="fas fa-book"></i>
+    <div class="row g-4 mb-4">
+        <div class="col-xl-3 col-md-6">
+            <div class="stat-card primary">
+                <div class="stat-icon"><i class="fas fa-book"></i></div>
+                <div class="stat-value">{{ novedades_hoy|default:"0" }}</div>
+                <div class="stat-label">Novedades Hoy</div>
             </div>
-            <div class="stat-value">{{ novedades_hoy|default:"0" }}</div>
-            <div class="stat-label">Novedades Hoy</div>
+        </div>
+        
+        <div class="col-xl-3 col-md-6">
+            <div class="stat-card warning">
+                <div class="stat-icon"><i class="fas fa-envelope-open-text"></i></div>
+                <div class="stat-value">{{ correos_pendientes_count|default:"0" }}</div>
+                <div class="stat-label">Correos Pendientes</div>
+            </div>
+        </div>
+        
+        <div class="col-xl-3 col-md-6">
+            <div class="stat-card info">
+                <div class="stat-icon"><i class="fas fa-user-clock"></i></div>
+                <div class="stat-value">{{ operadores_en_turno|default:"0" }}</div>
+                <div class="stat-label">Operadores en Turno</div>
+            </div>
+        </div>
+        
+        <div class="col-xl-3 col-md-6">
+            <div class="stat-card success">
+                <div class="stat-icon"><i class="fas fa-network-wired"></i></div>
+                <div class="stat-value">{{ servicios_monitoreados_activos|default:"0" }}</div>
+                <div class="stat-label">Servicios Monitoreados</div>
+            </div>
         </div>
     </div>
-    
-    <div class="col-xl-3 col-md-6">
-        <div class="stat-card warning">
-            <div class="stat-icon">
-                <i class="fas fa-envelope-open-text"></i>
-            </div>
-            <div class="stat-value">{{ correos_pendientes_count|default:"0" }}</div>
-            <div class="stat-label">Correos Pendientes</div>
-        </div>
-    </div>
-    
-    <div class="col-xl-3 col-md-6">
-        <div class="stat-card info">
-            <div class="stat-icon">
-                <i class="fas fa-user-clock"></i>
-            </div>
-            <div class="stat-value">{{ operadores_en_turno|default:"0" }}</div>
-            <div class="stat-label">Operadores en Turno</div>
-        </div>
-    </div>
-    
-    <div class="col-xl-3 col-md-6">
-        <div class="stat-card success">
-            <div class="stat-icon">
-                <i class="fas fa-network-wired"></i>
-            </div>
-            <div class="stat-value">{{ servicios_monitoreados_activos|default:"0" }}</div>
-            <div class="stat-label">Servicios Monitoreados</div>
-        </div>
-    </div>
-</div>
 
-<div class="row g-4">
-    <div class="col-lg-8">
-        <div class="action-card">
-            <div class="action-card-header">
-                <h5><i class="fas fa-cogs"></i>Gestión del Sistema</h5>
+    <div class="row g-4">
+        <div class="col-lg-8">
+            <div class="action-card">
+                <div class="action-card-header"><h5><i class="fas fa-cogs"></i>Gestión del Sistema</h5></div>
+                <div class="action-grid">
+                    <a href="{% url 'manage_operators' %}" class="action-btn primary"><span>Gestionar Operadores</span></a>
+                    <a href="{% url 'manage_companies' %}" class="action-btn info"><span>Gestionar Empresas</span></a>
+                    <a href="{% url 'manage_checklist_items' %}" class="action-btn secondary"><span>Gestionar Checklist</span></a>
+                    <a href="{% url 'manage_monitored_services' %}" class="action-btn dark"><span>Monitoreo de Servicios</span></a>
+                    <a href="{% url 'manage_shift_types' %}" class="action-btn warning"><span>Tipos de Turno</span></a>
+                    <a href="{% url 'manage_shifts' %}" class="action-btn success"><span>Asignar Turnos</span></a>
+                    <a href="{% url 'shift_calendar' %}" class="action-btn primary"><span>Calendario de Turnos</span></a>
+                    <a href="{% url 'view_turn_reports' %}" class="action-btn secondary"><span>Reportes Firmados</span></a>
+                </div>
             </div>
-            <div class="action-grid">
-                <a href="{% url 'manage_operators' %}" class="action-btn primary">
-                    <i class="fas fa-user-shield"></i>
-                    <span>Gestionar Operadores</span>
-                </a>
-                <a href="{% url 'manage_companies' %}" class="action-btn info">
-                    <i class="fas fa-building"></i>
-                    <span>Gestionar Empresas</span>
-                </a>
-                <a href="{% url 'manage_checklist_items' %}" class="action-btn secondary">
-                    <i class="fas fa-list-check"></i>
-                    <span>Gestionar Checklist</span>
-                </a>
-                <a href="{% url 'manage_monitored_services' %}" class="action-btn dark">
-                    <i class="fas fa-desktop"></i>
-                    <span>Monitoreo de Servicios</span>
-                </a>
-                <a href="{% url 'manage_shift_types' %}" class="action-btn warning">
-                    <i class="fas fa-clock"></i>
-                    <span>Tipos de Turno</span>
-                </a>
-                <a href="{% url 'manage_shifts' %}" class="action-btn success">
-                    <i class="fas fa-calendar-plus"></i>
-                    <span>Asignar Turnos</span>
-                </a>
-                <a href="{% url 'shift_calendar' %}" class="action-btn primary">
-                    <i class="fas fa-calendar-alt"></i>
-                    <span>Calendario de Turnos</span>
-                </a>
-                <a href="{% url 'view_turn_reports' %}" class="action-btn secondary">
-                    <i class="fas fa-file-invoice"></i>
-                    <span>Reportes Firmados</span>
-                </a>
-            </div>
-        </div>
 
-        <div class="data-table">
-            <div class="action-card-header">
-                <h5><i class="fas fa-bullhorn"></i>Reporte de Novedades del Día</h5>
-            </div>
-            <div class="table-responsive">
-                <table class="table">
-                    <thead>
-                        <tr>
-                            <th>Hora</th>
-                            <th>Operador</th>
-                            <th>Empresa / Instalación</th>
-                            <th>Novedad</th>
-                        </tr>
-                    </thead>
-                    <tbody>
+            <div class="data-table">
+                <div class="action-card-header"><h5><i class="fas fa-bullhorn"></i>Reporte de Novedades del Día</h5></div>
+                <div class="table-responsive">
+                    <table class="table">
+                        <thead><tr><th>Hora</th><th>Operador</th><th>Empresa / Instalación</th><th>Novedad</th></tr></thead>
+                        <tbody>
                         {% for report in reports %}
-                        <tr>
-                            <td>
-                                <span class="time-label">{{ report.created_at|date:"H:i" }}</span>
-                            </td>
-                            <td>
-                                <div class="d-flex align-items-center">
-                                    <div class="avatar-sm me-2">
-                                        <i class="fas fa-user-circle text-secondary"></i>
-                                    </div>
-                                    <span>{{ report.operator_shift.operator.username }}</span>
-                                </div>
-                            </td>
-                            <td>
-                                <strong>{{ report.installation.company.name }}</strong>
-                                <br><small class="text-muted">{{ report.installation.name }}</small>
-                            </td>
-                            <td>{{ report.message }}</td>
-                        </tr>
+                            <tr>
+                                <td><span class="time-label">{{ report.created_at|date:"H:i" }}</span></td>
+                                <td><div class="d-flex align-items-center"><div class="avatar-sm me-2"><i class="fas fa-user-circle text-secondary"></i></div><span>{{ report.operator_shift.operator.username }}</span></div></td>
+                                <td><strong>{{ report.installation.company.name }}</strong><br><small class="text-muted">{{ report.installation.name }}</small></td>
+                                <td>{{ report.message }}</td>
+                            </tr>
                         {% empty %}
-                        <tr>
-                            <td colspan="4" class="text-center py-5 text-muted">
-                                <i class="fas fa-inbox fa-3x mb-3 d-block"></i>
-                                No hay novedades registradas hoy.
-                            </td>
-                        </tr>
+                            <tr><td colspan="4" class="text-center py-5 text-muted"><i class="fas fa-inbox fa-3x mb-3 d-block"></i>No hay novedades registradas hoy.</td></tr>
                         {% endfor %}
-                    </tbody>
-                </table>
+                        </tbody>
+                    </table>
+                </div>
             </div>
         </div>
-    </div>
 
-    <div class="col-lg-4">
-        <div class="status-card" id="service-status-panel">
-            <div class="action-card-header">
-                <h5><i class="fas fa-heartbeat"></i>Estado de Servicios</h5>
+        <div class="col-lg-4">
+            <div class="status-card" id="service-status-panel">
+                <div class="action-card-header"><h5><i class="fas fa-heartbeat"></i>Estado de Servicios</h5></div>
+                <div class="p-3 text-center text-muted"><i class="fas fa-spinner fa-spin fa-2x mb-2"></i><p class="mb-0">Cargando servicios...</p></div>
             </div>
-            <div class="p-3 text-center text-muted">
-                <i class="fas fa-spinner fa-spin fa-2x mb-2"></i>
-                <p class="mb-0">Cargando servicios...</p>
-            </div>
-        </div>
-        
-        <div class="status-card">
-            <div class="action-card-header">
-                <h5><i class="fas fa-envelope"></i>Correos por Aprobar</h5>
-            </div>
-            <div class="list-group list-group-flush">
+            
+            <div class="status-card">
+                <div class="action-card-header"><h5><i class="fas fa-envelope"></i>Correos por Aprobar</h5></div>
+                <div class="list-group list-group-flush">
                 {% for email in pending_emails %}
-                <a href="{% url 'review_email' email.id %}" class="list-group-item list-group-item-action">
-                    <div class="d-flex justify-content-between align-items-start">
-                        <div class="flex-grow-1">
-                            <h6 class="mb-1 fw-bold">{{ email.company.name }}</h6>
-                            <small class="text-muted">Por: {{ email.operator.username }}</small>
-                        </div>
-                        <div>
-                            <span class="status-badge pending">
-                                <i class="fas fa-clock"></i>
-                                {{ email.created_at|timesince }}
-                            </span>
-                        </div>
-                    </div>
-                </a>
+                    <a href="{% url 'review_email' email.id %}" class="list-group-item list-group-item-action"><div class="d-flex justify-content-between align-items-start"><div class="flex-grow-1"><h6 class="mb-1 fw-bold">{{ email.company.name }}</h6><small class="text-muted">Por: {{ email.operator.username }}</small></div><div><span class="status-badge pending"><i class="fas fa-clock"></i> {{ email.created_at|timesince }}</span></div></div></a>
                 {% empty %}
-                <div class="list-group-item text-center py-4 text-muted">
-                    <i class="fas fa-check-circle fa-2x mb-2 text-success"></i>
-                    <p class="mb-0">No hay correos pendientes</p>
-                </div>
+                    <div class="list-group-item text-center py-4 text-muted"><i class="fas fa-check-circle fa-2x mb-2 text-success"></i><p class="mb-0">No hay correos pendientes</p></div>
                 {% endfor %}
+                </div>
             </div>
-        </div>
-        
-        <div class="status-card">
-            <div class="action-card-header">
-                <h5><i class="fas fa-history"></i>Actividad Reciente</h5>
-            </div>
-            <div class="p-3">
+            
+            <div class="status-card" id="activity-card">
+                <div class="action-card-header"><h5><i class="fas fa-history"></i>Actividad Reciente</h5></div>
+                <div class="p-3">
                 {% for log in traceability_logs %}
-                <div class="activity-item">
-                    <small class="time-label">{{ log.timestamp|timesince }} atrás</small>
-                    <p class="mb-0 mt-1">
-                        <strong>{{ log.user.username }}</strong> {{ log.action }}
-                    </p>
-                </div>
+                    <div class="activity-item"><small class="time-label">{{ log.timestamp|timesince }} atrás</small><p class="mb-0 mt-1"><strong>{{ log.user.username }}</strong> {{ log.action }}</p></div>
                 {% empty %}
-                <div class="text-center py-3 text-muted">
-                    <i class="fas fa-history fa-2x mb-2"></i>
-                    <p class="mb-0">No hay actividad reciente</p>
-                </div>
+                    <div class="text-center py-3 text-muted"><i class="fas fa-history fa-2x mb-2"></i><p class="mb-0">No hay actividad reciente</p></div>
                 {% endfor %}
+                </div>
             </div>
         </div>
     </div>
-</div>
 {% endblock %}
 
 {% block extra_js %}
-{{ block.super }}
-<script>
-document.addEventListener('DOMContentLoaded', function() {
-    const statusPanel = document.getElementById('service-status-panel');
-    
-    function updateServiceStatus() {
-        const url = `{% url 'ajax_get_service_status' %}?timestamp=${new Date().getTime()}`;
-        fetch(url)
-            .then(response => response.text())
-            .then(html => {
-                const contentArea = statusPanel.querySelector('.p-3, .list-group');
-                if (contentArea) {
-                    contentArea.outerHTML = html;
+    {{ block.super }}
+    <script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const statusPanel = document.getElementById('service-status-panel');
+        
+        function updateServiceStatus() {
+            const url = `{% url 'ajax_get_service_status' %}?timestamp=${new Date().getTime()}`;
+            fetch(url)
+                .then(response => response.text())
+                .then(html => {
+                    const contentArea = statusPanel.querySelector('.p-3, .list-group');
+                    if (contentArea) {
+                        contentArea.outerHTML = html;
+                    }
+                })
+                .catch(error => {
+                    console.error('Error al actualizar servicios:', error);
+                    const contentArea = statusPanel.querySelector('.p-3, .list-group');
+                    if (contentArea) {
+                        contentArea.innerHTML = `<div class="p-3 text-center text-danger"><i class="fas fa-exclamation-circle fa-2x mb-2"></i><p class="mb-0">Error al cargar servicios</p></div>`;
+                    }
+                });
+        }
+        
+        updateServiceStatus();
+        setInterval(updateServiceStatus, 5000);
+        
+        const statValues = document.querySelectorAll('.stat-value');
+        statValues.forEach(stat => {
+            const finalValue = parseInt(stat.textContent) || 0;
+            let currentValue = 0;
+            const increment = finalValue / 20;
+            const timer = setInterval(() => {
+                currentValue += increment;
+                if (currentValue >= finalValue) {
+                    currentValue = finalValue;
+                    clearInterval(timer);
                 }
-            })
-            .catch(error => {
-                console.error('Error al actualizar servicios:', error);
-                const contentArea = statusPanel.querySelector('.p-3, .list-group');
-                if (contentArea) {
-                    contentArea.innerHTML = `
-                        <div class="p-3 text-center text-danger">
-                            <i class="fas fa-exclamation-circle fa-2x mb-2"></i>
-                            <p class="mb-0">Error al cargar servicios</p>
-                        </div>
-                    `;
-                }
-            });
-    }
-    
-    // Actualizar inmediatamente y luego cada 5 segundos
-    updateServiceStatus();
-    setInterval(updateServiceStatus, 5000);
-    
-    // Animación de números en las estadísticas
-    const statValues = document.querySelectorAll('.stat-value');
-    statValues.forEach(stat => {
-        const finalValue = parseInt(stat.textContent) || 0;
-        let currentValue = 0;
-        const increment = finalValue / 20;
-        const timer = setInterval(() => {
-            currentValue += increment;
-            if (currentValue >= finalValue) {
-                currentValue = finalValue;
-                clearInterval(timer);
-            }
-            stat.textContent = Math.floor(currentValue);
-        }, 50);
+                stat.textContent = Math.floor(currentValue);
+            }, 50);
+        });
     });
-});
-</script>
+    </script>
 {% endblock %}

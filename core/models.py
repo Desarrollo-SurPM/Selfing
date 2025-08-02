@@ -41,31 +41,52 @@ class OperatorShift(models.Model):
         return f"Turno de {self.operator.username} el {self.date.strftime('%Y-%m-%d')} ({self.shift_type.name})"
 
 class ChecklistItem(models.Model):
-    class TurnPhase(models.TextChoices):
-        INICIO = 'INICIO', 'Inicio de Turno'
-        DURANTE = 'DURANTE', 'Durante el Turno'
-        FIN = 'FIN', 'Finalización de Turno'
-    description = models.CharField(max_length=255)
-    phase = models.CharField(
-        max_length=10,
-        choices=TurnPhase.choices,
-        default=TurnPhase.INICIO
+    description = models.CharField(max_length=255, verbose_name="Descripción de la Tarea")
+    phase = models.CharField(max_length=20, choices=[('start', 'Inicio de Turno'), ('during', 'Durante el Turno'), ('end', 'Finalización de Turno')], default='during')
+    order = models.PositiveIntegerField(default=0)
+
+    # --- 👇 CAMPOS NUEVOS AÑADIDOS 👇 ---
+    DIAS_SEMANA = [
+        (0, 'Lunes'), (1, 'Martes'), (2, 'Miércoles'), (3, 'Jueves'),
+        (4, 'Viernes'), (5, 'Sábado'), (6, 'Domingo')
+    ]
+
+    dias_aplicables = models.CharField(
+        max_length=20, blank=True, null=True,
+        help_text="Días de la semana en que aplica la tarea (ej: 0,5 para Lunes y Sábado). Dejar en blanco para todos los días."
     )
-    trigger_offset_minutes = models.PositiveIntegerField(
-        default=0,
-        help_text="Minutos desde el inicio del turno para que esta tarea sea relevante."
+    turnos_aplicables = models.ManyToManyField(
+        ShiftType, blank=True,
+        help_text="Turnos en los que aplica la tarea. Dejar en blanco para todos los turnos."
     )
+    # --- 👆 FIN DE LOS CAMPOS NUEVOS 👆 ---
+
+    class Meta:
+        ordering = ['order']
+
+    def __str__(self):
+        return self.description
+    
+    class Meta:
+        # Ordenar por el nuevo campo 'order' por defecto
+        ordering = ['order']
+
     def __str__(self):
         return f"[{self.get_phase_display()}] {self.description}"
 
-# --- 👇 CAMBIO #1 👇 ---
+# core/models.py
+
 class ChecklistLog(models.Model):
-    # Se asocia a un turno específico para saber a qué jornada pertenece.
     operator_shift = models.ForeignKey(OperatorShift, on_delete=models.CASCADE, related_name='checklist_logs')
     item = models.ForeignKey(ChecklistItem, on_delete=models.CASCADE)
     completed_at = models.DateTimeField(auto_now_add=True)
-    def __str__(self):
-        return f"{self.item.description} - {self.operator_shift.operator.username}"
+
+    # --- 👇 CAMPO NUEVO AÑADIDO 👇 ---
+    observacion = models.TextField(blank=True, null=True, verbose_name="Observación")
+    # --- 👆 FIN DEL CAMPO NUEVO 👆 ---
+
+    class Meta:
+        unique_together = ('operator_shift', 'item')
 
 # --- 👇 CAMBIO #2 👇 ---
 class VirtualRoundLog(models.Model):
@@ -75,6 +96,23 @@ class VirtualRoundLog(models.Model):
     end_time = models.DateTimeField(null=True, blank=True)
     duration_seconds = models.PositiveIntegerField(null=True, blank=True)
     checked_installations = models.TextField(blank=True, null=True, help_text="Lista de instalaciones revisadas, separadas por comas")
+
+    def get_duration_display(self):
+        if self.duration_seconds is None:
+            return "N/A"
+        
+        seconds = self.duration_seconds
+        if seconds < 60:
+            return f"{seconds} seg"
+        elif seconds < 3600:
+            minutes = seconds // 60
+            rem_seconds = seconds % 60
+            return f"{minutes} min {rem_seconds} seg"
+        else:
+            hours = seconds // 3600
+            rem_minutes = (seconds % 3600) // 60
+            return f"{hours}h {rem_minutes} min"
+    # --- 👆 FIN DE LA FUNCIÓN AÑADIDA 👆 ---
     def __str__(self):
         return f"Ronda de {self.operator_shift.operator.username} - iniciada a las {self.start_time.strftime('%H:%M')}"
 
@@ -87,6 +125,7 @@ class UpdateLog(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     def __str__(self):
         return f"Novedad para {self.installation.name} por {self.operator_shift.operator.username}"
+
 
 # --- (El resto de los modelos no tienen cambios) ---
 class Email(models.Model):

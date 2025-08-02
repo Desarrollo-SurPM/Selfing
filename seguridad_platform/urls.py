@@ -11,7 +11,10 @@ urlpatterns = [
     path('logout/', auth_views.LogoutView.as_view(), name='logout'),
 ]
 
-# --- LÍNEAS AÑADIDAS ---
-# Esto permite que el servidor de desarrollo sirva los archivos PDF que generemos
+# --- AQUÍ ESTÁ LA CORRECCIÓN ---
 if settings.DEBUG:
+    # Esta línea sirve los archivos de medios (PDFs, etc.). ¡La tienes bien!
     urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
+    
+    # 👇 AÑADE ESTA LÍNEA QUE FALTA para servir los archivos estáticos (CSS, JS) 👇
+    urlpatterns += static(settings.STATIC_URL, document_root=settings.STATIC_ROOT)
