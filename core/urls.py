@@ -71,6 +71,8 @@ urlpatterns = [
     # Alarma
     path('api/check_alarms/', views.check_pending_alarms, name='check_pending_alarms'),
 
+    # Mi Bitacora
+    path('mi-bitacora/', views.my_logbook_view, name='my_logbook'),
     # --- Rutas AJAX ---
     path('ajax/get-updates/<int:company_id>/', views.get_updates_for_company, name='ajax_get_updates'),
     path('ajax/get-service-status/', views.get_service_status, name='ajax_get_service_status'),

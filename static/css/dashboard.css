@@ -1,3 +1,4 @@
+/* desarrollo-surpm/selfing/Selfing-mejorasorden/static/css/dashboard.css */
 /* Dashboard Styles */
 .dashboard-header {
     background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
@@ -318,23 +319,55 @@
 
 .activity-item:last-child {
     border-left: none;
+    padding-bottom: 0;
 }
 
 .activity-item::before {
     content: '';
     position: absolute;
-    left: -6px;
-    top: 0;
-    width: 10px;
-    height: 10px;
+    left: -7px; /* Ajustado para centrar */
+    top: 5px; /* Ajustado verticalmente */
+    width: 12px;
+    height: 12px;
     border-radius: 50%;
     background: #4e73df;
     border: 2px solid white;
 }
-
+.status-card .list-group {
+    max-height: 280px; /* Altura máxima antes de que aparezca el scroll */
+    overflow-y: auto; /* Habilita el scroll vertical cuando el contenido excede la altura */
+}
 .time-label {
     font-size: 0.75rem;
     color: #858796;
     text-transform: uppercase;
     letter-spacing: 0.5px;
 }
+
+/* desarrollo-surpm/selfing/Selfing-mejorasorden/static/css/dashboard.css */
+
+/* --- 👇 ESTILOS CORREGIDOS Y AÑADIDOS 👇 --- */
+
+/* Estilo para el panel de actividad con scroll */
+.activity-panel {
+    max-height: 400px; /* Altura máxima para aprox. 10 items */
+    overflow-y: auto;  /* Activa el scroll vertical si el contenido se desborda */
+    border: 1px solid #e3e6f0; /* Borde sutil para el contenedor */
+    border-radius: .25rem; /* Bordes redondeados */
+}
+
+/* Estilo para el temporizador, asegurando que sea grande y visible */
+#round-countdown {
+    font-size: 4.5rem; /* Tamaño de fuente grande */
+    font-weight: 700;  /* Fuente en negrita */
+    line-height: 1;
+    letter-spacing: -2px; /* Espaciado entre caracteres ajustado */
+    transition: color 0.3s ease-in-out; /* Transición suave de color */
+}
+
+/* Clase para cuando el temporizador llega a cero */
+#round-countdown.text-danger {
+    color: #e74a3b !important;
+}
+
+/* --- 👆 FIN DE LOS ESTILOS CORREGIDOS 👆 --- */

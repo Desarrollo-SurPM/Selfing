@@ -1,5 +1,8 @@
+{# desarrollo-surpm/selfing/Selfing-mejorasorden/templates/operator_dashboard.html #}
 {% extends 'base.html' %}
 {% load static %}
+{% block extra_css %}
+{% endblock extra_css %}
 {% block title %}Panel del Operador{% endblock %}
 
 {% block content %}
@@ -76,6 +79,7 @@
                             <div class="d-grid gap-2 d-md-flex justify-content-center">
                                 <a href="{% url 'checklist' %}" class="btn btn-primary btn-lg shadow-sm"><i class="fas fa-list-check me-2"></i>Ir al Checklist</a>
                                 <a href="{% url 'update_log' %}" class="btn btn-info btn-lg shadow-sm"><i class="fas fa-edit me-2"></i>Anotar en Bitácora</a>
+                                <a href="{% url 'my_logbook' %}" class="btn btn-secondary btn-lg shadow-sm"><i class="fas fa-book me-2"></i>Ver Mi Bitácora</a>
                                 <a href="{% url 'email_form' %}" class="btn btn-success btn-lg shadow-sm"><i class="fas fa-paper-plane me-2"></i>Generar Correo</a>
                                 {% if progress_percentage >= 99 %}
                                 <a href="{% url 'end_turn_preview' %}" class="btn btn-danger btn-lg shadow-sm animate__animated animate__heartBeat animate__infinite">
@@ -92,37 +96,34 @@
                 <div class="card text-center shadow-sm mb-4 border-primary">
                     <div class="card-header bg-primary text-white">Próxima Ronda Virtual</div>
                     <div class="card-body">
-                        <h3 class="display-5 fw-bold text-primary" id="round-countdown">--:--</h3>
+                        <h3 class="display-2 fw-bold text-primary" id="dashboard-round-countdown">--:--</h3>
                     </div>
                     <div class="card-footer bg-light">
-                        {% if active_round_id %}
-                            <form method="post" action="{% url 'finish_virtual_round' %}" class="d-grid">
-                                {% csrf_token %}
-                                <button type="submit" class="btn btn-danger">
-                                    <i class="fas fa-stop-circle me-2"></i>Finalizar Ronda en Curso
-                                </button>
-                            </form>
-                        {% else %}
+                        {% if not active_round_id %}
                             <form method="post" action="{% url 'start_virtual_round' %}" class="d-grid">
                                 {% csrf_token %}
                                 <button type="submit" class="btn btn-primary">
                                     <i class="fas fa-play-circle me-2"></i>Iniciar Ronda Manualmente
                                 </button>
                             </form>
+                        {% else %}
+                             <a href="{% url 'finish_virtual_round' active_round_id %}" class="btn btn-danger btn-lg shadow-sm">
+                                <i class="fas fa-stop-circle me-2"></i>Finalizar Ronda en Curso
+                            </a>
                         {% endif %}
                     </div>
                 </div>
                 <div class="card shadow-sm mb-4 border-secondary" id="service-status-panel">
                     <div class="card-header bg-light text-secondary">Estado de Servicios Críticos</div>
                 </div>
-                <div class="card shadow-sm border-info">
+                <div class="card shadow-sm border-info" id="activity-card">
                     <div class="card-header bg-light text-secondary">
                         <h5 class="mb-0"><i class="fas fa-history me-2"></i>Tu Actividad Reciente</h5>
                     </div>
-                    <ul class="list-group list-group-flush">
+                    <ul class="list-group list-group-flush activity-panel">
                         {% for log in traceability_logs %}
                         <li class="list-group-item">
-                            <small>{{ log.action }} <span class="text-muted">- {{ log.timestamp|timesince }}</span></small>
+                            <small>{{ log.action }} <span class="text-muted">- {{ log.timestamp|timesince }} atrás</span></small>
                         </li>
                         {% empty %}
                         <li class="list-group-item text-center text-muted py-3">No tienes actividad reciente.</li>
@@ -134,6 +135,5 @@
     {% endif %}
 </div>
 
-<div class="modal fade" id="checklistAlertModal" tabindex="-1"> ... </div>
-<div class="modal fade" id="roundNotificationModal" tabindex="-1"> ... </div>
-{% endblock %}
+{% endblock content %}
+

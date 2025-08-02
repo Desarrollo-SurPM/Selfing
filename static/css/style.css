@@ -260,3 +260,28 @@ main > * {
         transform: translateY(0);
     }
 }
+
+#activity-card .activity-panel {
+    max-height: 450px; /* Altura fija para unos 10-12 items */
+    overflow-y: auto;  /* ACTIVA EL SCROLL VERTICAL */
+    border: 1px solid #dee2e6; /* Un borde sutil para que se vea bien */
+    border-radius: 4px;
+}
+
+/* Mejora visual para la barra de scroll (opcional) */
+#activity-card .activity-panel::-webkit-scrollbar {
+    width: 8px;
+}
+
+#activity-card .activity-panel::-webkit-scrollbar-track {
+    background: #f1f1f1;
+}
+
+#activity-card .activity-panel::-webkit-scrollbar-thumb {
+    background: #888;
+    border-radius: 4px;
+}
+
+#activity-card .activity-panel::-webkit-scrollbar-thumb:hover {
+    background: #555;
+}

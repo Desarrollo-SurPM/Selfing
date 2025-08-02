@@ -10,6 +10,7 @@
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" />
     <link rel="stylesheet" href="{% static 'css/style.css' %}">
+    <link rel="stylesheet" href="{% static 'css/style.css' %}?v=1.7">
 {% block extra_css %}{% endblock %}
 </head>
 <body>
@@ -102,9 +103,9 @@
         checkChecklistAlarm(); // Revisa al cargar
 
         // --- LÓGICA DE TEMPORIZADOR Y ALARMA DE RONDA (CLIENT-SIDE) ---
-        const countdownElement = document.getElementById('global-round-countdown');
+       const countdownElementIds = ['global-round-countdown', 'dashboard-round-countdown'];
+        
         const shiftStartTime = new Date("{{ global_active_shift.actual_start_time.isoformat }}");
-        let lastTriggeredHour = -1;
 
         function updateRoundCountdown() {
             const now = new Date();
@@ -114,11 +115,20 @@
             const nextRoundTime = new Date(shiftStartTime.getTime() + nextHourMark * hourInMilliseconds);
             const timeRemaining = nextRoundTime - now;
 
+            let formattedTime = "--:--"; // Valor por defecto
             if (timeRemaining > 0) {
-                const minutes = Math.floor((timeRemaining % hourInMilliseconds) / 60000);
-                const seconds = Math.floor((timeRemaining % 60000) / 1000);
-                if(countdownElement) countdownElement.textContent = `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+                const minutes = String(Math.floor((timeRemaining % hourInMilliseconds) / 60000)).padStart(2, '0');
+                const seconds = String(Math.floor((timeRemaining % 60000) / 1000)).padStart(2, '0');
+                formattedTime = `${minutes}:${seconds}`;
             }
+
+            // Bucle que actualiza cada temporizador en la página
+            countdownElementIds.forEach(id => {
+                const element = document.getElementById(id);
+                if (element) { // Solo si el elemento existe en la página actual
+                    element.textContent = formattedTime;
+                }
+            })
 
             // Disparar la alarma en el minuto :00 de cada hora del turno
             if (now.getMinutes() === 0 && now.getSeconds() === 0) {
