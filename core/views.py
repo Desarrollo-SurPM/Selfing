@@ -7,6 +7,7 @@ from django.utils import timezone
 from django.http import JsonResponse, HttpResponse
 from django.template.loader import get_template
 from xhtml2pdf import pisa
+from django.db.models import Q
 from collections import defaultdict
 from django.contrib import messages
 from io import BytesIO
@@ -855,8 +856,55 @@ def update_log_view(request):
     }
     return render(request, 'update_log.html', context)
 
+
 @login_required
 def checklist_view(request):
+    active_shift = get_active_shift(request.user)
+
+    if not active_shift or not active_shift.actual_start_time:
+        messages.error(request, "Debes iniciar un turno activo para ver el checklist.")
+        return redirect('operator_dashboard')
+
+    # --- LÓGICA MEJORADA PARA FILTRAR TAREAS ---
+    hoy_dia_semana = str(timezone.now().weekday()) # 0=Lunes, 6=Domingo
+    turno_actual_tipo = active_shift.shift_type
+
+    # 1. Obtenemos solo las tareas que aplican para HOY
+    items_del_dia = ChecklistItem.objects.filter(
+        Q(dias_aplicables__isnull=True) | Q(dias_aplicables__exact='') | Q(dias_aplicables__contains=hoy_dia_semana)
+    )
+
+    # 2. De esas, filtramos solo las que aplican para ESTE TURNO
+    items_finales = items_del_dia.filter(
+        Q(turnos_aplicables__isnull=True) | Q(turnos_aplicables=turno_actual_tipo)
+    ).distinct()
+    # --- FIN DE LA LÓGICA DE FILTRADO ---
+
+    # Manejo del guardado de tareas y observaciones
+    if request.method == 'POST':
+        completed_item_ids = request.POST.getlist('items')
+        
+        for item_id in completed_item_ids:
+            observacion_texto = request.POST.get(f'observacion_{item_id}', '').strip()
+            
+            ChecklistLog.objects.update_or_create(
+                operator_shift=active_shift,
+                item_id=item_id,
+                defaults={'observacion': observacion_texto if observacion_texto else None}
+            )
+        messages.success(request, "Checklist actualizado con éxito.")
+        return redirect('operator_dashboard')
+
+    # Obtenemos los logs para saber qué tareas ya se completaron
+    logs_del_turno = ChecklistLog.objects.filter(operator_shift=active_shift)
+    completed_logs_dict = {log.item_id: log for log in logs_del_turno}
+
+    context = {
+        'checklist_items': items_finales,
+        'completed_logs_dict': completed_logs_dict,
+    }
+    
+    return render(request, 'checklist.html', context)
     """
     Vista final para el checklist, compatible con la plantilla de acordeón.
     """
@@ -989,6 +1037,7 @@ def checklist_view(request):
         'companies': companies_with_installations
     }
     return render(request, 'update_log.html', context)
+
 
 @login_required
 def email_form_view(request):

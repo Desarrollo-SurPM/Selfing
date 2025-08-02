@@ -82,17 +82,53 @@ class InstallationForm(forms.ModelForm):
         fields = ['company', 'name', 'address']
 
 class ChecklistItemForm(forms.ModelForm):
+    # This will render as a list of checkboxes for selecting days of the week
+    dias_aplicables = forms.MultipleChoiceField(
+        choices=ChecklistItem.DIAS_SEMANA,
+        widget=forms.CheckboxSelectMultiple(attrs={'class': 'checkbox-horizontal'}),
+        required=False,
+        label="Días aplicables (dejar en blanco si aplica para todos)"
+    )
+
+    # This will render as a list of checkboxes for selecting shift types
+    turnos_aplicables = forms.ModelMultipleChoiceField(
+        queryset=ShiftType.objects.all(),
+        widget=forms.CheckboxSelectMultiple(attrs={'class': 'checkbox-horizontal'}),
+        required=False,
+        label="Turnos aplicables (dejar en blanco si aplica para todos)"
+    )
+
     class Meta:
         model = ChecklistItem
-        fields = ['description', 'phase', 'trigger_offset_minutes']
+        # Use the new fields in the form
+        fields = ['description', 'phase', 'order', 'dias_aplicables', 'turnos_aplicables']
+        widgets = {
+            'description': forms.Textarea(attrs={'rows': 3}),
+        }
         labels = {
             'description': 'Descripción de la Tarea',
             'phase': 'Fase del Turno',
-            'trigger_offset_minutes': 'Minutos desde el inicio para activar alerta',
+            'order': 'Orden',
         }
-        widgets = {
-            'description': forms.TextInput(attrs={'placeholder': 'Ej: Revisar cámaras del sector A'}),
-        }
+
+    # Converts the saved string (e.g., "0,5") into a list for editing
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        if self.instance and self.instance.dias_aplicables:
+            self.fields['dias_aplicables'].initial = self.instance.dias_aplicables.split(',')
+
+    # Converts the list of selected checkboxes (e.g., ['0', '5']) into a string for saving
+    def save(self, commit=True):
+        instance = super().save(commit=False)
+        dias = self.cleaned_data.get('dias_aplicables')
+        instance.dias_aplicables = ','.join(dias) if dias else ''
+        
+        if commit:
+            instance.save()
+            self.save_m2m() # Required for ManyToMany relationships
+            
+        return instance
+
 
 class MonitoredServiceForm(forms.ModelForm):
     class Meta:
