@@ -1,41 +1,48 @@
 {% extends 'base.html' %}
 {% load crispy_forms_tags %}
 
-{% block title %}Revisar Correo para {{ email.company.name }}{% endblock %}
+{% block title %}Revisar Reporte de {{ report_submission.operator.username }}{% endblock %}
 
 {% block content %}
 <div class="card">
     <div class="card-header bg-primary text-white">
-        <h2>Revisión de Correo</h2>
+        <h2>Revisión de Reporte de Novedades</h2>
     </div>
     <div class="card-body">
-        <h4 class="card-title">Destinatario: {{ email.company.name }}</h4>
-        <p class="card-text">Creado por: <strong>{{ email.operator.username }}</strong> el {{ email.created_at|date:"d/m/Y \a \l\a\s H:i" }}</p>
-        <hr>
-
-        <h4>Novedades Incluidas:</h4>
-        {% if updates_list %}
-            <ul class="list-group mb-3">
-                {% for update in updates_list %}
-                    <li class="list-group-item">
-                        <strong>{{ update.installation.name }} ({{ update.created_at|date:"H:i" }}):</strong>
-                        <p class="mb-0">{{ update.message }}</p>
-                    </li>
-                {% endfor %}
-            </ul>
-        {% else %}
-            <p class="text-muted">No se incluyeron novedades específicas.</p>
+        <h4 class="card-title">Operador: {{ report_submission.operator.username }}</h4>
+        <p class="card-text">Turno del: <strong>{{ report_submission.operator_shift.date|date:"d/m/Y" }}</strong></p>
+        {% if report_submission.final_observation %}
+            <div class="alert alert-info">
+                <strong>Observación Final del Operador:</strong>
+                <p class="mb-0">{{ report_submission.final_observation }}</p>
+            </div>
         {% endif %}
-
         <hr>
 
         <form method="post">
             {% csrf_token %}
-            <h4>Observaciones Adicionales (Editable):</h4>
-            {{ form|crispy }}
+            <h4>Seleccione las Novedades a Aprobar:</h4>
+            <div class="mb-3">
+                {% for log in update_logs %}
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" name="approved_updates" value="{{ log.id }}" id="update_{{ log.id }}" checked>
+                        <label class="form-check-label" for="update_{{ log.id }}">
+                            <strong>{{ log.installation.company.name }} / {{ log.installation.name }} ({{ log.created_at|date:"H:i" }}):</strong>
+                            {{ log.message }}
+                        </label>
+                    </div>
+                {% empty %}
+                    <p class="text-muted">Este reporte no contiene novedades.</p>
+                {% endfor %}
+            </div>
+
+            <hr>
+
+            {{ form.admin_observations|as_crispy_field }}
+
             <div class="d-flex justify-content-end mt-4">
                 <a href="{% url 'admin_dashboard' %}" class="btn btn-secondary me-2">Cancelar</a>
-                <button type="submit" class="btn btn-success">Aprobar y Enviar Correo</button>
+                <button type="submit" class="btn btn-success">Procesar y Aprobar Novedades</button>
             </div>
         </form>
     </div>

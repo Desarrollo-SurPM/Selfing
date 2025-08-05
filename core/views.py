@@ -9,7 +9,7 @@ from django.contrib import messages
 from io import BytesIO
 from django.core.files.base import ContentFile
 from django import forms
-from datetime import timedelta, datetime
+from datetime import timedelta, datetime, time
 from django.contrib.auth import logout
 import json
 
@@ -60,7 +60,7 @@ def admin_dashboard(request):
     reports = UpdateLog.objects.filter(created_at__date=today).select_related(
         'operator_shift__operator', 'installation__company'
     ).order_by('-created_at')
-    pending_emails = Email.objects.filter(status='pending').select_related('company', 'operator').order_by('-created_at')
+    pending_emails = Email.objects.filter(status='pending').select_related('operator', 'operator_shift').order_by('-created_at')
 
     context = {
         'novedades_hoy': novedades_hoy,
@@ -105,6 +105,68 @@ def delete_operator(request, user_id):
     op = get_object_or_404(User, id=user_id)
     if request.method == 'POST': op.delete(); return redirect('manage_operators')
     return render(request, 'operator_confirm_delete.html', {'operator': op})
+
+@login_required
+@user_passes_test(is_supervisor)
+def prepare_daily_reports(request):
+    """
+    Prepara una vista previa de los correos que se enviarán, agrupando
+    todas las novedades aprobadas por empresa de los turnos de tarde y noche.
+    """
+    # Definir los rangos de tiempo para los turnos de tarde y noche del día anterior
+    today = timezone.now().date()
+    yesterday = today - timedelta(days=1)
+    
+    # Turno Noche: 00:30 del día actual
+    start_noche = timezone.make_aware(datetime.combine(today, time(0, 30)))
+    # Turno Tarde: 16:30 del día anterior
+    start_tarde = timezone.make_aware(datetime.combine(yesterday, time(16, 30)))
+
+    # Buscar todas las novedades APROBADAS dentro de esos turnos
+    approved_updates = UpdateLog.objects.filter(
+        status='approved',
+        operator_shift__actual_start_time__gte=start_tarde,
+        operator_shift__actual_start_time__lt=start_noche + timedelta(hours=8) # Rango seguro
+    ).select_related('installation__company', 'operator_shift__operator').order_by('installation__company__name', 'created_at')
+
+    # Agrupar las novedades por empresa para la vista previa
+    reports_by_company = {}
+    for update in approved_updates:
+        company = update.installation.company
+        if company not in reports_by_company:
+            reports_by_company[company] = []
+        reports_by_company[company].append(update)
+
+    return render(request, 'prepare_daily_report.html', {
+        'reports_by_company': reports_by_company
+    })
+
+
+@login_required
+@user_passes_test(is_supervisor)
+def send_company_report(request, company_id):
+    """
+    Vista que se activa al presionar "Enviar" para una empresa específica.
+    (Aquí iría la lógica de envío de correo real)
+    """
+    company = get_object_or_404(Company, id=company_id)
+    
+    # Simulación de envío
+    # En un caso real, aquí se conectarían con un servicio de email (ej. SendGrid, SMTP)
+    # y se generaría un HTML o PDF para el cuerpo del correo.
+    
+    # Marcar las novedades como 'enviadas' para que no aparezcan de nuevo.
+    # (Esta es una implementación de ejemplo, la lógica real puede variar)
+    UpdateLog.objects.filter(
+        status='approved',
+        installation__company_id=company_id
+    ).update(status='sent') # Suponiendo que añades un estado 'sent' al modelo UpdateLog
+
+    messages.success(request, f"El correo para {company.name} ha sido enviado correctamente.")
+    TraceabilityLog.objects.create(user=request.user, action=f"Envió manualmente el reporte consolidado para {company.name}.")
+    
+    return redirect('prepare_daily_reports')
+
 
 @login_required
 @user_passes_test(is_supervisor)
@@ -244,16 +306,40 @@ def delete_monitored_service(request, service_id):
 @login_required
 @user_passes_test(is_supervisor)
 def review_and_approve_email(request, email_id):
-    email = get_object_or_404(Email, id=email_id)
+    report_submission = get_object_or_404(Email, id=email_id, status='pending')
+    # Obtenemos todas las novedades asociadas al turno de este reporte
+    update_logs = UpdateLog.objects.filter(operator_shift=report_submission.operator_shift)
+
     if request.method == 'POST':
-        form = EmailApprovalForm(request.POST, instance=email)
+        form = EmailApprovalForm(request.POST, update_logs=update_logs)
         if form.is_valid():
-            form.save(); email.status = 'approved'; email.approved_by = request.user; email.approved_at = timezone.now()
-            email.save(update_fields=['status', 'approved_by', 'approved_at'])
-            TraceabilityLog.objects.create(user=request.user, action=f"Revisó y aprobó correo para {email.company.name}")
+            approved_ids = form.cleaned_data['approved_updates'].values_list('id', flat=True)
+            
+            # Marcar como 'aprobadas' las seleccionadas
+            UpdateLog.objects.filter(id__in=approved_ids).update(status='approved')
+            # Marcar como 'rechazadas' las no seleccionadas
+            update_logs.exclude(id__in=approved_ids).update(status='rejected')
+
+            # Actualizar el estado del reporte principal
+            report_submission.status = 'processed'
+            report_submission.processed_by = request.user
+            report_submission.processed_at = timezone.now()
+            report_submission.save()
+            
+            # (Opcional) Aquí se podría disparar el envío de correo manual
+            # send_company_email(report_submission.operator_shift.id, admin_observations=form.cleaned_data['admin_observations'])
+
+            messages.success(request, "El reporte de novedades ha sido procesado.")
+            TraceabilityLog.objects.create(user=request.user, action=f"Procesó el reporte de {report_submission.operator.username}.")
             return redirect('admin_dashboard')
-    else: form = EmailApprovalForm(instance=email)
-    return render(request, 'review_email.html', {'email': email, 'form': form, 'updates_list': email.updates.all()})
+    else:
+        form = EmailApprovalForm(update_logs=update_logs)
+
+    return render(request, 'review_email.html', {
+        'form': form,
+        'report_submission': report_submission,
+        'update_logs': update_logs
+    })
 
 @login_required
 @user_passes_test(is_supervisor)
@@ -592,17 +678,48 @@ def update_log_view(request):
 
 @login_required
 def email_form_view(request):
-    if not get_active_shift(request.user): return redirect('operator_dashboard')
+    active_shift = get_active_shift(request.user)
+    if not active_shift:
+        messages.error(request, "Debes tener un turno activo para enviar un reporte.")
+        return redirect('operator_dashboard')
+
+    # Restricción para el turno de mañana
+    start_time_morning = datetime.strptime("08:30", "%H:%M").time()
+    if active_shift.shift_type.start_time == start_time_morning:
+        messages.warning(request, "El turno de mañana no puede enviar reportes para aprobación.")
+        return redirect('operator_dashboard')
+
+    # Verificar si ya existe un reporte para este turno
+    if Email.objects.filter(operator_shift=active_shift).exists():
+        messages.info(request, "Ya has enviado el reporte para este turno.")
+        return redirect('operator_dashboard')
+        
     if request.method == 'POST':
         form = EmailForm(request.POST)
         if form.is_valid():
-            email = form.save(commit=False); email.operator = request.user; email.status = 'pending'; email.save()
-            form.save_m2m()
-            TraceabilityLog.objects.create(user=request.user, action=f"Generó borrador de correo para {email.company.name}")
+            # Crear el objeto Email, que ahora funciona como una "solicitud de reporte"
+            report_submission = form.save(commit=False)
+            report_submission.operator = request.user
+            report_submission.operator_shift = active_shift
+            report_submission.status = 'pending'
+            report_submission.save()
+            
+            # Marcar todas las novedades del turno como 'pendientes'
+            UpdateLog.objects.filter(operator_shift=active_shift).update(status='pending')
+            
+            TraceabilityLog.objects.create(user=request.user, action="Envió su reporte de turno para revisión.")
+            messages.success(request, "Reporte de novedades enviado a revisión del administrador.")
             return redirect('operator_dashboard')
-    else: form = EmailForm()
-    return render(request, 'email_form.html', {'form': form})
+    else:
+        form = EmailForm()
 
+    # Mostrar las novedades que se incluirán para que el operador esté informado
+    updates_in_shift = UpdateLog.objects.filter(operator_shift=active_shift)
+    
+    return render(request, 'email_form.html', {
+        'form': form,
+        'updates_in_shift': updates_in_shift
+    })
 # Flujo de Rondas Virtuales
 
 

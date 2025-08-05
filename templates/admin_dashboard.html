@@ -1,159 +1,167 @@
 {% extends 'base.html' %}
+{% load static %}
 
-{% block title %}Dashboard de Administración{% endblock %}
+{% block title %}Dashboard Administrador - SELFING{% endblock %}
+
+{% block extra_css %}
+    <link rel="stylesheet" href="{% static 'css/dashboard.css' %}">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+{% endblock %}
 
 {% block content %}
-<h2 class="mb-4 text-center text-secondary">Panel de Administración</h2>
+    <div class="dashboard-header">
+        <h2><i class="fas fa-tachometer-alt me-3"></i>Panel de Administración</h2>
+        <p>Bienvenido al centro de control de SELFING</p>
+    </div>
 
-<div class="row g-4 mb-5">
-    <div class="col-md-3">
-        <div class="card border-primary h-100 shadow-sm">
-            <div class="card-body text-center">
-                <i class="fas fa-book fa-3x text-primary mb-3"></i>
-                <h3 class="card-title display-5 fw-bold">{{ novedades_hoy }}</h3>
-                <p class="card-text text-muted">Novedades Hoy</p>
+    <div class="row g-4 mb-4">
+        <div class="col-xl-3 col-md-6">
+            <div class="stat-card primary">
+                <div class="stat-icon"><i class="fas fa-book"></i></div>
+                <div class="stat-value">{{ novedades_hoy|default:"0" }}</div>
+                <div class="stat-label">Novedades Hoy</div>
+            </div>
+        </div>
+        
+        <div class="col-xl-3 col-md-6">
+            <div class="stat-card warning">
+                <div class="stat-icon"><i class="fas fa-envelope-open-text"></i></div>
+                <div class="stat-value">{{ correos_pendientes_count|default:"0" }}</div>
+                <div class="stat-label">Correos Pendientes</div>
+            </div>
+        </div>
+        
+        <div class="col-xl-3 col-md-6">
+            <div class="stat-card info">
+                <div class="stat-icon"><i class="fas fa-user-clock"></i></div>
+                <div class="stat-value">{{ operadores_en_turno|default:"0" }}</div>
+                <div class="stat-label">Operadores en Turno</div>
+            </div>
+        </div>
+        
+        <div class="col-xl-3 col-md-6">
+            <div class="stat-card success">
+                <div class="stat-icon"><i class="fas fa-network-wired"></i></div>
+                <div class="stat-value">{{ servicios_monitoreados_activos|default:"0" }}</div>
+                <div class="stat-label">Servicios Monitoreados</div>
             </div>
         </div>
     </div>
-    <div class="col-md-3">
-        <div class="card border-warning h-100 shadow-sm">
-            <div class="card-body text-center">
-                <i class="fas fa-envelope-open-text fa-3x text-warning mb-3"></i>
-                <h3 class="card-title display-5 fw-bold">{{ correos_pendientes_count }}</h3>
-                <p class="card-text text-muted">Correos Pendientes</p>
-            </div>
-        </div>
-    </div>
-    <div class="col-md-3">
-        <div class="card border-info h-100 shadow-sm">
-            <div class="card-body text-center">
-                <i class="fas fa-user-clock fa-3x text-info mb-3"></i> <h3 class="card-title display-5 fw-bold">{{ operadores_en_turno }}</h3> <p class="card-text text-muted">Operadores en Turno</p> </div>
-        </div>
-        </div>
-    <div class="col-md-3">
-        <div class="card border-success h-100 shadow-sm">
-            <div class="card-body text-center">
-                <i class="fas fa-network-wired fa-3x text-success mb-3"></i>
-                <h3 class="card-title display-5 fw-bold">{{ servicios_monitoreados_activos }}</h3>
-                <p class="card-text text-muted">Servicios Monitoreados</p>
-            </div>
-        </div>
-    </div>
-</div>
 
-<div class="row g-4">
-    <div class="col-lg-8">
-        <div class="card shadow-sm mb-4">
-            <div class="card-header bg-light">
-                <h5 class="mb-0 text-secondary"><i class="fas fa-cogs me-2"></i>Gestión del Sistema</h5>
+    <div class="row g-4">
+        <div class="col-lg-8">
+            <div class="action-card">
+                <div class="action-card-header"><h5><i class="fas fa-cogs"></i>Gestión del Sistema</h5></div>
+                <div class="action-grid">
+                    <a href="{% url 'manage_operators' %}" class="action-btn primary"><span>Gestionar Operadores</span></a>
+                    <a href="{% url 'manage_companies' %}" class="action-btn info"><span>Gestionar Empresas</span></a>
+                    <a href="{% url 'manage_checklist_items' %}" class="action-btn secondary"><span>Gestionar Checklist</span></a>
+                    <a href="{% url 'manage_monitored_services' %}" class="action-btn dark"><span>Monitoreo de Servicios</span></a>
+                    <a href="{% url 'manage_shift_types' %}" class="action-btn warning"><span>Tipos de Turno</span></a>
+                    <a href="{% url 'manage_shifts' %}" class="action-btn success"><span>Asignar Turnos</span></a>
+                    <a href="{% url 'shift_calendar' %}" class="action-btn primary"><span>Calendario de Turnos</span></a>
+                    <a href="{% url 'view_turn_reports' %}" class="action-btn secondary"><span>Reportes Firmados</span></a>
+                    <a href="{% url 'prepare_daily_reports' %}" class="action-btn" style="background-color: #6f42c1; color: white;">
+        <span>Preparar y Enviar Reportes</span>
+    </a>
+                </div>
             </div>
-            <div class="card-body d-flex flex-wrap gap-2">
-                <a href="{% url 'manage_operators' %}" class="btn btn-outline-primary flex-grow-1"><i class="fas fa-user-shield me-2"></i>Gestionar Operadores</a>
-                <a href="{% url 'manage_companies' %}" class="btn btn-outline-info flex-grow-1"><i class="fas fa-building me-2"></i>Gestionar Empresas</a>
-                <a href="{% url 'manage_checklist_items' %}" class="btn btn-outline-secondary flex-grow-1"><i class="fas fa-list-check me-2"></i>Gestionar Checklist</a>
-                <a href="{% url 'manage_monitored_services' %}" class="btn btn-outline-dark flex-grow-1"><i class="fas fa-desktop me-2"></i>Monitoreo de Servicios</a>
-                <a href="{% url 'manage_shift_types' %}" class="btn btn-outline-warning flex-grow-1"><i class="fas fa-clock me-2"></i>Gestionar Tipos de Turno</a>
-                <a href="{% url 'manage_shifts' %}" class="btn btn-outline-success flex-grow-1"><i class="fas fa-calendar-plus me-2"></i>Asignar Turnos</a>
-                <a href="{% url 'shift_calendar' %}" class="btn btn-outline-primary flex-grow-1"><i class="fas fa-calendar-alt me-2"></i>Ver Calendario de Turnos</a>
-                <a href="{% url 'view_turn_reports' %}" class="btn btn-outline-secondary flex-grow-1"><i class="fas fa-file-invoice me-2"></i>Reportes de Turno Firmados</a>
-            </div>
-        </div>
 
-        <div class="card shadow-sm">
-            <div class="card-header bg-light">
-                <h5 class="mb-0 text-secondary"><i class="fas fa-bullhorn me-2"></i>Reporte de Novedades del Día</h5>
-            </div>
-            <div class="table-responsive">
-                <table class="table table-hover mb-0">
-                    <thead class="table-light">
-                        <tr>
-                            <th scope="col">Hora</th>
-                            <th scope="col">Operador</th>
-                            <th scope="col">Empresa / Instalación</th>
-                            <th scope="col">Novedad</th>
-                        </tr>
-                    </thead>
-                    <tbody>
+            <div class="data-table">
+                <div class="action-card-header"><h5><i class="fas fa-bullhorn"></i>Reporte de Novedades del Día</h5></div>
+                <div class="table-responsive">
+                    <table class="table">
+                        <thead><tr><th>Hora</th><th>Operador</th><th>Empresa / Instalación</th><th>Novedad</th></tr></thead>
+                        <tbody>
                         {% for report in reports %}
-                        <tr>
-                            <td>{{ report.created_at|date:"H:i" }}</td>
-                            <td>{{ report.operator_shift.operator.username }}</td>
-                            <td>
-                                <strong>{{ report.installation.company.name }}</strong>
-                                <br><small class="text-muted">{{ report.installation.name }}</small>
-                            </td>
-                            <td>{{ report.message }}</td>
-                        </tr>
+                            <tr>
+                                <td><span class="time-label">{{ report.created_at|date:"H:i" }}</span></td>
+                                <td><div class="d-flex align-items-center"><div class="avatar-sm me-2"><i class="fas fa-user-circle text-secondary"></i></div><span>{{ report.operator_shift.operator.username }}</span></div></td>
+                                <td><strong>{{ report.installation.company.name }}</strong><br><small class="text-muted">{{ report.installation.name }}</small></td>
+                                <td>{{ report.message }}</td>
+                            </tr>
                         {% empty %}
-                        <tr><td colspan="4" class="text-center py-4 text-muted">No hay novedades registradas hoy.</td></tr>
+                            <tr><td colspan="4" class="text-center py-5 text-muted"><i class="fas fa-inbox fa-3x mb-3 d-block"></i>No hay novedades registradas hoy.</td></tr>
                         {% endfor %}
-                    </tbody>
-                </table>
+                        </tbody>
+                    </table>
+                </div>
             </div>
         </div>
-    </div>
 
-    <div class="col-lg-4">
-        <div class="card shadow-sm mb-4" id="service-status-panel">
-            <div class="card-header bg-light">
-                <h5 class="mb-0 text-secondary"><i class="fas fa-heartbeat me-2"></i>Estado de Servicios</h5>
+        <div class="col-lg-4">
+            <div class="status-card" id="service-status-panel">
+                <div class="action-card-header"><h5><i class="fas fa-heartbeat"></i>Estado de Servicios</h5></div>
+                <div class="p-3 text-center text-muted"><i class="fas fa-spinner fa-spin fa-2x mb-2"></i><p class="mb-0">Cargando servicios...</p></div>
             </div>
-        </div>
-        <div class="card shadow-sm mb-4">
-            <div class="card-header bg-light">
-                <h5 class="mb-0 text-secondary"><i class="fas fa-envelope me-2"></i>Correos por Aprobar</h5>
-            </div>
-            <div class="list-group list-group-flush">
+            
+            <div class="status-card">
+                <div class="action-card-header"><h5><i class="fas fa-envelope"></i>Correos por Aprobar</h5></div>
+                <div class="list-group list-group-flush">
                 {% for email in pending_emails %}
-                <a href="{% url 'review_email' email.id %}" class="list-group-item list-group-item-action">
-                    <div class="d-flex w-100 justify-content-between">
-                        <h6 class="mb-1"><strong>{{ email.company.name }}</strong></h6>
-                        <small class="text-muted">{{ email.created_at|timesince }}</small>
-                    </div>
-                    <small>Enviado por: {{ email.operator.username }}</small>
-                </a>
+                    <a href="{% url 'review_email' email.id %}" class="list-group-item list-group-item-action"><div class="d-flex justify-content-between align-items-start"><div class="flex-grow-1"><h6 class="mb-1 fw-bold">{{ email.company.name }}</h6><small class="text-muted">Por: {{ email.operator.username }}</small></div><div><span class="status-badge pending"><i class="fas fa-clock"></i> {{ email.created_at|timesince }}</span></div></div></a>
                 {% empty %}
-                <div class="list-group-item text-center text-muted py-3">No hay correos pendientes.</div>
+                    <div class="list-group-item text-center py-4 text-muted"><i class="fas fa-check-circle fa-2x mb-2 text-success"></i><p class="mb-0">No hay correos pendientes</p></div>
                 {% endfor %}
+                </div>
             </div>
-        </div>
-        <div class="card shadow-sm">
-            <div class="card-header bg-light">
-                <h5 class="mb-0 text-secondary"><i class="fas fa-history me-2"></i>Actividad Reciente (Últimas 6)</h5>
-            </div>
-            <ul class="list-group list-group-flush">
+            
+            <div class="status-card" id="activity-card">
+                <div class="action-card-header"><h5><i class="fas fa-history"></i>Actividad Reciente</h5></div>
+                <div class="p-3">
                 {% for log in traceability_logs %}
-                <li class="list-group-item"><small>{{ log.action }} por <strong>{{ log.user.username }}</strong> <span class="text-muted">- {{ log.timestamp|timesince }}</span></small></li>
+                    <div class="activity-item"><small class="time-label">{{ log.timestamp|timesince }} atrás</small><p class="mb-0 mt-1"><strong>{{ log.user.username }}</strong> {{ log.action }}</p></div>
                 {% empty %}
-                <li class="list-group-item text-center text-muted py-3">No hay actividad reciente.</li>
+                    <div class="text-center py-3 text-muted"><i class="fas fa-history fa-2x mb-2"></i><p class="mb-0">No hay actividad reciente</p></div>
                 {% endfor %}
-            </ul>
+                </div>
+            </div>
         </div>
     </div>
-</div>
 {% endblock %}
 
 {% block extra_js %}
-{{ block.super }}
-<script>
-document.addEventListener('DOMContentLoaded', function() {
-    const statusPanel = document.getElementById('service-status-panel');
-    function updateServiceStatus() {
-        const url = `{% url 'ajax_get_service_status' %}?timestamp=${new Date().getTime()}`;
-        fetch(url)
-            .then(response => response.text())
-            .then(html => {
-                const listContainer = statusPanel.querySelector('.list-group');
-                if (listContainer) {
-                    listContainer.outerHTML = html;
-                } else {
-                    statusPanel.querySelector('.card-header').insertAdjacentHTML('afterend', html);
+    {{ block.super }}
+    <script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const statusPanel = document.getElementById('service-status-panel');
+        
+        function updateServiceStatus() {
+            const url = `{% url 'ajax_get_service_status' %}?timestamp=${new Date().getTime()}`;
+            fetch(url)
+                .then(response => response.text())
+                .then(html => {
+                    const contentArea = statusPanel.querySelector('.p-3, .list-group');
+                    if (contentArea) {
+                        contentArea.outerHTML = html;
+                    }
+                })
+                .catch(error => {
+                    console.error('Error al actualizar servicios:', error);
+                    const contentArea = statusPanel.querySelector('.p-3, .list-group');
+                    if (contentArea) {
+                        contentArea.innerHTML = `<div class="p-3 text-center text-danger"><i class="fas fa-exclamation-circle fa-2x mb-2"></i><p class="mb-0">Error al cargar servicios</p></div>`;
+                    }
+                });
+        }
+        
+        updateServiceStatus();
+        setInterval(updateServiceStatus, 5000);
+        
+        const statValues = document.querySelectorAll('.stat-value');
+        statValues.forEach(stat => {
+            const finalValue = parseInt(stat.textContent) || 0;
+            let currentValue = 0;
+            const increment = finalValue / 20;
+            const timer = setInterval(() => {
+                currentValue += increment;
+                if (currentValue >= finalValue) {
+                    currentValue = finalValue;
+                    clearInterval(timer);
                 }
-            })
-            .catch(error => console.error('Error al actualizar servicios:', error));
-    }
-    updateServiceStatus();
-    setInterval(updateServiceStatus, 5000);
-});
-</script>
+                stat.textContent = Math.floor(currentValue);
+            }, 50);
+        });
+    });
+    </script>
 {% endblock %}

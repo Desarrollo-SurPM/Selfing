@@ -19,27 +19,19 @@ class UpdateLogForm(forms.ModelForm):
         }
 
 class EmailForm(forms.ModelForm):
-    def __init__(self, *args, **kwargs):
-        super(EmailForm, self).__init__(*args, **kwargs)
-        self.fields['updates'].label = "Novedades a Incluir"
-        # Lógica para que la validación funcione con checkboxes dinámicos
-        if self.data:
-            try:
-                company_id = int(self.data.get('company'))
-                self.fields['updates'].queryset = UpdateLog.objects.filter(
-                    installation__company_id=company_id
-                )
-            except (ValueError, TypeError):
-                self.fields['updates'].queryset = UpdateLog.objects.none()
-        else:
-            self.fields['updates'].queryset = UpdateLog.objects.none()
-
+    """
+    Formulario simplificado para que el operador envíe su reporte de turno
+    con una observación final.
+    """
     class Meta:
         model = Email
-        fields = ['company', 'updates', 'observations']
+        # El único campo que el operador debe llenar es la observación.
+        fields = ['final_observation']
         widgets = {
-            'updates': forms.CheckboxSelectMultiple,
-            'observations': forms.Textarea(attrs={'rows': 5, 'placeholder': 'Añada observaciones adicionales aquí...'}),
+            'final_observation': forms.Textarea(attrs={'rows': 5, 'placeholder': 'Añada un resumen u observación final sobre las novedades de su turno...'}),
+        }
+        labels = {
+            'final_observation': "Observación Final del Turno"
         }
 
 class VirtualRoundCompletionForm(forms.ModelForm):
@@ -55,11 +47,30 @@ class VirtualRoundCompletionForm(forms.ModelForm):
 
 # --- Formularios de Gestión del Administrador ---
 
-class EmailApprovalForm(forms.ModelForm):
-    class Meta:
-        model = Email
-        fields = ['observations']
-        widgets = {'observations': forms.Textarea(attrs={'rows': 10})}
+class EmailApprovalForm(forms.Form):
+    """
+    Este formulario se genera dinámicamente en la vista para permitir al admin
+    aprobar o rechazar novedades individualmente.
+    """
+    # Usamos un campo que aceptará una lista de IDs de las novedades aprobadas.
+    approved_updates = forms.ModelMultipleChoiceField(
+        queryset=UpdateLog.objects.all(),
+        widget=forms.CheckboxSelectMultiple,
+        required=False # Es posible que no se apruebe ninguna.
+    )
+    # El administrador también puede añadir sus propias observaciones.
+    admin_observations = forms.CharField(
+        widget=forms.Textarea(attrs={'rows': 4}),
+        required=False,
+        label="Observaciones Adicionales para el Correo Final"
+    )
+
+    def __init__(self, *args, **kwargs):
+        # El queryset de las novedades se pasará desde la vista.
+        update_logs_queryset = kwargs.pop('update_logs', None)
+        super().__init__(*args, **kwargs)
+        if update_logs_queryset is not None:
+            self.fields['approved_updates'].queryset = update_logs_queryset
 
 class OperatorCreationForm(UserCreationForm):
     class Meta(UserCreationForm.Meta):

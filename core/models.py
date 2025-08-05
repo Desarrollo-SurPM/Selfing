@@ -80,27 +80,44 @@ class VirtualRoundLog(models.Model):
 
 # --- 👇 CAMBIO #3 👇 ---
 class UpdateLog(models.Model):
-    # Se asocia a un turno específico.
-    operator_shift = models.ForeignKey(OperatorShift, on_delete=models.CASCADE, related_name='update_logs')
+    # --- CAMBIO: Se asocia a un turno y se añade un estado ---
+    STATUS_CHOICES = [
+        ('pending', 'Pendiente de Revisión'),
+        ('approved', 'Aprobado'),
+        ('rejected', 'Rechazado'),
+    ]
+    operator_shift = models.ForeignKey('OperatorShift', on_delete=models.CASCADE, related_name='update_logs')
     installation = models.ForeignKey(Installation, on_delete=models.CASCADE)
     message = models.TextField()
     created_at = models.DateTimeField(auto_now_add=True)
+    status = models.CharField(max_length=10, choices=STATUS_CHOICES, default='pending', verbose_name="Estado de Aprobación")
+    
     def __str__(self):
         return f"Novedad para {self.installation.name} por {self.operator_shift.operator.username}"
 
 # --- (El resto de los modelos no tienen cambios) ---
 class Email(models.Model):
-    STATUS_CHOICES = [('draft', 'Borrador'), ('pending', 'Pendiente de Aprobación'), ('approved', 'Aprobado'), ('sent', 'Enviado')]
-    operator = models.ForeignKey(User, on_delete=models.CASCADE, related_name='emails_sent')
-    company = models.ForeignKey(Company, on_delete=models.CASCADE, related_name='emails_received')
-    updates = models.ManyToManyField(UpdateLog) 
-    observations = models.TextField(blank=True, null=True)
-    status = models.CharField(max_length=10, choices=STATUS_CHOICES, default='draft')
+    # --- REESTRUCTURADO: Ahora representa un reporte de turno para aprobación ---
+    STATUS_CHOICES = [
+        ('pending', 'Pendiente de Aprobación'),
+        ('processed', 'Procesado y Enviado'),
+    ]
+    operator = models.ForeignKey(User, on_delete=models.CASCADE, related_name='submitted_reports')
+    # Ya no se asocia a una Company, sino a un turno para agrupar todas las novedades.
+    operator_shift = models.ForeignKey('OperatorShift', on_delete=models.CASCADE, related_name='email_reports')
+    # Este campo contendrá la observación final del operador.
+    final_observation = models.TextField(blank=True, null=True, verbose_name="Observación Final del Operador")
+    status = models.CharField(max_length=10, choices=STATUS_CHOICES, default='pending')
     created_at = models.DateTimeField(auto_now_add=True)
-    approved_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='approved_emails')
-    approved_at = models.DateTimeField(null=True, blank=True)
+    
+    # El campo 'updates' se elimina, ya que la relación ahora está en el turno.
+    
+    # Campos para la trazabilidad del admin
+    processed_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='processed_emails')
+    processed_at = models.DateTimeField(null=True, blank=True)
+    
     def __str__(self):
-        return f"Correo para {self.company.name} - {self.status}"
+        return f"Reporte de {self.operator.username} del turno {self.operator_shift.date.strftime('%d/%m/%Y')}"
 
 class TraceabilityLog(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE)

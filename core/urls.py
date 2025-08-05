@@ -38,6 +38,10 @@ urlpatterns = [
     # Gestión de Reportes y Correos
     path('email/review/<int:email_id>/', views.review_and_approve_email, name='review_email'),
     path('dashboard/turn-reports/', views.view_turn_reports, name='view_turn_reports'),
+    # --- Rutas para Reporte Consolidado Manual ---
+    path('dashboard/reports/prepare/', views.prepare_daily_reports, name='prepare_daily_reports'),
+    path('dashboard/reports/send/<int:company_id>/', views.send_company_report, name='send_company_report'),
+    # ...
     
     # --- Rutas de Gestión de Turnos (Fase 1) ---
     path('dashboard/shift-types/', views.manage_shift_types, name='manage_shift_types'),
