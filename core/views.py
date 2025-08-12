@@ -7,7 +7,9 @@ from django.utils import timezone
 from django.http import JsonResponse, HttpResponse
 from django.template.loader import get_template
 from xhtml2pdf import pisa
-from django.db.models import Q
+from django.core.mail import send_mail
+from django.template.loader import render_to_string
+from django.db.models import Q, Count
 from collections import defaultdict
 from django.contrib import messages
 from io import BytesIO
@@ -27,7 +29,7 @@ from .models import (
     TurnReport, MonitoredService, ServiceStatusLog, TraceabilityLog
 )
 from .forms import (
-    UpdateLogForm, EmailForm, EmailApprovalForm, OperatorCreationForm,
+    UpdateLogForm, OperatorCreationForm,
     OperatorChangeForm, CompanyForm, InstallationForm, ChecklistItemForm,
     MonitoredServiceForm, ShiftTypeForm, OperatorShiftForm, VirtualRoundCompletionForm
 )
@@ -52,35 +54,107 @@ def home(request):
 def admin_dashboard(request):
     today = timezone.now().date()
     
-    # --- CAMBIO AQUÍ ---
-    # Contamos los turnos de hoy que han iniciado pero no han terminado.
     operadores_en_turno = OperatorShift.objects.filter(
         date=today,
         actual_start_time__isnull=False,
         actual_end_time__isnull=True
     ).count()
-    # --- FIN DEL CAMBIO ---
 
     novedades_hoy = UpdateLog.objects.filter(created_at__date=today).count()
-    correos_pendientes_count = Email.objects.filter(status='pending').count()
+    
+    # --- CAMBIO: Se reemplaza correos pendientes por reportes finalizados ---
+    reportes_finalizados_count = TurnReport.objects.filter(is_signed=True, signed_at__date=today).count()
+    
     servicios_monitoreados_activos = MonitoredService.objects.filter(is_active=True).count()
     traceability_logs = TraceabilityLog.objects.select_related('user').all().order_by('-timestamp')[:6]
     reports = UpdateLog.objects.filter(created_at__date=today).select_related(
         'operator_shift__operator', 'installation__company'
     ).order_by('-created_at')
-    pending_emails = Email.objects.filter(status='pending').select_related('company', 'operator').order_by('-created_at')
 
     context = {
         'novedades_hoy': novedades_hoy,
-        'correos_pendientes_count': correos_pendientes_count,
-        # Pasamos la nueva variable al contexto
+        'reportes_finalizados_count': reportes_finalizados_count, # Nuevo dato para la plantilla
         'operadores_en_turno': operadores_en_turno,
         'servicios_monitoreados_activos': servicios_monitoreados_activos,
         'reports': reports,
-        'pending_emails': pending_emails,
         'traceability_logs': traceability_logs,
     }
     return render(request, 'admin_dashboard.html', context)
+
+@login_required
+@user_passes_test(is_supervisor)
+def review_and_send_novedades(request):
+    company_id = request.GET.get('company_id')
+    selected_company = None
+    novedades_pendientes = None
+
+    if request.method == 'POST':
+        selected_ids = request.POST.getlist('updates_to_send')
+        observations = request.POST.get('observations', '')
+        company_id_form = request.POST.get('company_id')
+
+        if not selected_ids:
+            messages.warning(request, "Debe seleccionar al menos una novedad para enviar.")
+            return redirect(f"{request.path_info}?company_id={company_id_form}")
+
+        company = get_object_or_404(Company, id=company_id_form)
+        updates = UpdateLog.objects.filter(id__in=selected_ids).order_by('installation__name', 'created_at')
+
+        if company.email:
+            try:
+                email_context = {
+                    'company': company,
+                    'updates': updates,
+                    'observations': observations,
+                    'enviado_por': request.user,
+                }
+                html_message = render_to_string('emails/reporte_novedades.html', email_context)
+                
+                send_mail(
+                    subject=f"Reporte de Novedades - {company.name} - {timezone.now().strftime('%d/%m/%Y')}",
+                    message="",
+                    from_email=None,
+                    recipient_list=[company.email],
+                    fail_silently=False,
+                    html_message=html_message
+                )
+                
+                updates.update(is_sent=True)
+                TraceabilityLog.objects.create(user=request.user, action=f"Envió correo de novedades a {company.name}.")
+                messages.success(request, f"Correo enviado correctamente a {company.name}.")
+
+            except Exception as e:
+                messages.error(request, f"Error al enviar el correo: {e}")
+                return redirect(f"{request.path_info}?company_id={company_id_form}")
+        else:
+            messages.warning(request, f"La empresa {company.name} no tiene un correo configurado.")
+
+        return redirect('review_and_send_novedades')
+
+    # --- LÓGICA GET (CUANDO SE CARGA LA PÁGINA) ---
+    if company_id:
+        selected_company = get_object_or_404(Company, id=company_id)
+        novedades_pendientes = UpdateLog.objects.filter(
+            installation__company=selected_company, is_sent=False
+        ).exclude(
+            operator_shift__shift_type__name__iexact='Turno Mañana'
+        ).select_related('operator_shift__operator', 'installation').order_by('installation__name', '-created_at')
+
+    companies_with_pending_updates = Company.objects.filter(
+        installations__updatelog__is_sent=False
+    ).exclude(
+        installations__updatelog__operator_shift__shift_type__name__iexact='Turno Mañana'
+    ).annotate(
+        pending_count=Count('installations__updatelog', filter=Q(installations__updatelog__is_sent=False))
+    ).filter(pending_count__gt=0).distinct()
+
+    context = {
+        'companies': companies_with_pending_updates,
+        'selected_company': selected_company,
+        'novedades_pendientes': novedades_pendientes
+    }
+    # --- LA LÍNEA QUE FALTABA Y SOLUCIONA EL ERROR ---
+    return render(request, 'review_and_send.html', context)
 
 @login_required
 @user_passes_test(is_supervisor)
@@ -263,19 +337,6 @@ def delete_monitored_service(request, service_id):
     if request.method == 'POST': service.delete(); return redirect('manage_monitored_services')
     return render(request, 'monitored_service_confirm_delete.html', {'service': service})
 
-@login_required
-@user_passes_test(is_supervisor)
-def review_and_approve_email(request, email_id):
-    email = get_object_or_404(Email, id=email_id)
-    if request.method == 'POST':
-        form = EmailApprovalForm(request.POST, instance=email)
-        if form.is_valid():
-            form.save(); email.status = 'approved'; email.approved_by = request.user; email.approved_at = timezone.now()
-            email.save(update_fields=['status', 'approved_by', 'approved_at'])
-            TraceabilityLog.objects.create(user=request.user, action=f"Revisó y aprobó correo para {email.company.name}")
-            return redirect('admin_dashboard')
-    else: form = EmailApprovalForm(instance=email)
-    return render(request, 'review_email.html', {'email': email, 'form': form, 'updates_list': email.updates.all()})
 
 @login_required
 @user_passes_test(is_supervisor)
@@ -923,18 +984,6 @@ def checklist_view(request):
     return render(request, 'checklist.html', context)
 
 
-@login_required
-def email_form_view(request):
-    if not get_active_shift(request.user): return redirect('operator_dashboard')
-    if request.method == 'POST':
-        form = EmailForm(request.POST)
-        if form.is_valid():
-            email = form.save(commit=False); email.operator = request.user; email.status = 'pending'; email.save()
-            form.save_m2m()
-            TraceabilityLog.objects.create(user=request.user, action=f"Generó borrador de correo para {email.company.name}")
-            return redirect('operator_dashboard')
-    else: form = EmailForm()
-    return render(request, 'email_form.html', {'form': form})
 
 # Flujo de Rondas Virtuales
 
@@ -1181,8 +1230,7 @@ def get_service_status(request):
         status_list.append({'id': s.id, 'name': s.name, 'status': latest_log.is_up if latest_log else None})
     return render(request, '_service_status_panel.html', {'service_status_list': status_list})
 
-@login_required
-def check_pending_alarms(request):
+
     """
     Vista de API que le dice al frontend si debe mostrar una alarma.
     """
@@ -1240,6 +1288,41 @@ def check_pending_alarms(request):
             pass # Lógica para rondas periódicas
 
     return JsonResponse(response_data)
+
+@login_required
+def check_pending_alarms(request):
+    """
+    NUEVA LÓGICA DE ALARMAS:
+    Esta vista ahora devuelve las tareas específicas que están vencidas.
+    """
+    active_shift = get_active_shift(request.user)
+    overdue_tasks = []
+
+    if active_shift and active_shift.actual_start_time:
+        now = timezone.now()
+        
+        # 1. Obtiene solo los ítems que aplican a este turno específico.
+        applicable_items = get_applicable_checklist_items(active_shift)
+        
+        # 2. Obtiene los IDs de las tareas ya completadas en este turno.
+        completed_item_ids = ChecklistLog.objects.filter(
+            operator_shift=active_shift
+        ).values_list('item_id', flat=True)
+        
+        # 3. Filtra para quedarse solo con las tareas pendientes que tienen alarma.
+        pending_items_with_alarm = applicable_items.exclude(
+            id__in=completed_item_ids
+        ).filter(
+            alarm_trigger_delay__isnull=False
+        )
+        
+        # 4. Comprueba si alguna de las tareas pendientes está vencida.
+        for item in pending_items_with_alarm:
+            due_time = active_shift.actual_start_time + item.alarm_trigger_delay
+            if now > due_time:
+                overdue_tasks.append({'description': item.description})
+
+    return JsonResponse({'overdue_tasks': overdue_tasks})
 
 @csrf_exempt # Deshabilitamos CSRF para esta vista AJAX
 @login_required

@@ -3,7 +3,7 @@ from django.contrib.auth.forms import UserCreationForm
 from django.contrib.auth.models import User
 # Importación consolidada de todos los modelos necesarios
 from .models import (
-    UpdateLog, Email, ChecklistItem, Company, Installation, MonitoredService,
+    UpdateLog, ChecklistItem, Company, Installation, MonitoredService,
     ShiftType, OperatorShift, VirtualRoundLog
 )
 
@@ -18,29 +18,6 @@ class UpdateLogForm(forms.ModelForm):
             'message': forms.Textarea(attrs={'rows': 4, 'placeholder': 'Describa la novedad...'}),
         }
 
-class EmailForm(forms.ModelForm):
-    def __init__(self, *args, **kwargs):
-        super(EmailForm, self).__init__(*args, **kwargs)
-        self.fields['updates'].label = "Novedades a Incluir"
-        # Lógica para que la validación funcione con checkboxes dinámicos
-        if self.data:
-            try:
-                company_id = int(self.data.get('company'))
-                self.fields['updates'].queryset = UpdateLog.objects.filter(
-                    installation__company_id=company_id
-                )
-            except (ValueError, TypeError):
-                self.fields['updates'].queryset = UpdateLog.objects.none()
-        else:
-            self.fields['updates'].queryset = UpdateLog.objects.none()
-
-    class Meta:
-        model = Email
-        fields = ['company', 'updates', 'observations']
-        widgets = {
-            'updates': forms.CheckboxSelectMultiple,
-            'observations': forms.Textarea(attrs={'rows': 5, 'placeholder': 'Añada observaciones adicionales aquí...'}),
-        }
 
 class VirtualRoundCompletionForm(forms.ModelForm):
     checked_installations = forms.ModelMultipleChoiceField(
@@ -55,11 +32,6 @@ class VirtualRoundCompletionForm(forms.ModelForm):
 
 # --- Formularios de Gestión del Administrador ---
 
-class EmailApprovalForm(forms.ModelForm):
-    class Meta:
-        model = Email
-        fields = ['observations']
-        widgets = {'observations': forms.Textarea(attrs={'rows': 10})}
 
 class OperatorCreationForm(UserCreationForm):
     class Meta(UserCreationForm.Meta):
@@ -147,6 +119,15 @@ class ChecklistItemForm(forms.ModelForm):
             
         return instance
 
+class OperatorObservationForm(forms.Form):
+    """
+    Nuevo formulario simple para que el operador añada una observación final.
+    """
+    observacion_final = forms.CharField(
+        widget=forms.Textarea(attrs={'rows': 4, 'placeholder': 'Añada una observación general de su turno...'}),
+        required=False,
+        label="Observación Final del Turno"
+    )
 
 class MonitoredServiceForm(forms.ModelForm):
     class Meta:

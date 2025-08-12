@@ -145,29 +145,27 @@ class VirtualRoundLog(models.Model):
 
 # --- 👇 CAMBIO #3 👇 ---
 class UpdateLog(models.Model):
-    # Se asocia a un turno específico.
     operator_shift = models.ForeignKey(OperatorShift, on_delete=models.CASCADE, related_name='update_logs')
     installation = models.ForeignKey(Installation, on_delete=models.CASCADE)
     message = models.TextField()
     created_at = models.DateTimeField(auto_now_add=True)
+    
+    # --- CAMPO AÑADIDO ---
+    # Para saber si esta novedad ya fue incluida en un correo.
+    is_sent = models.BooleanField(default=False, verbose_name="¿Enviado en reporte?")
+
     def __str__(self):
         return f"Novedad para {self.installation.name} por {self.operator_shift.operator.username}"
 
-
-# --- (El resto de los modelos no tienen cambios) ---
 class Email(models.Model):
-    STATUS_CHOICES = [('draft', 'Borrador'), ('pending', 'Pendiente de Aprobación'), ('approved', 'Aprobado'), ('sent', 'Enviado')]
     operator = models.ForeignKey(User, on_delete=models.CASCADE, related_name='emails_sent')
     company = models.ForeignKey(Company, on_delete=models.CASCADE, related_name='emails_received')
     updates = models.ManyToManyField(UpdateLog) 
     observations = models.TextField(blank=True, null=True)
-    status = models.CharField(max_length=10, choices=STATUS_CHOICES, default='draft')
+    status = models.CharField(max_length=10, choices=[('sent', 'Enviado')], default='sent')
     created_at = models.DateTimeField(auto_now_add=True)
-    approved_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='approved_emails')
-    approved_at = models.DateTimeField(null=True, blank=True)
     def __str__(self):
         return f"Correo para {self.company.name} - {self.status}"
-
 class TraceabilityLog(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE)
     action = models.CharField(max_length=255)

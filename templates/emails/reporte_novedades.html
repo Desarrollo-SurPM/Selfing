@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Reporte de Novedades</title>
+</head>
+<body style="font-family: Arial, sans-serif; color: #333; margin: 0; padding: 20px; background-color: #f9f9f9;">
+    <table width="100%" border="0" cellspacing="0" cellpadding="0" style="max-width: 600px; margin: auto; background-color: #ffffff; border: 1px solid #ddd; border-radius: 8px;">
+        <tr>
+            <td style="padding: 20px;">
+                <h1 style="color: #1e3c72; text-align: center; border-bottom: 2px solid #1e3c72; padding-bottom: 10px;">Reporte de Novedades</h1>
+                <p>Estimado cliente <strong>{{ company.name }}</strong>,</p>
+                <p>A continuación, se detallan las novedades más recientes registradas por nuestro equipo de monitoreo:</p>
+
+                {% regroup updates by installation.name as installation_list %}
+                {% for installation in installation_list %}
+                    <h3 style="color: #2a5298; border-bottom: 1px solid #eee; padding-bottom: 5px; margin-top: 25px;">
+                        Instalación: {{ installation.grouper }}
+                    </h3>
+                    <ul style="list-style: none; padding: 0;">
+                        {% for update in installation.list %}
+                            <li style="margin-bottom: 15px; padding-bottom: 10px; border-bottom: 1px dotted #ccc;">
+                                <strong style="color: #555;">{{ update.created_at|date:"d/m/Y H:i" }} hrs</strong> (Operador: {{ update.operator_shift.operator.username }})
+                                <p style="margin: 5px 0 0 15px; background-color: #f4f4f4; padding: 10px; border-radius: 4px;">{{ update.message }}</p>
+                            </li>
+                        {% endfor %}
+                    </ul>
+                {% endfor %}
+
+                {% if observations %}
+                    <h3 style="color: #1e3c72; margin-top: 30px;">Observaciones del Administrador</h3>
+                    <div style="background-color: #eaf2f8; padding: 15px; border-left: 4px solid #2a5298; border-radius: 4px;">
+                        <p style="margin: 0;">{{ observations|linebreaksbr }}</p>
+                    </div>
+                {% endif %}
+
+                <hr style="border: 0; border-top: 1px solid #eee; margin: 20px 0;">
+                <p style="font-size: 0.8em; color: #888; text-align: center;">
+                    Este correo fue generado automáticamente por la plataforma SELFING.<br>
+                    Reporte enviado por: {{ enviado_por.username }}.
+                </p>
+            </td>
+        </tr>
+    </table>
+</body>
+</html>

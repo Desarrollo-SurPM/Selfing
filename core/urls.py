@@ -38,7 +38,7 @@ urlpatterns = [
     path('dashboard/monitored-services/delete/<int:service_id>/', views.delete_monitored_service, name='delete_monitored_service'),
 
     # Gestión de Reportes y Correos
-    path('email/review/<int:email_id>/', views.review_and_approve_email, name='review_email'),
+    #path('email/review/<int:email_id>/', views.review_and_approve_email, name='review_email'),
     path('dashboard/turn-reports/', views.view_turn_reports, name='view_turn_reports'),
     
     # --- Rutas de Gestión de Turnos (Fase 1) ---
@@ -53,10 +53,11 @@ urlpatterns = [
     path('dashboard/shifts/delete/<int:shift_id>/', views.delete_assigned_shift, name='delete_assigned_shift'),
 
     # --- Rutas de Operador ---
+    path('dashboard/review-and-send/', views.review_and_send_novedades, name='review_and_send_novedades'),
     path('dashboard/operator/', views.operator_dashboard, name='operator_dashboard'),
     path('checklist/', views.checklist_view, name='checklist'),
     path('update-log/', views.update_log_view, name='update_log'),
-    path('email/new/', views.email_form_view, name='email_form'),
+    #path('email/new/', views.email_form_view, name='email_form'),
     path('turn/end/', views.end_turn_preview, name='end_turn_preview'),
     path('turn/sign/<int:report_id>/', views.sign_turn_report, name='sign_turn_report'),
 
