@@ -12,11 +12,29 @@ from .models import (
 class UpdateLogForm(forms.ModelForm):
     class Meta:
         model = UpdateLog
-        fields = ['installation', 'message']
+        fields = ['installation', 'message', 'manual_timestamp']
         widgets = {
             'installation': forms.HiddenInput(),
             'message': forms.Textarea(attrs={'rows': 4, 'placeholder': 'Describa la novedad...'}),
+            # Añadimos un widget para que el input sea de tipo datetime-local
+            'manual_timestamp': forms.TimeInput(attrs={'type': 'time'}, format='%H:%M'),
         }
+        labels = {
+            'manual_timestamp': 'Hora y Fecha del Evento (Opcional)',
+        }
+
+# --- 👇 NUEVO FORMULARIO PARA EDICIÓN 👇 ---
+class UpdateLogEditForm(forms.ModelForm):
+    class Meta:
+        model = UpdateLog
+        fields = ['message']
+        widgets = {
+            'message': forms.Textarea(attrs={'rows': 4}),
+        }
+        labels = {
+            'message': 'Corregir Novedad',
+        }
+# --- 👆 FIN DE NUEVO FORMULARIO 👆 ---
 
 
 class VirtualRoundCompletionForm(forms.ModelForm):

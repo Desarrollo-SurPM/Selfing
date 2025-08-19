@@ -20,8 +20,20 @@
                     <ul style="list-style: none; padding: 0;">
                         {% for update in installation.list %}
                             <li style="margin-bottom: 15px; padding-bottom: 10px; border-bottom: 1px dotted #ccc;">
-                                <strong style="color: #555;">{{ update.created_at|date:"d/m/Y H:i" }} hrs</strong> (Operador: {{ update.operator_shift.operator.username }})
-                                <p style="margin: 5px 0 0 15px; background-color: #f4f4f4; padding: 10px; border-radius: 4px;">{{ update.message }}</p>
+                                <strong style="color: #555;">
+                                    {# --- 👇 LÓGICA DE HORA CORREGIDA AQUÍ 👇 --- #}
+                                    {% if update.manual_timestamp %}
+                                        {{ update.created_at|date:"d/m/Y" }} {{ update.manual_timestamp|date:"H:i" }} hrs (Manual)
+                                    {% else %}
+                                        {{ update.created_at|date:"d/m/Y H:i" }} hrs
+                                    {% endif %}
+                                </strong> (Operador: {{ update.operator_shift.operator.username }})
+                                <p style="margin: 5px 0 0 15px; background-color: #f4f4f4; padding: 10px; border-radius: 4px;">
+                                    {{ update.message }}
+                                    {% if update.is_edited %}
+                                        <em style="color: #888; font-size: 0.9em;">(Editado)</em>
+                                    {% endif %}
+                                </p>
                             </li>
                         {% endfor %}
                     </ul>

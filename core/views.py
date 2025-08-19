@@ -31,7 +31,7 @@ from .models import (
 from .forms import (
     UpdateLogForm, OperatorCreationForm,
     OperatorChangeForm, CompanyForm, InstallationForm, ChecklistItemForm,
-    MonitoredServiceForm, ShiftTypeForm, OperatorShiftForm, VirtualRoundCompletionForm
+    MonitoredServiceForm, ShiftTypeForm, OperatorShiftForm, VirtualRoundCompletionForm, UpdateLogEditForm
 )
 
 def is_supervisor(user):
@@ -819,7 +819,38 @@ def get_applicable_checklist_items(active_shift):
     
     return render(request, 'operator_dashboard.html', context)
 
+@login_required
+def edit_update_log(request, log_id):
+    # Obtenemos el log y nos aseguramos de que pertenezca al usuario actual para seguridad.
+    log_entry = get_object_or_404(UpdateLog, id=log_id, operator_shift__operator=request.user)
+    
+    # Si la entrada ya fue editada, guardamos el mensaje original. Si no, lo hacemos ahora.
+    if not log_entry.is_edited:
+        log_entry.original_message = log_entry.message
 
+    if request.method == 'POST':
+        form = UpdateLogEditForm(request.POST, instance=log_entry)
+        if form.is_valid():
+            log_entry.is_edited = True
+            log_entry.edited_at = timezone.now()
+            form.save()
+            
+            # Registro de trazabilidad
+            TraceabilityLog.objects.create(
+                user=request.user, 
+                action=f"Editó una entrada de la bitácora para la instalación '{log_entry.installation.name}'."
+            )
+            
+            messages.success(request, 'La novedad ha sido actualizada correctamente.')
+            return redirect('my_logbook')
+    else:
+        form = UpdateLogEditForm(instance=log_entry)
+
+    context = {
+        'form': form,
+        'log_entry': log_entry
+    }
+    return render(request, 'edit_update_log.html', context)
 
 @login_required
 def update_log_view(request):

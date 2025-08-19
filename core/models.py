@@ -143,7 +143,6 @@ class VirtualRoundLog(models.Model):
     def __str__(self):
         return f"Ronda de {self.operator_shift.operator.username} - iniciada a las {self.start_time.strftime('%H:%M')}"
 
-# --- 👇 CAMBIO #3 👇 ---
 class UpdateLog(models.Model):
     operator_shift = models.ForeignKey(OperatorShift, on_delete=models.CASCADE, related_name='update_logs')
     installation = models.ForeignKey(Installation, on_delete=models.CASCADE)
@@ -154,8 +153,31 @@ class UpdateLog(models.Model):
     # Para saber si esta novedad ya fue incluida en un correo.
     is_sent = models.BooleanField(default=False, verbose_name="¿Enviado en reporte?")
 
+    # --- 👇 NUEVOS CAMPOS PARA SPRINT 1 👇 ---
+    manual_timestamp = models.TimeField(
+        null=True, 
+        blank=True, 
+        verbose_name="Hora Manual del Evento"
+    )
+    is_edited = models.BooleanField(
+        default=False, 
+        verbose_name="¿Ha sido editado?"
+    )
+    original_message = models.TextField(
+        blank=True, 
+        null=True, 
+        verbose_name="Mensaje Original"
+    )
+    edited_at = models.DateTimeField(
+        null=True, 
+        blank=True, 
+        verbose_name="Fecha de Edición"
+    )
+    # --- 👆 FIN DE NUEVOS CAMPOS 👆 ---
+
     def __str__(self):
         return f"Novedad para {self.installation.name} por {self.operator_shift.operator.username}"
+
 
 class Email(models.Model):
     operator = models.ForeignKey(User, on_delete=models.CASCADE, related_name='emails_sent')
