@@ -1,0 +1,67 @@
+{% extends 'base.html' %}
+{% load crispy_forms_tags %}
+
+{% block title %}Bitácora de 24 Horas y Relevo de Turno{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h2 class="h3 text-secondary"><i class="fas fa-history me-2"></i> Bitácora de 24 Horas</h2>
+            <p class="text-muted">Mostrando novedades desde el {{ start_time_log|date:"d/m/Y, H:i" }} hasta el {{ end_time_log|date:"d/m/Y, H:i" }}</p>
+        </div>
+        <a href="{% url 'operator_dashboard' %}" class="btn btn-outline-secondary">
+            <i class="fas fa-arrow-left me-2"></i>Volver al Dashboard
+        </a>
+    </div>
+
+    <div class="card shadow-sm mb-5">
+        <div class="card-header bg-light">
+            <h4 class="h5 mb-0"><i class="fas fa-sticky-note me-2 text-warning"></i> Dejar una Nota para el Próximo Turno</h4>
+        </div>
+        <div class="card-body">
+            <form method="post">
+                {% csrf_token %}
+                {{ form|crispy }}
+                <div class="text-end mt-3">
+                    <button type="submit" class="btn btn-primary">Guardar Nota</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <h4 class="mb-3">Registro de Novedades</h4>
+    {% if logs_by_shift %}
+        <div class="accordion" id="logbookAccordion">
+            {% for shift_name, logs in logs_by_shift.items %}
+            <div class="accordion-item">
+                <h2 class="accordion-header" id="heading-{{ forloop.counter }}">
+                    <button class="accordion-button" type="button" data-bs-toggle="collapse" data-bs-target="#collapse-{{ forloop.counter }}" aria-expanded="true" aria-controls="collapse-{{ forloop.counter }}">
+                        <strong>{{ shift_name }}</strong>
+                    </button>
+                </h2>
+                <div id="collapse-{{ forloop.counter }}" class="accordion-collapse collapse show" aria-labelledby="heading-{{ forloop.counter }}">
+                    <div class="accordion-body">
+                        <ul class="list-group list-group-flush">
+                            {% for log in logs %}
+                            <li class="list-group-item">
+                                <span class="badge bg-secondary fw-normal">{{ log.created_at|date:"H:i" }} hrs</span>
+                                por <strong>{{ log.operator_shift.operator.username }}</strong> en 
+                                <strong>{{ log.installation.name }} ({{ log.installation.company.name }})</strong>:
+                                <p class="mb-0 ps-3"><em>"{{ log.message }}"</em></p>
+                            </li>
+                            {% endfor %}
+                        </ul>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    {% else %}
+        <div class="text-center p-5 bg-light rounded shadow-sm">
+            <p class="lead text-muted">No se encontraron novedades en el último ciclo de 24 horas.</p>
+        </div>
+    {% endif %}
+
+</div>
+{% endblock %}

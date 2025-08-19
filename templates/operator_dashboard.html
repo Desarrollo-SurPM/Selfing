@@ -19,7 +19,21 @@
             {% endif %}
         </div>
     </div>
-
+{% if active_notes %}
+    <div class="mb-4">
+        <h4 class="h5 text-warning"><i class="fas fa-exclamation-circle me-2"></i> Notas / Pendientes del Turno Anterior</h4>
+        {% for note in active_notes %}
+        <div class="alert alert-warning alert-dismissible fade show" role="alert">
+            <strong>{{ note.created_by.username }} ({{ note.created_at|timesince }} atrás):</strong>
+            <p class="mb-0">{{ note.message|linebreaksbr }}</p>
+            <form action="{% url 'dismiss_shift_note' note.id %}" method="post" class="d-inline">
+                {% csrf_token %}
+                <button type="submit" class="btn-close" aria-label="Close"></button>
+            </form>
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
 
     {# --- Lógica Principal de la Plantilla --- #}
 
@@ -52,6 +66,7 @@
                                 <div class="d-grid gap-2 d-md-flex justify-content-center flex-wrap">
                                     <a href="{% url 'checklist' %}" class="btn btn-primary btn-lg shadow-sm mb-2"><i class="fas fa-list-check me-2"></i>Ir al Checklist</a>
                                     <a href="{% url 'update_log' %}" class="btn btn-info btn-lg shadow-sm mb-2"><i class="fas fa-edit me-2"></i>Anotar en Bitácora</a>
+                                    <a href="{% url 'full_logbook_view' %}" class="btn btn-dark btn-lg shadow-sm mb-2"><i class="fas fa-history me-2"></i>Bitácora 24h / Relevo</a>
                                     <a href="{% url 'my_logbook' %}" class="btn btn-secondary btn-lg shadow-sm mb-2"><i class="fas fa-book me-2"></i>Ver Mi Bitácora</a>
                                     {% if progress_percentage >= 99 %}
                                     <a href="{% url 'end_turn_preview' %}" class="btn btn-danger btn-lg shadow-sm mb-2 animate__animated animate__heartBeat animate__infinite"><i class="fas fa-power-off me-2"></i>Finalizar Turno</a>

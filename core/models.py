@@ -262,3 +262,16 @@ class EmergencyContact(models.Model):
             return f"{self.name} - {self.company.name}"
         return f"{self.name} (General)"
 
+class ShiftNote(models.Model):
+    message = models.TextField(verbose_name="Mensaje de la Nota")
+    created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, related_name="created_shift_notes")
+    created_at = models.DateTimeField(auto_now_add=True)
+    is_active = models.BooleanField(default=True, verbose_name="¿Está activa?")
+
+    class Meta:
+        ordering = ['-created_at']
+        verbose_name = "Nota de Turno"
+        verbose_name_plural = "Notas de Turno"
+
+    def __str__(self):
+        return f"Nota de {self.created_by.username} el {self.created_at.strftime('%d/%m/%Y')}"

@@ -4,7 +4,7 @@ from django.contrib.auth.models import User
 # Importación consolidada de todos los modelos necesarios
 from .models import (
     UpdateLog, ChecklistItem, Company, Installation, MonitoredService,
-    ShiftType, OperatorShift, VirtualRoundLog, EmergencyContact
+    ShiftType, OperatorShift, VirtualRoundLog, EmergencyContact, ShiftNote
 )
 
 # --- Formularios de Registros del Operador ---
@@ -193,6 +193,16 @@ class OperatorShiftForm(forms.ModelForm):
             'date': forms.DateInput(attrs={'type': 'date'}),
         }
 
+class ShiftNoteForm(forms.ModelForm):
+    class Meta:
+        model = ShiftNote
+        fields = ['message']
+        widgets = {
+            'message': forms.Textarea(attrs={'rows': 3, 'placeholder': 'Escribe aquí una nota, pendiente o instrucción para el próximo turno...'}),
+        }
+        labels = {
+            'message': 'Nueva Nota para el Siguiente Turno'
+        }
 class EmergencyContactForm(forms.ModelForm):
     class Meta:
         model = EmergencyContact

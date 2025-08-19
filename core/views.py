@@ -16,7 +16,7 @@ from io import BytesIO
 from django.db import transaction
 from django.core.files.base import ContentFile
 from django import forms
-from datetime import timedelta, datetime
+from datetime import timedelta, datetime, time
 from collections import defaultdict
 from django.contrib.auth import logout
 from collections import OrderedDict
@@ -27,10 +27,10 @@ import re # Importar el módulo de expresiones regulares
 from .models import (
     Company, Installation, OperatorProfile, ShiftType, OperatorShift,
     ChecklistItem, ChecklistLog, VirtualRoundLog, UpdateLog, Email, EmergencyContact,
-    TurnReport, MonitoredService, ServiceStatusLog, TraceabilityLog
+    TurnReport, MonitoredService, ServiceStatusLog, TraceabilityLog, ShiftNote
 )
 from .forms import (
-    UpdateLogForm, OperatorCreationForm,
+    UpdateLogForm, OperatorCreationForm, ShiftNoteForm,
     OperatorChangeForm, CompanyForm, InstallationForm, ChecklistItemForm, EmergencyContactForm,
     MonitoredServiceForm, ShiftTypeForm, OperatorShiftForm, VirtualRoundCompletionForm, UpdateLogEditForm
 )
@@ -567,9 +567,14 @@ def start_shift(request):
 @login_required
 def operator_dashboard(request):
     active_shift = get_active_shift(request.user)
+    active_notes = ShiftNote.objects.filter(is_active=True)
     
     # Preparamos un contexto base
-    context = {'active_shift': active_shift}
+    context = {
+        'active_shift': active_shift,
+        'active_notes': active_notes,
+        }
+    
 
     # Si el turno ya ha sido iniciado, calculamos todo el progreso y las tareas.
     if active_shift and active_shift.actual_start_time:
@@ -1446,3 +1451,63 @@ def update_checklist_order(request):
             return JsonResponse({'status': 'error', 'message': str(e)}, status=400)
     
     return JsonResponse({'status': 'error', 'message': 'Método no permitido'}, status=405)
+
+@login_required
+def full_logbook_view(request):
+    """
+    Muestra la bitácora completa de las últimas 24 horas (ciclo de 08:30 a 08:30)
+    y permite crear notas para el siguiente turno.
+    """
+    now = timezone.now()
+    end_time_log = now.replace(hour=8, minute=30, second=0, microsecond=0)
+    if now.time() < time(8, 30):
+        # Si es antes de las 8:30 AM, el ciclo terminó esta mañana
+        pass
+    else:
+        # Si es después de las 8:30 AM, el ciclo termina mañana
+        end_time_log += timedelta(days=1)
+    
+    start_time_log = end_time_log - timedelta(days=1)
+
+    # Filtrar logs y ordenarlos
+    logs = UpdateLog.objects.filter(
+        created_at__range=(start_time_log, end_time_log)
+    ).select_related('operator_shift__shift_type', 'operator_shift__operator', 'installation__company').order_by('created_at')
+
+    # Agrupar por turno
+    logs_by_shift = defaultdict(list)
+    for log in logs:
+        shift_name = log.operator_shift.shift_type.name
+        logs_by_shift[shift_name].append(log)
+
+    # Formulario para crear una nueva nota
+    if request.method == 'POST':
+        form = ShiftNoteForm(request.POST)
+        if form.is_valid():
+            note = form.save(commit=False)
+            note.created_by = request.user
+            note.save()
+            messages.success(request, "Nota para el próximo turno guardada con éxito.")
+            return redirect('full_logbook_view')
+    else:
+        form = ShiftNoteForm()
+
+    context = {
+        'start_time_log': start_time_log,
+        'end_time_log': end_time_log,
+        'logs_by_shift': dict(logs_by_shift),
+        'form': form
+    }
+    return render(request, 'full_logbook.html', context)
+
+@login_required
+def dismiss_shift_note(request, note_id):
+    """
+    Marca una nota de turno como inactiva (leída/descartada).
+    """
+    if request.method == 'POST':
+        note = get_object_or_404(ShiftNote, id=note_id)
+        note.is_active = False
+        note.save()
+        messages.info(request, "Nota marcada como leída.")
+    return redirect('operator_dashboard')

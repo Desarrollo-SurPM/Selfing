@@ -74,6 +74,10 @@ urlpatterns = [
     path('round/finish/<int:round_id>/', views.finish_virtual_round, name='finish_virtual_round'),
     path('round/finish/', views.finish_virtual_round, name='finish_virtual_round'),
 
+     # --- 👇 NUEVAS RUTAS PARA RELEVO DE TURNO 👇 ---
+    path('bitacora-24h/', views.full_logbook_view, name='full_logbook_view'),
+    path('notas-turno/descartar/<int:note_id>/', views.dismiss_shift_note, name='dismiss_shift_note'),
+
  # --- 👇 NUEVAS RUTAS PARA CONTACTOS DE EMERGENCIA 👇 ---
     path('dashboard/emergency-contacts/', views.manage_emergency_contacts, name='manage_emergency_contacts'),
     path('dashboard/emergency-contacts/add/', views.create_emergency_contact, name='create_emergency_contact'),
