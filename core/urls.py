@@ -63,6 +63,10 @@ urlpatterns = [
     path('turn/sign/<int:report_id>/', views.sign_turn_report, name='sign_turn_report'),
 
     path('shift/start/', views.start_shift, name='start_shift'),
+
+     # --- Ruta para el operador ---
+    path('panic-button/', views.panic_button_view, name='panic_button'),
+
     # Dentro de urlpatterns, junto a las otras rutas de gestión de turnos:
     path('dashboard/shift-calendar/', views.shift_calendar_view, name='shift_calendar'),
     # Rondas Virtuales
@@ -70,6 +74,11 @@ urlpatterns = [
     path('round/finish/<int:round_id>/', views.finish_virtual_round, name='finish_virtual_round'),
     path('round/finish/', views.finish_virtual_round, name='finish_virtual_round'),
 
+ # --- 👇 NUEVAS RUTAS PARA CONTACTOS DE EMERGENCIA 👇 ---
+    path('dashboard/emergency-contacts/', views.manage_emergency_contacts, name='manage_emergency_contacts'),
+    path('dashboard/emergency-contacts/add/', views.create_emergency_contact, name='create_emergency_contact'),
+    path('dashboard/emergency-contacts/edit/<int:contact_id>/', views.edit_emergency_contact, name='edit_emergency_contact'),
+    path('dashboard/emergency-contacts/delete/<int:contact_id>/', views.delete_emergency_contact, name='delete_emergency_contact'),
     # Alarma
     path('api/check_alarms/', views.check_pending_alarms, name='check_pending_alarms'),
 

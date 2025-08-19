@@ -4,7 +4,7 @@ from django.contrib.auth.models import User
 # Importación consolidada de todos los modelos necesarios
 from .models import (
     UpdateLog, ChecklistItem, Company, Installation, MonitoredService,
-    ShiftType, OperatorShift, VirtualRoundLog
+    ShiftType, OperatorShift, VirtualRoundLog, EmergencyContact
 )
 
 # --- Formularios de Registros del Operador ---
@@ -35,6 +35,7 @@ class UpdateLogEditForm(forms.ModelForm):
             'message': 'Corregir Novedad',
         }
 # --- 👆 FIN DE NUEVO FORMULARIO 👆 ---
+
 
 
 class VirtualRoundCompletionForm(forms.ModelForm):
@@ -190,4 +191,15 @@ class OperatorShiftForm(forms.ModelForm):
         }
         widgets = {
             'date': forms.DateInput(attrs={'type': 'date'}),
+        }
+
+class EmergencyContactForm(forms.ModelForm):
+    class Meta:
+        model = EmergencyContact
+        fields = ['name', 'phone_number', 'company', 'installation']
+        labels = {
+            'name': 'Nombre del Contacto',
+            'phone_number': 'Número de Teléfono',
+            'company': 'Empresa Asociada (Opcional)',
+            'installation': 'Instalación Específica (Opcional)',
         }

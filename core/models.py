@@ -228,3 +228,37 @@ class TurnReport(models.Model):
     signed_at = models.DateTimeField(null=True, blank=True)
     def __str__(self):
         return f"Reporte de {self.operator.username} - {self.end_time.strftime('%Y-%m-%d %H:%M')}"
+    
+class EmergencyContact(models.Model):
+    name = models.CharField(max_length=100, verbose_name="Nombre del Contacto (Ej: Ambulancia, Bomberos, Supervisor)")
+    phone_number = models.CharField(max_length=20, verbose_name="Número de Teléfono")
+    
+    company = models.ForeignKey(
+        Company, 
+        on_delete=models.CASCADE, 
+        related_name='emergency_contacts',
+        null=True, 
+        blank=True,
+        help_text="Dejar en blanco si es un contacto general (Ej: Ambulancia)."
+    )
+    installation = models.ForeignKey(
+        Installation, 
+        on_delete=models.CASCADE, 
+        related_name='emergency_contacts',
+        null=True, 
+        blank=True,
+        help_text="Opcional: especificar si este contacto es solo para una instalación."
+    )
+
+    class Meta:
+        ordering = ['company__name', 'installation__name', 'name']
+        verbose_name = "Contacto de Emergencia"
+        verbose_name_plural = "Contactos de Emergencia"
+
+    def __str__(self):
+        if self.installation:
+            return f"{self.name} - {self.installation.name}"
+        if self.company:
+            return f"{self.name} - {self.company.name}"
+        return f"{self.name} (General)"
+

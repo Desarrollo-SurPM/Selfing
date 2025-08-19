@@ -17,6 +17,7 @@ from django.db import transaction
 from django.core.files.base import ContentFile
 from django import forms
 from datetime import timedelta, datetime
+from collections import defaultdict
 from django.contrib.auth import logout
 from collections import OrderedDict
 import json
@@ -25,12 +26,12 @@ import re # Importar el módulo de expresiones regulares
 
 from .models import (
     Company, Installation, OperatorProfile, ShiftType, OperatorShift,
-    ChecklistItem, ChecklistLog, VirtualRoundLog, UpdateLog, Email,
+    ChecklistItem, ChecklistLog, VirtualRoundLog, UpdateLog, Email, EmergencyContact,
     TurnReport, MonitoredService, ServiceStatusLog, TraceabilityLog
 )
 from .forms import (
     UpdateLogForm, OperatorCreationForm,
-    OperatorChangeForm, CompanyForm, InstallationForm, ChecklistItemForm,
+    OperatorChangeForm, CompanyForm, InstallationForm, ChecklistItemForm, EmergencyContactForm,
     MonitoredServiceForm, ShiftTypeForm, OperatorShiftForm, VirtualRoundCompletionForm, UpdateLogEditForm
 )
 
@@ -1354,6 +1355,75 @@ def check_pending_alarms(request):
                 overdue_tasks.append({'description': item.description})
 
     return JsonResponse({'overdue_tasks': overdue_tasks})
+
+# --- VISTAS DE CONTACTOS DE EMERGENCIA ---
+
+@login_required
+@user_passes_test(is_supervisor)
+def manage_emergency_contacts(request):
+    contacts = EmergencyContact.objects.select_related('company', 'installation').all()
+    return render(request, 'manage_emergency_contacts.html', {'contacts': contacts})
+
+@login_required
+@user_passes_test(is_supervisor)
+def create_emergency_contact(request):
+    if request.method == 'POST':
+        form = EmergencyContactForm(request.POST)
+        if form.is_valid():
+            form.save()
+            messages.success(request, "Contacto de emergencia creado con éxito.")
+            return redirect('manage_emergency_contacts')
+    else:
+        form = EmergencyContactForm()
+    return render(request, 'emergency_contact_form.html', {'form': form, 'title': 'Añadir Contacto de Emergencia'})
+
+@login_required
+@user_passes_test(is_supervisor)
+def edit_emergency_contact(request, contact_id):
+    contact = get_object_or_404(EmergencyContact, id=contact_id)
+    if request.method == 'POST':
+        form = EmergencyContactForm(request.POST, instance=contact)
+        if form.is_valid():
+            form.save()
+            messages.success(request, "Contacto de emergencia actualizado con éxito.")
+            return redirect('manage_emergency_contacts')
+    else:
+        form = EmergencyContactForm(instance=contact)
+    return render(request, 'emergency_contact_form.html', {'form': form, 'title': 'Editar Contacto de Emergencia'})
+
+@login_required
+@user_passes_test(is_supervisor)
+def delete_emergency_contact(request, contact_id):
+    contact = get_object_or_404(EmergencyContact, id=contact_id)
+    if request.method == 'POST':
+        contact.delete()
+        messages.success(request, "Contacto de emergencia eliminado.")
+        return redirect('manage_emergency_contacts')
+    return render(request, 'emergency_contact_confirm_delete.html', {'contact': contact})
+
+@login_required
+def panic_button_view(request):
+    # Agrupamos los contactos para una visualización clara
+    contacts_by_company = defaultdict(lambda: defaultdict(list))
+    general_contacts = []
+
+    # Obtenemos todos los contactos y los pre-cargamos para eficiencia
+    all_contacts = EmergencyContact.objects.select_related('company', 'installation').all()
+
+    for contact in all_contacts:
+        if not contact.company and not contact.installation:
+            general_contacts.append(contact)
+        elif contact.company and not contact.installation:
+            contacts_by_company[contact.company.name]['company_contacts'].append(contact)
+        elif contact.installation:
+            company_name = contact.installation.company.name
+            contacts_by_company[company_name][contact.installation.name].append(contact)
+
+    context = {
+        'general_contacts': general_contacts,
+        'contacts_by_company': dict(contacts_by_company)
+    }
+    return render(request, 'panic_button.html', context)
 
 @csrf_exempt # Deshabilitamos CSRF para esta vista AJAX
 @login_required
