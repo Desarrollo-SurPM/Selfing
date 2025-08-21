@@ -38,7 +38,7 @@ urlpatterns = [
     path('dashboard/monitored-services/delete/<int:service_id>/', views.delete_monitored_service, name='delete_monitored_service'),
 
     # Gestión de Reportes y Correos
-    path('email/review/<int:email_id>/', views.review_and_approve_email, name='review_email'),
+    #path('email/review/<int:email_id>/', views.review_and_approve_email, name='review_email'),
     path('dashboard/turn-reports/', views.view_turn_reports, name='view_turn_reports'),
     
     # --- Rutas de Gestión de Turnos (Fase 1) ---
@@ -53,14 +53,20 @@ urlpatterns = [
     path('dashboard/shifts/delete/<int:shift_id>/', views.delete_assigned_shift, name='delete_assigned_shift'),
 
     # --- Rutas de Operador ---
+    path('dashboard/review-and-send/', views.review_and_send_novedades, name='review_and_send_novedades'),
     path('dashboard/operator/', views.operator_dashboard, name='operator_dashboard'),
     path('checklist/', views.checklist_view, name='checklist'),
     path('update-log/', views.update_log_view, name='update_log'),
-    path('email/new/', views.email_form_view, name='email_form'),
+    path('update-log/edit/<int:log_id>/', views.edit_update_log, name='edit_update_log'),
+    #path('email/new/', views.email_form_view, name='email_form'),
     path('turn/end/', views.end_turn_preview, name='end_turn_preview'),
     path('turn/sign/<int:report_id>/', views.sign_turn_report, name='sign_turn_report'),
 
     path('shift/start/', views.start_shift, name='start_shift'),
+
+     # --- Ruta para el operador ---
+    path('panic-button/', views.panic_button_view, name='panic_button'),
+
     # Dentro de urlpatterns, junto a las otras rutas de gestión de turnos:
     path('dashboard/shift-calendar/', views.shift_calendar_view, name='shift_calendar'),
     # Rondas Virtuales
@@ -68,6 +74,15 @@ urlpatterns = [
     path('round/finish/<int:round_id>/', views.finish_virtual_round, name='finish_virtual_round'),
     path('round/finish/', views.finish_virtual_round, name='finish_virtual_round'),
 
+     # --- 👇 NUEVAS RUTAS PARA RELEVO DE TURNO 👇 ---
+    path('bitacora-24h/', views.full_logbook_view, name='full_logbook_view'),
+    path('notas-turno/descartar/<int:note_id>/', views.dismiss_shift_note, name='dismiss_shift_note'),
+
+ # --- 👇 NUEVAS RUTAS PARA CONTACTOS DE EMERGENCIA 👇 ---
+    path('dashboard/emergency-contacts/', views.manage_emergency_contacts, name='manage_emergency_contacts'),
+    path('dashboard/emergency-contacts/add/', views.create_emergency_contact, name='create_emergency_contact'),
+    path('dashboard/emergency-contacts/edit/<int:contact_id>/', views.edit_emergency_contact, name='edit_emergency_contact'),
+    path('dashboard/emergency-contacts/delete/<int:contact_id>/', views.delete_emergency_contact, name='delete_emergency_contact'),
     # Alarma
     path('api/check_alarms/', views.check_pending_alarms, name='check_pending_alarms'),
 

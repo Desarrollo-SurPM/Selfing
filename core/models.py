@@ -143,31 +143,51 @@ class VirtualRoundLog(models.Model):
     def __str__(self):
         return f"Ronda de {self.operator_shift.operator.username} - iniciada a las {self.start_time.strftime('%H:%M')}"
 
-# --- 👇 CAMBIO #3 👇 ---
 class UpdateLog(models.Model):
-    # Se asocia a un turno específico.
     operator_shift = models.ForeignKey(OperatorShift, on_delete=models.CASCADE, related_name='update_logs')
     installation = models.ForeignKey(Installation, on_delete=models.CASCADE)
     message = models.TextField()
     created_at = models.DateTimeField(auto_now_add=True)
+    
+    # --- CAMPO AÑADIDO ---
+    # Para saber si esta novedad ya fue incluida en un correo.
+    is_sent = models.BooleanField(default=False, verbose_name="¿Enviado en reporte?")
+
+    # --- 👇 NUEVOS CAMPOS PARA SPRINT 1 👇 ---
+    manual_timestamp = models.TimeField(
+        null=True, 
+        blank=True, 
+        verbose_name="Hora Manual del Evento"
+    )
+    is_edited = models.BooleanField(
+        default=False, 
+        verbose_name="¿Ha sido editado?"
+    )
+    original_message = models.TextField(
+        blank=True, 
+        null=True, 
+        verbose_name="Mensaje Original"
+    )
+    edited_at = models.DateTimeField(
+        null=True, 
+        blank=True, 
+        verbose_name="Fecha de Edición"
+    )
+    # --- 👆 FIN DE NUEVOS CAMPOS 👆 ---
+
     def __str__(self):
         return f"Novedad para {self.installation.name} por {self.operator_shift.operator.username}"
 
 
-# --- (El resto de los modelos no tienen cambios) ---
 class Email(models.Model):
-    STATUS_CHOICES = [('draft', 'Borrador'), ('pending', 'Pendiente de Aprobación'), ('approved', 'Aprobado'), ('sent', 'Enviado')]
     operator = models.ForeignKey(User, on_delete=models.CASCADE, related_name='emails_sent')
     company = models.ForeignKey(Company, on_delete=models.CASCADE, related_name='emails_received')
     updates = models.ManyToManyField(UpdateLog) 
     observations = models.TextField(blank=True, null=True)
-    status = models.CharField(max_length=10, choices=STATUS_CHOICES, default='draft')
+    status = models.CharField(max_length=10, choices=[('sent', 'Enviado')], default='sent')
     created_at = models.DateTimeField(auto_now_add=True)
-    approved_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='approved_emails')
-    approved_at = models.DateTimeField(null=True, blank=True)
     def __str__(self):
         return f"Correo para {self.company.name} - {self.status}"
-
 class TraceabilityLog(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE)
     action = models.CharField(max_length=255)
@@ -208,3 +228,50 @@ class TurnReport(models.Model):
     signed_at = models.DateTimeField(null=True, blank=True)
     def __str__(self):
         return f"Reporte de {self.operator.username} - {self.end_time.strftime('%Y-%m-%d %H:%M')}"
+    
+class EmergencyContact(models.Model):
+    name = models.CharField(max_length=100, verbose_name="Nombre del Contacto (Ej: Ambulancia, Bomberos, Supervisor)")
+    phone_number = models.CharField(max_length=20, verbose_name="Número de Teléfono")
+    
+    company = models.ForeignKey(
+        Company, 
+        on_delete=models.CASCADE, 
+        related_name='emergency_contacts',
+        null=True, 
+        blank=True,
+        help_text="Dejar en blanco si es un contacto general (Ej: Ambulancia)."
+    )
+    installation = models.ForeignKey(
+        Installation, 
+        on_delete=models.CASCADE, 
+        related_name='emergency_contacts',
+        null=True, 
+        blank=True,
+        help_text="Opcional: especificar si este contacto es solo para una instalación."
+    )
+
+    class Meta:
+        ordering = ['company__name', 'installation__name', 'name']
+        verbose_name = "Contacto de Emergencia"
+        verbose_name_plural = "Contactos de Emergencia"
+
+    def __str__(self):
+        if self.installation:
+            return f"{self.name} - {self.installation.name}"
+        if self.company:
+            return f"{self.name} - {self.company.name}"
+        return f"{self.name} (General)"
+
+class ShiftNote(models.Model):
+    message = models.TextField(verbose_name="Mensaje de la Nota")
+    created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, related_name="created_shift_notes")
+    created_at = models.DateTimeField(auto_now_add=True)
+    is_active = models.BooleanField(default=True, verbose_name="¿Está activa?")
+
+    class Meta:
+        ordering = ['-created_at']
+        verbose_name = "Nota de Turno"
+        verbose_name_plural = "Notas de Turno"
+
+    def __str__(self):
+        return f"Nota de {self.created_by.username} el {self.created_at.strftime('%d/%m/%Y')}"

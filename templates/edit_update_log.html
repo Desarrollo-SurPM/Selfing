@@ -1,0 +1,40 @@
+{% extends 'base.html' %}
+{% load crispy_forms_tags %}
+
+{% block title %}Editar Novedad de Bitácora{% endblock %}
+
+{% block content %}
+<div class="container">
+    <div class="row justify-content-center">
+        <div class="col-lg-8">
+            <div class="card shadow-sm">
+                <div class="card-header">
+                    <h2 class="h4 mb-0">Editar Novedad</h2>
+                </div>
+                <div class="card-body">
+                    <p class="text-muted">
+                        {# --- 👇 CORRECCIÓN DE FORMATO DE FECHA AQUÍ 👇 --- #}
+                        Estás editando la novedad para la instalación <strong>{{ log_entry.installation.name }}</strong>
+                        creada el {{ log_entry.created_at|date:"d/m/Y \a \l\a\s H:i" }}.
+                    </p>
+                    
+                    {% if log_entry.is_edited %}
+                    <div class="alert alert-warning">
+                        <strong>Mensaje Original:</strong> "{{ log_entry.original_message }}"
+                    </div>
+                    {% endif %}
+
+                    <form method="post">
+                        {% csrf_token %}
+                        {{ form|crispy }}
+                        <div class="d-flex justify-content-end mt-4">
+                            <a href="{% url 'my_logbook' %}" class="btn btn-secondary me-2">Cancelar</a>
+                            <button type="submit" class="btn btn-primary">Guardar Cambios</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

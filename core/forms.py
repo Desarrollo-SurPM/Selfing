@@ -3,8 +3,8 @@ from django.contrib.auth.forms import UserCreationForm
 from django.contrib.auth.models import User
 # Importación consolidada de todos los modelos necesarios
 from .models import (
-    UpdateLog, Email, ChecklistItem, Company, Installation, MonitoredService,
-    ShiftType, OperatorShift, VirtualRoundLog
+    UpdateLog, ChecklistItem, Company, Installation, MonitoredService,
+    ShiftType, OperatorShift, VirtualRoundLog, EmergencyContact, ShiftNote
 )
 
 # --- Formularios de Registros del Operador ---
@@ -12,35 +12,31 @@ from .models import (
 class UpdateLogForm(forms.ModelForm):
     class Meta:
         model = UpdateLog
-        fields = ['installation', 'message']
+        fields = ['installation', 'message', 'manual_timestamp']
         widgets = {
             'installation': forms.HiddenInput(),
             'message': forms.Textarea(attrs={'rows': 4, 'placeholder': 'Describa la novedad...'}),
+            # Añadimos un widget para que el input sea de tipo datetime-local
+            'manual_timestamp': forms.TimeInput(attrs={'type': 'time'}, format='%H:%M'),
+        }
+        labels = {
+            'manual_timestamp': 'Hora y Fecha del Evento (Opcional)',
         }
 
-class EmailForm(forms.ModelForm):
-    def __init__(self, *args, **kwargs):
-        super(EmailForm, self).__init__(*args, **kwargs)
-        self.fields['updates'].label = "Novedades a Incluir"
-        # Lógica para que la validación funcione con checkboxes dinámicos
-        if self.data:
-            try:
-                company_id = int(self.data.get('company'))
-                self.fields['updates'].queryset = UpdateLog.objects.filter(
-                    installation__company_id=company_id
-                )
-            except (ValueError, TypeError):
-                self.fields['updates'].queryset = UpdateLog.objects.none()
-        else:
-            self.fields['updates'].queryset = UpdateLog.objects.none()
-
+# --- 👇 NUEVO FORMULARIO PARA EDICIÓN 👇 ---
+class UpdateLogEditForm(forms.ModelForm):
     class Meta:
-        model = Email
-        fields = ['company', 'updates', 'observations']
+        model = UpdateLog
+        fields = ['message']
         widgets = {
-            'updates': forms.CheckboxSelectMultiple,
-            'observations': forms.Textarea(attrs={'rows': 5, 'placeholder': 'Añada observaciones adicionales aquí...'}),
+            'message': forms.Textarea(attrs={'rows': 4}),
         }
+        labels = {
+            'message': 'Corregir Novedad',
+        }
+# --- 👆 FIN DE NUEVO FORMULARIO 👆 ---
+
+
 
 class VirtualRoundCompletionForm(forms.ModelForm):
     checked_installations = forms.ModelMultipleChoiceField(
@@ -55,11 +51,6 @@ class VirtualRoundCompletionForm(forms.ModelForm):
 
 # --- Formularios de Gestión del Administrador ---
 
-class EmailApprovalForm(forms.ModelForm):
-    class Meta:
-        model = Email
-        fields = ['observations']
-        widgets = {'observations': forms.Textarea(attrs={'rows': 10})}
 
 class OperatorCreationForm(UserCreationForm):
     class Meta(UserCreationForm.Meta):
@@ -147,6 +138,15 @@ class ChecklistItemForm(forms.ModelForm):
             
         return instance
 
+class OperatorObservationForm(forms.Form):
+    """
+    Nuevo formulario simple para que el operador añada una observación final.
+    """
+    observacion_final = forms.CharField(
+        widget=forms.Textarea(attrs={'rows': 4, 'placeholder': 'Añada una observación general de su turno...'}),
+        required=False,
+        label="Observación Final del Turno"
+    )
 
 class MonitoredServiceForm(forms.ModelForm):
     class Meta:
@@ -191,4 +191,25 @@ class OperatorShiftForm(forms.ModelForm):
         }
         widgets = {
             'date': forms.DateInput(attrs={'type': 'date'}),
+        }
+
+class ShiftNoteForm(forms.ModelForm):
+    class Meta:
+        model = ShiftNote
+        fields = ['message']
+        widgets = {
+            'message': forms.Textarea(attrs={'rows': 3, 'placeholder': 'Escribe aquí una nota, pendiente o instrucción para el próximo turno...'}),
+        }
+        labels = {
+            'message': 'Nueva Nota para el Siguiente Turno'
+        }
+class EmergencyContactForm(forms.ModelForm):
+    class Meta:
+        model = EmergencyContact
+        fields = ['name', 'phone_number', 'company', 'installation']
+        labels = {
+            'name': 'Nombre del Contacto',
+            'phone_number': 'Número de Teléfono',
+            'company': 'Empresa Asociada (Opcional)',
+            'installation': 'Instalación Específica (Opcional)',
         }

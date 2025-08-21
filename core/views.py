@@ -7,14 +7,17 @@ from django.utils import timezone
 from django.http import JsonResponse, HttpResponse
 from django.template.loader import get_template
 from xhtml2pdf import pisa
-from django.db.models import Q
+from django.core.mail import send_mail
+from django.template.loader import render_to_string
+from django.db.models import Q, Count
 from collections import defaultdict
 from django.contrib import messages
 from io import BytesIO
 from django.db import transaction
 from django.core.files.base import ContentFile
 from django import forms
-from datetime import timedelta, datetime
+from datetime import timedelta, datetime, time
+from collections import defaultdict
 from django.contrib.auth import logout
 from collections import OrderedDict
 import json
@@ -23,13 +26,13 @@ import re # Importar el módulo de expresiones regulares
 
 from .models import (
     Company, Installation, OperatorProfile, ShiftType, OperatorShift,
-    ChecklistItem, ChecklistLog, VirtualRoundLog, UpdateLog, Email,
-    TurnReport, MonitoredService, ServiceStatusLog, TraceabilityLog
+    ChecklistItem, ChecklistLog, VirtualRoundLog, UpdateLog, Email, EmergencyContact,
+    TurnReport, MonitoredService, ServiceStatusLog, TraceabilityLog, ShiftNote
 )
 from .forms import (
-    UpdateLogForm, EmailForm, EmailApprovalForm, OperatorCreationForm,
-    OperatorChangeForm, CompanyForm, InstallationForm, ChecklistItemForm,
-    MonitoredServiceForm, ShiftTypeForm, OperatorShiftForm, VirtualRoundCompletionForm
+    UpdateLogForm, OperatorCreationForm, ShiftNoteForm,
+    OperatorChangeForm, CompanyForm, InstallationForm, ChecklistItemForm, EmergencyContactForm,
+    MonitoredServiceForm, ShiftTypeForm, OperatorShiftForm, VirtualRoundCompletionForm, UpdateLogEditForm
 )
 
 def is_supervisor(user):
@@ -52,35 +55,107 @@ def home(request):
 def admin_dashboard(request):
     today = timezone.now().date()
     
-    # --- CAMBIO AQUÍ ---
-    # Contamos los turnos de hoy que han iniciado pero no han terminado.
     operadores_en_turno = OperatorShift.objects.filter(
         date=today,
         actual_start_time__isnull=False,
         actual_end_time__isnull=True
     ).count()
-    # --- FIN DEL CAMBIO ---
 
     novedades_hoy = UpdateLog.objects.filter(created_at__date=today).count()
-    correos_pendientes_count = Email.objects.filter(status='pending').count()
+    
+    # --- CAMBIO: Se reemplaza correos pendientes por reportes finalizados ---
+    reportes_finalizados_count = TurnReport.objects.filter(is_signed=True, signed_at__date=today).count()
+    
     servicios_monitoreados_activos = MonitoredService.objects.filter(is_active=True).count()
     traceability_logs = TraceabilityLog.objects.select_related('user').all().order_by('-timestamp')[:6]
     reports = UpdateLog.objects.filter(created_at__date=today).select_related(
         'operator_shift__operator', 'installation__company'
     ).order_by('-created_at')
-    pending_emails = Email.objects.filter(status='pending').select_related('company', 'operator').order_by('-created_at')
 
     context = {
         'novedades_hoy': novedades_hoy,
-        'correos_pendientes_count': correos_pendientes_count,
-        # Pasamos la nueva variable al contexto
+        'reportes_finalizados_count': reportes_finalizados_count, # Nuevo dato para la plantilla
         'operadores_en_turno': operadores_en_turno,
         'servicios_monitoreados_activos': servicios_monitoreados_activos,
         'reports': reports,
-        'pending_emails': pending_emails,
         'traceability_logs': traceability_logs,
     }
     return render(request, 'admin_dashboard.html', context)
+
+@login_required
+@user_passes_test(is_supervisor)
+def review_and_send_novedades(request):
+    company_id = request.GET.get('company_id')
+    selected_company = None
+    novedades_pendientes = None
+
+    if request.method == 'POST':
+        selected_ids = request.POST.getlist('updates_to_send')
+        observations = request.POST.get('observations', '')
+        company_id_form = request.POST.get('company_id')
+
+        if not selected_ids:
+            messages.warning(request, "Debe seleccionar al menos una novedad para enviar.")
+            return redirect(f"{request.path_info}?company_id={company_id_form}")
+
+        company = get_object_or_404(Company, id=company_id_form)
+        updates = UpdateLog.objects.filter(id__in=selected_ids).order_by('installation__name', 'created_at')
+
+        if company.email:
+            try:
+                email_context = {
+                    'company': company,
+                    'updates': updates,
+                    'observations': observations,
+                    'enviado_por': request.user,
+                }
+                html_message = render_to_string('emails/reporte_novedades.html', email_context)
+                
+                send_mail(
+                    subject=f"Reporte de Novedades - {company.name} - {timezone.now().strftime('%d/%m/%Y')}",
+                    message="",
+                    from_email=None,
+                    recipient_list=[company.email],
+                    fail_silently=False,
+                    html_message=html_message
+                )
+                
+                updates.update(is_sent=True)
+                TraceabilityLog.objects.create(user=request.user, action=f"Envió correo de novedades a {company.name}.")
+                messages.success(request, f"Correo enviado correctamente a {company.name}.")
+
+            except Exception as e:
+                messages.error(request, f"Error al enviar el correo: {e}")
+                return redirect(f"{request.path_info}?company_id={company_id_form}")
+        else:
+            messages.warning(request, f"La empresa {company.name} no tiene un correo configurado.")
+
+        return redirect('review_and_send_novedades')
+
+    # --- LÓGICA GET (CUANDO SE CARGA LA PÁGINA) ---
+    if company_id:
+        selected_company = get_object_or_404(Company, id=company_id)
+        novedades_pendientes = UpdateLog.objects.filter(
+            installation__company=selected_company, is_sent=False
+        ).exclude(
+            operator_shift__shift_type__name__iexact='Turno Mañana'
+        ).select_related('operator_shift__operator', 'installation').order_by('installation__name', '-created_at')
+
+    companies_with_pending_updates = Company.objects.filter(
+        installations__updatelog__is_sent=False
+    ).exclude(
+        installations__updatelog__operator_shift__shift_type__name__iexact='Turno Mañana'
+    ).annotate(
+        pending_count=Count('installations__updatelog', filter=Q(installations__updatelog__is_sent=False))
+    ).filter(pending_count__gt=0).distinct()
+
+    context = {
+        'companies': companies_with_pending_updates,
+        'selected_company': selected_company,
+        'novedades_pendientes': novedades_pendientes
+    }
+    # --- LA LÍNEA QUE FALTABA Y SOLUCIONA EL ERROR ---
+    return render(request, 'review_and_send.html', context)
 
 @login_required
 @user_passes_test(is_supervisor)
@@ -263,19 +338,6 @@ def delete_monitored_service(request, service_id):
     if request.method == 'POST': service.delete(); return redirect('manage_monitored_services')
     return render(request, 'monitored_service_confirm_delete.html', {'service': service})
 
-@login_required
-@user_passes_test(is_supervisor)
-def review_and_approve_email(request, email_id):
-    email = get_object_or_404(Email, id=email_id)
-    if request.method == 'POST':
-        form = EmailApprovalForm(request.POST, instance=email)
-        if form.is_valid():
-            form.save(); email.status = 'approved'; email.approved_by = request.user; email.approved_at = timezone.now()
-            email.save(update_fields=['status', 'approved_by', 'approved_at'])
-            TraceabilityLog.objects.create(user=request.user, action=f"Revisó y aprobó correo para {email.company.name}")
-            return redirect('admin_dashboard')
-    else: form = EmailApprovalForm(instance=email)
-    return render(request, 'review_email.html', {'email': email, 'form': form, 'updates_list': email.updates.all()})
 
 @login_required
 @user_passes_test(is_supervisor)
@@ -505,9 +567,14 @@ def start_shift(request):
 @login_required
 def operator_dashboard(request):
     active_shift = get_active_shift(request.user)
+    active_notes = ShiftNote.objects.filter(is_active=True)
     
     # Preparamos un contexto base
-    context = {'active_shift': active_shift}
+    context = {
+        'active_shift': active_shift,
+        'active_notes': active_notes,
+        }
+    
 
     # Si el turno ya ha sido iniciado, calculamos todo el progreso y las tareas.
     if active_shift and active_shift.actual_start_time:
@@ -758,7 +825,38 @@ def get_applicable_checklist_items(active_shift):
     
     return render(request, 'operator_dashboard.html', context)
 
+@login_required
+def edit_update_log(request, log_id):
+    # Obtenemos el log y nos aseguramos de que pertenezca al usuario actual para seguridad.
+    log_entry = get_object_or_404(UpdateLog, id=log_id, operator_shift__operator=request.user)
+    
+    # Si la entrada ya fue editada, guardamos el mensaje original. Si no, lo hacemos ahora.
+    if not log_entry.is_edited:
+        log_entry.original_message = log_entry.message
 
+    if request.method == 'POST':
+        form = UpdateLogEditForm(request.POST, instance=log_entry)
+        if form.is_valid():
+            log_entry.is_edited = True
+            log_entry.edited_at = timezone.now()
+            form.save()
+            
+            # Registro de trazabilidad
+            TraceabilityLog.objects.create(
+                user=request.user, 
+                action=f"Editó una entrada de la bitácora para la instalación '{log_entry.installation.name}'."
+            )
+            
+            messages.success(request, 'La novedad ha sido actualizada correctamente.')
+            return redirect('my_logbook')
+    else:
+        form = UpdateLogEditForm(instance=log_entry)
+
+    context = {
+        'form': form,
+        'log_entry': log_entry
+    }
+    return render(request, 'edit_update_log.html', context)
 
 @login_required
 def update_log_view(request):
@@ -923,18 +1021,6 @@ def checklist_view(request):
     return render(request, 'checklist.html', context)
 
 
-@login_required
-def email_form_view(request):
-    if not get_active_shift(request.user): return redirect('operator_dashboard')
-    if request.method == 'POST':
-        form = EmailForm(request.POST)
-        if form.is_valid():
-            email = form.save(commit=False); email.operator = request.user; email.status = 'pending'; email.save()
-            form.save_m2m()
-            TraceabilityLog.objects.create(user=request.user, action=f"Generó borrador de correo para {email.company.name}")
-            return redirect('operator_dashboard')
-    else: form = EmailForm()
-    return render(request, 'email_form.html', {'form': form})
 
 # Flujo de Rondas Virtuales
 
@@ -1181,8 +1267,7 @@ def get_service_status(request):
         status_list.append({'id': s.id, 'name': s.name, 'status': latest_log.is_up if latest_log else None})
     return render(request, '_service_status_panel.html', {'service_status_list': status_list})
 
-@login_required
-def check_pending_alarms(request):
+
     """
     Vista de API que le dice al frontend si debe mostrar una alarma.
     """
@@ -1241,6 +1326,110 @@ def check_pending_alarms(request):
 
     return JsonResponse(response_data)
 
+@login_required
+def check_pending_alarms(request):
+    """
+    NUEVA LÓGICA DE ALARMAS:
+    Esta vista ahora devuelve las tareas específicas que están vencidas.
+    """
+    active_shift = get_active_shift(request.user)
+    overdue_tasks = []
+
+    if active_shift and active_shift.actual_start_time:
+        now = timezone.now()
+        
+        # 1. Obtiene solo los ítems que aplican a este turno específico.
+        applicable_items = get_applicable_checklist_items(active_shift)
+        
+        # 2. Obtiene los IDs de las tareas ya completadas en este turno.
+        completed_item_ids = ChecklistLog.objects.filter(
+            operator_shift=active_shift
+        ).values_list('item_id', flat=True)
+        
+        # 3. Filtra para quedarse solo con las tareas pendientes que tienen alarma.
+        pending_items_with_alarm = applicable_items.exclude(
+            id__in=completed_item_ids
+        ).filter(
+            alarm_trigger_delay__isnull=False
+        )
+        
+        # 4. Comprueba si alguna de las tareas pendientes está vencida.
+        for item in pending_items_with_alarm:
+            due_time = active_shift.actual_start_time + item.alarm_trigger_delay
+            if now > due_time:
+                overdue_tasks.append({'description': item.description})
+
+    return JsonResponse({'overdue_tasks': overdue_tasks})
+
+# --- VISTAS DE CONTACTOS DE EMERGENCIA ---
+
+@login_required
+@user_passes_test(is_supervisor)
+def manage_emergency_contacts(request):
+    contacts = EmergencyContact.objects.select_related('company', 'installation').all()
+    return render(request, 'manage_emergency_contacts.html', {'contacts': contacts})
+
+@login_required
+@user_passes_test(is_supervisor)
+def create_emergency_contact(request):
+    if request.method == 'POST':
+        form = EmergencyContactForm(request.POST)
+        if form.is_valid():
+            form.save()
+            messages.success(request, "Contacto de emergencia creado con éxito.")
+            return redirect('manage_emergency_contacts')
+    else:
+        form = EmergencyContactForm()
+    return render(request, 'emergency_contact_form.html', {'form': form, 'title': 'Añadir Contacto de Emergencia'})
+
+@login_required
+@user_passes_test(is_supervisor)
+def edit_emergency_contact(request, contact_id):
+    contact = get_object_or_404(EmergencyContact, id=contact_id)
+    if request.method == 'POST':
+        form = EmergencyContactForm(request.POST, instance=contact)
+        if form.is_valid():
+            form.save()
+            messages.success(request, "Contacto de emergencia actualizado con éxito.")
+            return redirect('manage_emergency_contacts')
+    else:
+        form = EmergencyContactForm(instance=contact)
+    return render(request, 'emergency_contact_form.html', {'form': form, 'title': 'Editar Contacto de Emergencia'})
+
+@login_required
+@user_passes_test(is_supervisor)
+def delete_emergency_contact(request, contact_id):
+    contact = get_object_or_404(EmergencyContact, id=contact_id)
+    if request.method == 'POST':
+        contact.delete()
+        messages.success(request, "Contacto de emergencia eliminado.")
+        return redirect('manage_emergency_contacts')
+    return render(request, 'emergency_contact_confirm_delete.html', {'contact': contact})
+
+@login_required
+def panic_button_view(request):
+    # Agrupamos los contactos para una visualización clara
+    contacts_by_company = defaultdict(lambda: defaultdict(list))
+    general_contacts = []
+
+    # Obtenemos todos los contactos y los pre-cargamos para eficiencia
+    all_contacts = EmergencyContact.objects.select_related('company', 'installation').all()
+
+    for contact in all_contacts:
+        if not contact.company and not contact.installation:
+            general_contacts.append(contact)
+        elif contact.company and not contact.installation:
+            contacts_by_company[contact.company.name]['company_contacts'].append(contact)
+        elif contact.installation:
+            company_name = contact.installation.company.name
+            contacts_by_company[company_name][contact.installation.name].append(contact)
+
+    context = {
+        'general_contacts': general_contacts,
+        'contacts_by_company': dict(contacts_by_company)
+    }
+    return render(request, 'panic_button.html', context)
+
 @csrf_exempt # Deshabilitamos CSRF para esta vista AJAX
 @login_required
 @user_passes_test(is_supervisor)
@@ -1262,3 +1451,63 @@ def update_checklist_order(request):
             return JsonResponse({'status': 'error', 'message': str(e)}, status=400)
     
     return JsonResponse({'status': 'error', 'message': 'Método no permitido'}, status=405)
+
+@login_required
+def full_logbook_view(request):
+    """
+    Muestra la bitácora completa de las últimas 24 horas (ciclo de 08:30 a 08:30)
+    y permite crear notas para el siguiente turno.
+    """
+    now = timezone.now()
+    end_time_log = now.replace(hour=8, minute=30, second=0, microsecond=0)
+    if now.time() < time(8, 30):
+        # Si es antes de las 8:30 AM, el ciclo terminó esta mañana
+        pass
+    else:
+        # Si es después de las 8:30 AM, el ciclo termina mañana
+        end_time_log += timedelta(days=1)
+    
+    start_time_log = end_time_log - timedelta(days=1)
+
+    # Filtrar logs y ordenarlos
+    logs = UpdateLog.objects.filter(
+        created_at__range=(start_time_log, end_time_log)
+    ).select_related('operator_shift__shift_type', 'operator_shift__operator', 'installation__company').order_by('created_at')
+
+    # Agrupar por turno
+    logs_by_shift = defaultdict(list)
+    for log in logs:
+        shift_name = log.operator_shift.shift_type.name
+        logs_by_shift[shift_name].append(log)
+
+    # Formulario para crear una nueva nota
+    if request.method == 'POST':
+        form = ShiftNoteForm(request.POST)
+        if form.is_valid():
+            note = form.save(commit=False)
+            note.created_by = request.user
+            note.save()
+            messages.success(request, "Nota para el próximo turno guardada con éxito.")
+            return redirect('full_logbook_view')
+    else:
+        form = ShiftNoteForm()
+
+    context = {
+        'start_time_log': start_time_log,
+        'end_time_log': end_time_log,
+        'logs_by_shift': dict(logs_by_shift),
+        'form': form
+    }
+    return render(request, 'full_logbook.html', context)
+
+@login_required
+def dismiss_shift_note(request, note_id):
+    """
+    Marca una nota de turno como inactiva (leída/descartada).
+    """
+    if request.method == 'POST':
+        note = get_object_or_404(ShiftNote, id=note_id)
+        note.is_active = False
+        note.save()
+        messages.info(request, "Nota marcada como leída.")
+    return redirect('operator_dashboard')
