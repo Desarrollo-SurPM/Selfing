@@ -1,0 +1,173 @@
+/* Archivo de tema de colores personalizado */
+/* Colores principales de la nueva paleta */
+
+/* Elementos destacados con color vibrante */
+.btn-primary, .btn-primary:not(:disabled):not(.disabled):active {
+    background: linear-gradient(135deg, #6A4A8F 0%, #A953E5 100%) !important;
+    border-color: #6A4A8F !important;
+    box-shadow: 0 4px 15px rgba(169, 83, 229, 0.3) !important;
+}
+
+.btn-primary:hover {
+    background: linear-gradient(135deg, #A953E5 0%, #6A4A8F 100%) !important;
+    border-color: #A953E5 !important;
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(169, 83, 229, 0.4) !important;
+}
+
+/* Enlaces y texto destacado */
+a.text-primary, .text-primary {
+    color: #6A4A8F !important;
+}
+
+a.text-primary:hover {
+    color: #A953E5 !important;
+}
+
+/* Badges y etiquetas */
+.badge-primary {
+    background: linear-gradient(135deg, #6A4A8F 0%, #A953E5 100%) !important;
+    color: white !important;
+}
+
+/* Bordes y divisores */
+.border-primary {
+    border-color: #6A4A8F !important;
+}
+
+/* Fondos de acento */
+.bg-primary {
+    background: linear-gradient(135deg, #2B3050 0%, #6A4A8F 100%) !important;
+}
+
+/* Elementos de formulario con foco */
+.form-control:focus, .form-select:focus {
+    border-color: #6A4A8F !important;
+    box-shadow: 0 0 0 0.2rem rgba(106, 74, 143, 0.25) !important;
+}
+
+/* Checkboxes y radios personalizados */
+.form-check-input:checked {
+    background-color: #6A4A8F !important;
+    border-color: #6A4A8F !important;
+}
+
+.form-check-input:focus {
+    border-color: #A953E5 !important;
+    box-shadow: 0 0 0 0.25rem rgba(169, 83, 229, 0.25) !important;
+}
+
+/* Elementos de navegación activos */
+.nav-pills .nav-link.active {
+    background: linear-gradient(135deg, #6A4A8F 0%, #A953E5 100%) !important;
+}
+
+/* Barras de progreso */
+.progress-bar {
+    background: linear-gradient(90deg, #6A4A8F 0%, #A953E5 100%) !important;
+}
+
+/* Elementos de tabla destacados */
+.table-primary {
+    background-color: rgba(106, 74, 143, 0.1) !important;
+    border-color: rgba(106, 74, 143, 0.2) !important;
+}
+
+/* Tooltips y popovers */
+.tooltip-inner {
+    background-color: #2B3050 !important;
+}
+
+.bs-tooltip-top .tooltip-arrow::before {
+    border-top-color: #2B3050 !important;
+}
+
+.bs-tooltip-bottom .tooltip-arrow::before {
+    border-bottom-color: #2B3050 !important;
+}
+
+/* Elementos de alerta personalizados */
+.alert-primary {
+    background-color: rgba(106, 74, 143, 0.1) !important;
+    border-color: rgba(106, 74, 143, 0.2) !important;
+    color: #2B3050 !important;
+}
+
+/* Elementos de dropdown */
+.dropdown-item:active {
+    background-color: #6A4A8F !important;
+}
+
+/* Elementos de paginación */
+.page-link {
+    color: #6A4A8F !important;
+}
+
+.page-item.active .page-link {
+    background-color: #6A4A8F !important;
+    border-color: #6A4A8F !important;
+}
+
+.page-link:hover {
+    color: #A953E5 !important;
+    background-color: rgba(169, 83, 229, 0.1) !important;
+    border-color: rgba(169, 83, 229, 0.2) !important;
+}
+
+/* Elementos de card con acento */
+.card-header.bg-primary {
+    background: linear-gradient(135deg, #2B3050 0%, #6A4A8F 100%) !important;
+}
+
+/* Botones de acción secundarios */
+.btn-outline-primary {
+    color: #6A4A8F !important;
+    border-color: #6A4A8F !important;
+}
+
+.btn-outline-primary:hover {
+    background-color: #6A4A8F !important;
+    border-color: #6A4A8F !important;
+    color: white !important;
+}
+
+/* Elementos de lista activos */
+.list-group-item.active {
+    background-color: #6A4A8F !important;
+    border-color: #6A4A8F !important;
+}
+
+/* Spinners y elementos de carga */
+.spinner-border.text-primary {
+    color: #6A4A8F !important;
+}
+
+/* Elementos de switch/toggle */
+.form-switch .form-check-input:checked {
+    background-color: #6A4A8F !important;
+    border-color: #6A4A8F !important;
+}
+
+/* Elementos de rango/slider */
+input[type="range"]::-webkit-slider-thumb {
+    background: #6A4A8F !important;
+}
+
+input[type="range"]::-moz-range-thumb {
+    background: #6A4A8F !important;
+}
+
+/* Elementos de calendario y datepicker */
+.datepicker .active {
+    background-color: #6A4A8F !important;
+}
+
+/* Elementos de modal */
+.modal-header.bg-primary {
+    background: linear-gradient(135deg, #2B3050 0%, #6A4A8F 100%) !important;
+}
+
+/* Elementos de offcanvas */
+.offcanvas-header.bg-primary {
+    background: linear-gradient(135deg, #2B3050 0%, #6A4A8F 100%) !important;
+}

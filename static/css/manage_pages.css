@@ -2,7 +2,7 @@
 
 /* Page Header */
 .page-header {
-    background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+    background: linear-gradient(135deg, #2B3050 0%, #6A4A8F 100%);
     color: white;
     padding: 2rem;
     border-radius: 15px;
@@ -83,7 +83,7 @@
     width: 40px;
     height: 40px;
     border-radius: 50%;
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    background: linear-gradient(135deg, #6A4A8F 0%, #2B3050 100%);
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -160,7 +160,7 @@
     gap: 0.5rem;
     text-decoration: none;
 }
-.btn-add { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); }
+.btn-add { background: linear-gradient(135deg, #6A4A8F 0%, #2B3050 100%); }
 .btn-back { background: #858796; }
 
 /* Empty State */
@@ -191,7 +191,7 @@
     text-align: center;
 }
 .stat-card i { font-size: 2rem; margin-bottom: 0.5rem; }
-.stat-card.total i { color: #4e73df; }
+.stat-card.total i { color: #6A4A8F; }
 .stat-card.active i { color: #1cc88a; }
 .stat-card.inactive i { color: #e74a3b; }
 .stat-value { font-size: 2rem; font-weight: 700; }
