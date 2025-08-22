@@ -77,6 +77,7 @@ urlpatterns = [
      # --- 👇 NUEVAS RUTAS PARA RELEVO DE TURNO 👇 ---
     path('bitacora-24h/', views.full_logbook_view, name='full_logbook_view'),
     path('notas-turno/descartar/<int:note_id>/', views.dismiss_shift_note, name='dismiss_shift_note'),
+    path('notas-turno/crear/', views.create_shift_note_modal, name='create_shift_note_modal'),
 
  # --- 👇 NUEVAS RUTAS PARA CONTACTOS DE EMERGENCIA 👇 ---
     path('dashboard/emergency-contacts/', views.manage_emergency_contacts, name='manage_emergency_contacts'),

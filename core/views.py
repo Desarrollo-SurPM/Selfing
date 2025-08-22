@@ -569,10 +569,14 @@ def operator_dashboard(request):
     active_shift = get_active_shift(request.user)
     active_notes = ShiftNote.objects.filter(is_active=True)
     
+    # Formulario para crear notas de turno desde el modal
+    shift_note_form = ShiftNoteForm()
+    
     # Preparamos un contexto base
     context = {
         'active_shift': active_shift,
         'active_notes': active_notes,
+        'shift_note_form': shift_note_form,
         }
     
 
@@ -1480,23 +1484,10 @@ def full_logbook_view(request):
         shift_name = log.operator_shift.shift_type.name
         logs_by_shift[shift_name].append(log)
 
-    # Formulario para crear una nueva nota
-    if request.method == 'POST':
-        form = ShiftNoteForm(request.POST)
-        if form.is_valid():
-            note = form.save(commit=False)
-            note.created_by = request.user
-            note.save()
-            messages.success(request, "Nota para el próximo turno guardada con éxito.")
-            return redirect('full_logbook_view')
-    else:
-        form = ShiftNoteForm()
-
     context = {
         'start_time_log': start_time_log,
         'end_time_log': end_time_log,
         'logs_by_shift': dict(logs_by_shift),
-        'form': form
     }
     return render(request, 'full_logbook.html', context)
 
@@ -1510,6 +1501,23 @@ def dismiss_shift_note(request, note_id):
         note.is_active = False
         note.save()
         messages.info(request, "Nota marcada como leída.")
+    return redirect('operator_dashboard')
+
+@login_required
+def create_shift_note_modal(request):
+    """
+    Vista para crear una nota de turno desde el modal en el dashboard.
+    """
+    if request.method == 'POST':
+        form = ShiftNoteForm(request.POST)
+        if form.is_valid():
+            note = form.save(commit=False)
+            note.created_by = request.user
+            note.save()
+            messages.success(request, "Nota para el próximo turno guardada con éxito.")
+            return redirect('operator_dashboard')
+        else:
+            messages.error(request, "Error al guardar la nota. Por favor, revisa los datos.")
     return redirect('operator_dashboard')
 
 @login_required
