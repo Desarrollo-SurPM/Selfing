@@ -2,113 +2,380 @@
 <html>
 <head>
     <meta charset="UTF-8">
-    <title>Reporte de Turno</title>
+    <title>Reporte de Turno - SELFING</title>
     <style>
-        /* Estilos generales del documento */
-        @page { size: a4 portrait; margin: 1.5cm; }
-        body { font-family: "Helvetica", "Arial", sans-serif; font-size: 10pt; color: #333; }
-
-        /* Encabezado y Pie de página */
-        .header { text-align: center; border-bottom: 2px solid #003366; padding-bottom: 10px; }
-        .header h1 { margin: 0; font-size: 22pt; color: #003366; }
-        .header p { margin: 2px 0; font-size: 11pt; color: #444; }
-        .footer { position: fixed; bottom: -20px; left: 0; right: 0; text-align: center; font-size: 8pt; color: #888; }
+        /* Configuración de página */
+        @page { 
+            size: a4 portrait; 
+            margin: 2cm;
+        }
+        
+        /* Estilos generales */
+        body { 
+            font-family: "Times New Roman", "Times", serif; 
+            font-size: 11pt; 
+            color: #000; 
+            line-height: 1.3;
+            margin: 0;
+            padding: 0;
+            background-color: #f5f5f5;
+        }
+        
+        /* Contenedor principal */
+        .document-container {
+            background-color: white;
+            border: 2px solid #333;
+            padding: 20px;
+            margin: 0;
+            min-height: 90vh;
+        }
+        
+        /* Encabezado formal */
+        .header {
+            text-align: center;
+            border: 2px solid #000;
+            background-color: #e8e8e8;
+            padding: 15px;
+            margin-bottom: 20px;
+        }
+        
+        .header h1 {
+            margin: 0 0 5px 0;
+            font-size: 16pt;
+            font-weight: bold;
+            text-transform: uppercase;
+        }
+        
+        .header .subtitle {
+            font-size: 12pt;
+            margin: 0;
+            font-weight: normal;
+        }
+        
+        /* Información del operador */
+         .operator-info {
+             border: 2px solid #000;
+             background-color: #e8e8e8;
+             padding: 15px;
+             margin: 20px 0;
+         }
+         
+         .info-table {
+             width: 100%;
+             border-collapse: collapse;
+             margin-bottom: 20px;
+         }
+         
+         .info-table td {
+             padding: 12px 15px;
+             border: 2px solid #333;
+             vertical-align: middle;
+             text-align: center;
+         }
+         
+         .info-label {
+             background-color: #d0d0d0;
+             font-weight: bold;
+             width: 25%;
+             font-size: 12px;
+         }
+         
+         .info-value {
+             background-color: #f8f8f8;
+             width: 25%;
+             font-size: 13px;
+             font-weight: 500;
+         }
         
         /* Secciones principales */
-        .section { margin-top: 25px; page-break-inside: avoid; }
-        .section-title { font-size: 15pt; color: #003366; border-bottom: 1px solid #999; padding-bottom: 4px; margin-bottom: 10px; }
+         .section {
+             border: 2px solid #000;
+             background-color: #e8e8e8;
+             padding: 15px;
+             margin: 20px 0;
+             page-break-inside: avoid;
+         }
+         
+         .section-header {
+             background-color: #d0d0d0;
+             border: 1px solid #000;
+             color: #000;
+             padding: 10px 15px;
+             margin: -15px -15px 15px -15px;
+             font-size: 12pt;
+             font-weight: bold;
+             text-align: center;
+             text-transform: uppercase;
+         }
+         
+         /* Tablas formales */
+         .data-table {
+             width: 100%;
+             border-collapse: collapse;
+             margin: 20px 0;
+             background: white;
+             border: 2px solid #000;
+         }
+         
+         .data-table th {
+             background: #d0d0d0;
+             color: #000;
+             padding: 12px 15px;
+             text-align: center;
+             font-weight: bold;
+             border: 2px solid #000;
+             font-size: 12px;
+             line-height: 1.6;
+         }
+         
+         .data-table td {
+             padding: 12px 15px;
+             border: 2px solid #000;
+             vertical-align: top;
+             background-color: #f8f8f8;
+             font-size: 11px;
+             line-height: 1.6;
+         }
+         
+         .data-table tr:nth-child(even) td {
+             background: #f5f5f5;
+         }
         
-        /* Estilos para la Bitácora (sin tablas) */
-        .company-group { margin-top: 15px; }
-        .company-title { font-size: 12pt; font-weight: bold; color: #333; margin-left: 5px; }
-        .installation-group { margin-top: 8px; margin-left: 20px; }
-        .installation-title { font-size: 11pt; font-weight: bold; color: #555; }
-        .log-list { list-style-type: none; padding-left: 15px; margin-top: 5px; }
-        .log-item { padding: 4px 0; border-bottom: 1px dotted #ccc; }
-        .log-item:last-child { border-bottom: none; }
-        .log-time { float: right; font-weight: bold; color: #666; }
-
-        /* Estilos para Rondas y Checklist */
-        .item-list { list-style-type: none; padding-left: 5px; margin: 0; }
-        .item-list li { padding: 5px 0; border-bottom: 1px dotted #ddd; }
-        .item-list li:last-child { border-bottom: none; }
-        .item-list strong { color: #003366; }
-
+        /* Estilos para empresas e instalaciones */
+        .company-section {
+            margin: 15px 0;
+            border: 2px solid #333;
+            background-color: #f5f5f5;
+        }
+        
+        .company-title {
+            background-color: #e0e0e0;
+            padding: 8px 12px;
+            margin: 0;
+            border-bottom: 2px solid #333;
+            font-size: 12px;
+            font-weight: bold;
+            text-transform: uppercase;
+        }
+        
+        .installation-block {
+            margin: 12px;
+            border: 1px solid #666;
+            background-color: #f8f8f8;
+        }
+        
+        .installation-name {
+            background-color: #ddd;
+            padding: 6px 10px;
+            margin: 0;
+            border-bottom: 1px solid #666;
+            font-size: 11px;
+            font-weight: bold;
+        }
+        
+        /* Lista de elementos */
+        .item-list {
+            padding: 10px;
+        }
+        
+        .item-entry {
+            background: white;
+            border: 1px solid #ccc;
+            padding: 8px 12px;
+            margin: 8px 0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 10px;
+            line-height: 1.6;
+        }
+        
+        .item-time {
+            background: #666;
+            color: white;
+            padding: 4px 8px;
+            font-size: 9px;
+            font-weight: bold;
+            min-width: 50px;
+            text-align: center;
+            border: 1px solid #333;
+        }
+        
+        .item-content {
+            flex: 1;
+            margin-right: 10px;
+            line-height: 1.5;
+        }
+        
+        /* Mensaje de sin datos */
+        .no-data {
+            text-align: center;
+            color: #7f8c8d;
+            font-style: italic;
+            padding: 20px;
+            background: #f8f9fa;
+            border-radius: 6px;
+            border: 1px dashed #bdc3c7;
+        }
+        
+        /* Pie de página */
+        .footer {
+            position: fixed;
+            bottom: 1cm;
+            left: 2cm;
+            right: 2cm;
+            text-align: center;
+            font-size: 8pt;
+            color: #7f8c8d;
+            border-top: 1px solid #ecf0f1;
+            padding-top: 10px;
+        }
+        
+        /* Pie de página formal */
+         .footer {
+             position: fixed;
+             bottom: 1cm;
+             left: 2cm;
+             right: 2cm;
+             text-align: center;
+             font-size: 9pt;
+             color: #000;
+             border-top: 1px solid #000;
+             padding-top: 10px;
+         }
+         
+         /* Mensaje de sin datos */
+         .no-data {
+             text-align: center;
+             color: #000;
+             font-style: italic;
+             padding: 15px;
+             background: white;
+             border: 1px solid #000;
+             margin: 10px 0;
+         }
     </style>
 </head>
 <body>
-    <div class="header">
-        <h1>Reporte de Turno</h1>
-        <p><strong>Operador:</strong> {{ operator.get_full_name|default:operator.username }}</p>
-        <p><strong>Inicio:</strong> {{ start_time|date:"d/m/Y, H:i" }} | <strong>Fin:</strong> {{ end_time|date:"d/m/Y, H:i" }}</p>
-    </div>
+    <div class="document-container">
+        <div class="header">
+            <h1>REPORTE DE TURNO</h1>
+            <p class="subtitle">Sistema de Gestión Operacional - SELFING</p>
+        </div>
 
-    <div class="footer">
-        Generado por Plataforma SELFING
-    </div>
+        <div class="operator-info">
+            <table class="info-table">
+                <tr>
+                    <td class="info-label">Operador:</td>
+                    <td class="info-value">{{ operator.get_full_name|default:operator.username }}</td>
+                    <td class="info-label">Duración Total:</td>
+                    <td class="info-value">{{ duration }}</td>
+                </tr>
+                <tr>
+                    <td class="info-label">Inicio de Turno:</td>
+                    <td class="info-value">{{ start_time|date:"d/m/Y H:i" }}</td>
+                    <td class="info-label">Fin de Turno:</td>
+                    <td class="info-value">{{ end_time|date:"d/m/Y H:i" }}</td>
+                </tr>
+            </table>
+        </div>
 
-    <div class="section">
-        <h2 class="section-title">Bitácora de Novedades</h2>
+        <!-- Sección de Bitácora -->
+        <div class="section">
+            <div class="section-header">BITÁCORA DE EVENTOS</div>
         {% if updates_log %}
             {# Agrupamos primero por Empresa #}
             {% regroup updates_log by installation.company.name as company_list %}
             {% for company in company_list %}
-                <div class="company-group">
-                    <p class="company-title">■ Empresa: {{ company.grouper }}</p>
+                <div class="company-section">
+                    <div class="company-title">{{ company.grouper }}</div>
                     
                     {# Dentro de cada empresa, agrupamos por Instalación #}
                     {% regroup company.list by installation.name as installation_list %}
                     {% for installation in installation_list %}
-                        <div class="installation-group">
-                            <p class="installation-title">Instalación: {{ installation.grouper }}</p>
-                            <ul class="log-list">
+                        <div class="installation-block">
+                            <div class="installation-name">📍 {{ installation.grouper }}</div>
+                            <div class="item-list">
                                 {# Finalmente, mostramos las novedades ordenadas por hora #}
                                 {% for update in installation.list|dictsort:"created_at" %}
-                                    <li class="log-item">
-                                        <span class="log-time">{{ update.created_at|date:"H:i" }} hrs</span>
-                                        - {{ update.message }}
-                                    </li>
+                                    <div class="item-entry">
+                                        <div class="item-content">{{ update.message }}</div>
+                                        <div class="item-time">{{ update.created_at|date:"H:i" }}</div>
+                                    </div>
                                 {% endfor %}
-                            </ul>
+                            </div>
                         </div>
                     {% endfor %}
                 </div>
             {% endfor %}
         {% else %}
-            <p>No se registraron novedades en este turno.</p>
+            <div class="no-data">
+                ℹ️ No se registraron eventos durante este turno
+            </div>
         {% endif %}
     </div>
     
-    <div class="section">
-        <h2 class="section-title">Rondas Virtuales Realizadas</h2>
-        {% if rondas_virtuales %}
-            <ul class="item-list">
-                {% for ronda in rondas_virtuales %}
-                    <li>
-                        <strong>Ronda {{ forloop.counter }}:</strong> 
-                        Iniciada a las {{ ronda.start_time|date:"H:i:s" }}, 
-                        Finalizada a las {{ ronda.end_time|date:"H:i:s" }}.
-                        (<strong>Duración:</strong> {{ ronda.duration_seconds|floatformat:0 }} segundos)
-                    </li>
-                {% endfor %}
-            </ul>
-        {% else %}
-            <p>No se realizaron rondas virtuales en este turno.</p>
-        {% endif %}
-    </div>
+        <!-- Sección de Rondas -->
+        <div class="section">
+            <div class="section-header">RONDAS VIRTUALES REALIZADAS</div>
+            {% if rondas_virtuales %}
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Ronda</th>
+                            <th>Hora Inicio</th>
+                            <th>Hora Fin</th>
+                            <th>Duración</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for ronda in rondas_virtuales %}
+                            <tr>
+                                <td><strong>Ronda {{ forloop.counter }}</strong></td>
+                                <td>{{ ronda.start_time|date:"H:i:s" }}</td>
+                                <td>{{ ronda.end_time|date:"H:i:s" }}</td>
+                                <td>{{ ronda.duration_seconds|floatformat:0 }} segundos</td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            {% else %}
+                <div class="no-data">
+                    No se realizaron rondas virtuales en este turno
+                </div>
+            {% endif %}
+        </div>
 
-    <div class="section">
-        <h2 class="section-title">Checklist Completado</h2>
-        {% if completed_checklist %}
-            <ul class="item-list">
-            {% for log in completed_checklist|dictsort:"completed_at" %}
-                <li>(<strong>{{ log.completed_at|date:"H:i" }}</strong>) - {{ log.item.description }}</li>
-            {% endfor %}
-            </ul>
-        {% else %}
-            <p>No se completaron tareas del checklist en este turno.</p>
-        {% endif %}
-    </div>
+        <!-- Sección de Checklist -->
+        <div class="section">
+            <div class="section-header">CHECKLIST COMPLETADO</div>
+            {% if completed_checklist %}
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Hora</th>
+                            <th>Descripción</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for log in completed_checklist|dictsort:"completed_at" %}
+                            <tr>
+                                <td><strong>{{ log.completed_at|date:"H:i" }}</strong></td>
+                                <td>{{ log.item.description }}</td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            {% else %}
+                <div class="no-data">
+                    No se completaron tareas del checklist en este turno
+                </div>
+            {% endif %}
+        </div>
 
+        <div class="footer">
+            Reporte generado el {{ current_time|date:"d/m/Y H:i" }} - Sistema SELFING
+        </div>
+    </div>
 </body>
 </html>
