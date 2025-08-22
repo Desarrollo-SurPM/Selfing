@@ -16,7 +16,10 @@
     /* Usar la fuente Inter como predeterminada, pero solo dentro de este bloque de contenido */
     .checklist-container {
         font-family: 'Inter', sans-serif;
+        background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%);
+        min-height: 100vh;
     }
+    
     /* Estilo personalizado para la transición del tachado */
     .task-label {
         transition: all 0.3s ease-in-out;
@@ -35,10 +38,57 @@
     .task-completed .task-label::after {
         width: 100%;
     }
+    
+    /* Mejoras para pantallas grandes */
+    @media (min-width: 1280px) {
+        .phase-column {
+            max-height: 80vh;
+            overflow-y: auto;
+        }
+        
+        .phase-tasks {
+            padding-right: 8px;
+        }
+        
+        .phase-tasks::-webkit-scrollbar {
+            width: 6px;
+        }
+        
+        .phase-tasks::-webkit-scrollbar-track {
+            background: #f1f5f9;
+            border-radius: 3px;
+        }
+        
+        .phase-tasks::-webkit-scrollbar-thumb {
+            background: #cbd5e1;
+            border-radius: 3px;
+        }
+        
+        .phase-tasks::-webkit-scrollbar-thumb:hover {
+            background: #94a3b8;
+        }
+    }
+    
+    /* Animaciones suaves */
+    .task-item {
+        transform: translateY(0);
+        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+    
+    .task-item:hover {
+        transform: translateY(-2px);
+    }
+    
+    .phase-header {
+        position: sticky;
+        top: 0;
+        z-index: 10;
+        backdrop-filter: blur(10px);
+    }
 </style>
 {# --- FIN: Estilos y Librerías --- #}
 
-<div class="container mx-auto p-4 sm:p-6 lg:p-8 max-w-4xl checklist-container">
+<div class="container mx-auto p-4 sm:p-6 lg:p-8 max-w-7xl checklist-container">
     
     <!-- Encabezado -->
     <div class="flex justify-between items-center mb-6">
@@ -51,13 +101,144 @@
         </a>
     </div>
 
-    <!-- Contenedor del Checklist -->
+    <!-- Contenedor del Checklist en Tres Columnas -->
     <div class="bg-white rounded-xl shadow-md overflow-hidden">
         {# El formulario y el token CSRF son necesarios para enviar los datos de forma segura #}
         <form id="checklist-form" method="post">
             {% csrf_token %}
-            <div id="checklist-container" class="p-4 sm:p-6">
-                <!-- Las tareas se insertarán aquí dinámicamente desde el contexto de Django -->
+            
+            <!-- Grid de tres columnas -->
+            <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 lg:gap-6 xl:gap-8 p-4 sm:p-6 lg:p-8">
+                
+                <!-- Columna 1: Inicio de Turno -->
+                <div class="phase-column min-h-[400px]">
+                    <div class="phase-header bg-gradient-to-r from-green-50 to-green-100 border-l-4 border-green-500 p-4 mb-4 rounded-lg shadow-sm">
+                        <h3 class="text-lg font-semibold text-green-800 flex items-center">
+                            <i class="fas fa-play-circle me-2"></i>Inicio de Turno
+                        </h3>
+                        <p class="text-sm text-green-600 mt-1">Tareas al comenzar el turno</p>
+                    </div>
+                    <div id="start-tasks" class="phase-tasks">
+                        {% for task in tasks_by_phase.start %}
+                            <div class="task-item p-4 border rounded-lg mb-3 transition-all duration-300 hover:shadow-md {% if task.completed %}bg-green-50 border-green-200{% else %}bg-white border-gray-200 hover:border-gray-300{% endif %}" data-task-id="{{ task.id }}">
+                                <div class="flex items-start">
+                                    <input class="form-check-input h-6 w-6 mt-1 text-blue-600 border-gray-300 rounded focus:ring-blue-500 cursor-pointer" 
+                                           type="checkbox" 
+                                           name="items"
+                                           value="{{ task.id }}" 
+                                           id="item_{{ task.id }}"
+                                           {% if task.completed %}checked disabled{% endif %}>
+                                    <div class="ml-4 flex-grow">
+                                        <label class="task-label text-lg font-medium {% if task.completed %}text-gray-400 task-completed{% else %}text-gray-800{% endif %}" 
+                                               for="item_{{ task.id }}">
+                                            {{ task.description }}
+                                        </label>
+                                        <div class="mt-2">
+                                            <input type="text" 
+                                                   name="observacion_{{ task.id }}" 
+                                                   class="observation-input form-control w-full px-3 py-2 text-sm text-gray-700 bg-gray-50 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 transition" 
+                                                   placeholder="Añadir observación (opcional)..." 
+                                                   value="{{ task.observation }}"
+                                                   {% if task.completed %}readonly{% endif %}>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        {% empty %}
+                            <div class="text-center p-6 text-gray-500">
+                                <i class="fas fa-check-circle fa-2x mb-2"></i>
+                                <p>No hay tareas de inicio</p>
+                            </div>
+                        {% endfor %}
+                    </div>
+                </div>
+                
+                <!-- Columna 2: Durante el Turno -->
+                <div class="phase-column min-h-[400px]">
+                    <div class="phase-header bg-gradient-to-r from-blue-50 to-blue-100 border-l-4 border-blue-500 p-4 mb-4 rounded-lg shadow-sm">
+                        <h3 class="text-lg font-semibold text-blue-800 flex items-center">
+                            <i class="fas fa-clock me-2"></i>Durante el Turno
+                        </h3>
+                        <p class="text-sm text-blue-600 mt-1">Tareas continuas del turno</p>
+                    </div>
+                    <div id="during-tasks" class="phase-tasks">
+                        {% for task in tasks_by_phase.during %}
+                            <div class="task-item p-4 border rounded-lg mb-3 transition-all duration-300 hover:shadow-md {% if task.completed %}bg-green-50 border-green-200{% else %}bg-white border-gray-200 hover:border-gray-300{% endif %}" data-task-id="{{ task.id }}">
+                                <div class="flex items-start">
+                                    <input class="form-check-input h-6 w-6 mt-1 text-blue-600 border-gray-300 rounded focus:ring-blue-500 cursor-pointer" 
+                                           type="checkbox" 
+                                           name="items"
+                                           value="{{ task.id }}" 
+                                           id="item_{{ task.id }}"
+                                           {% if task.completed %}checked disabled{% endif %}>
+                                    <div class="ml-4 flex-grow">
+                                        <label class="task-label text-lg font-medium {% if task.completed %}text-gray-400 task-completed{% else %}text-gray-800{% endif %}" 
+                                               for="item_{{ task.id }}">
+                                            {{ task.description }}
+                                        </label>
+                                        <div class="mt-2">
+                                            <input type="text" 
+                                                   name="observacion_{{ task.id }}" 
+                                                   class="observation-input form-control w-full px-3 py-2 text-sm text-gray-700 bg-gray-50 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 transition" 
+                                                   placeholder="Añadir observación (opcional)..." 
+                                                   value="{{ task.observation }}"
+                                                   {% if task.completed %}readonly{% endif %}>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        {% empty %}
+                            <div class="text-center p-6 text-gray-500">
+                                <i class="fas fa-check-circle fa-2x mb-2"></i>
+                                <p>No hay tareas continuas</p>
+                            </div>
+                        {% endfor %}
+                    </div>
+                </div>
+                
+                <!-- Columna 3: Finalización de Turno -->
+                <div class="phase-column min-h-[400px] md:col-span-2 xl:col-span-1">
+                    <div class="phase-header bg-gradient-to-r from-red-50 to-red-100 border-l-4 border-red-500 p-4 mb-4 rounded-lg shadow-sm">
+                        <h3 class="text-lg font-semibold text-red-800 flex items-center">
+                            <i class="fas fa-stop-circle me-2"></i>Finalización de Turno
+                        </h3>
+                        <p class="text-sm text-red-600 mt-1">Tareas al finalizar el turno</p>
+                    </div>
+                    <div id="end-tasks" class="phase-tasks">
+                        {% for task in tasks_by_phase.end %}
+                            <div class="task-item p-4 border rounded-lg mb-3 transition-all duration-300 hover:shadow-md {% if task.completed %}bg-green-50 border-green-200{% else %}bg-white border-gray-200 hover:border-gray-300{% endif %}" data-task-id="{{ task.id }}">
+                                <div class="flex items-start">
+                                    <input class="form-check-input h-6 w-6 mt-1 text-blue-600 border-gray-300 rounded focus:ring-blue-500 cursor-pointer" 
+                                           type="checkbox" 
+                                           name="items"
+                                           value="{{ task.id }}" 
+                                           id="item_{{ task.id }}"
+                                           {% if task.completed %}checked disabled{% endif %}>
+                                    <div class="ml-4 flex-grow">
+                                        <label class="task-label text-lg font-medium {% if task.completed %}text-gray-400 task-completed{% else %}text-gray-800{% endif %}" 
+                                               for="item_{{ task.id }}">
+                                            {{ task.description }}
+                                        </label>
+                                        <div class="mt-2">
+                                            <input type="text" 
+                                                   name="observacion_{{ task.id }}" 
+                                                   class="observation-input form-control w-full px-3 py-2 text-sm text-gray-700 bg-gray-50 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 transition" 
+                                                   placeholder="Añadir observación (opcional)..." 
+                                                   value="{{ task.observation }}"
+                                                   {% if task.completed %}readonly{% endif %}>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        {% empty %}
+                            <div class="text-center p-6 text-gray-500">
+                                <i class="fas fa-check-circle fa-2x mb-2"></i>
+                                <p>No hay tareas de finalización</p>
+                            </div>
+                        {% endfor %}
+                    </div>
+                </div>
+                
             </div>
             
             <div class="px-6 py-4 bg-gray-50 border-t border-gray-200 flex justify-end">
@@ -86,83 +267,35 @@ document.addEventListener('DOMContentLoaded', function () {
     // Obtenemos los datos de las tareas desde el script JSON que Django generó
     const initialTasks = JSON.parse(document.getElementById('tasks-data').textContent);
     
-    const checklistContainer = document.getElementById('checklist-container');
     const emptyState = document.getElementById('empty-state');
     const checklistForm = document.getElementById('checklist-form');
+    const phaseContainers = document.querySelectorAll('.phase-tasks');
 
-    // Función para renderizar una tarea individual (sin cambios)
-    function renderTask(task) {
-        const isCompleted = task.completed;
-        const taskWrapper = document.createElement('div');
-        taskWrapper.className = `task-item p-4 border rounded-lg mb-3 transition-all duration-300 ${isCompleted ? 'bg-green-50 border-green-200' : 'bg-white border-gray-200'}`;
-        taskWrapper.dataset.taskId = task.id;
-
-        // Se crea un input oculto para cada observación para que el formulario lo envíe
-        taskWrapper.innerHTML = `
-            <div class="flex items-start">
-                <input 
-                    class="form-check-input h-6 w-6 mt-1 text-blue-600 border-gray-300 rounded focus:ring-blue-500 cursor-pointer" 
-                    type="checkbox" 
-                    name="items"
-                    value="${task.id}" 
-                    id="item_${task.id}"
-                    ${isCompleted ? 'checked' : ''}
-                    ${isCompleted ? 'disabled' : ''}
-                >
-                <div class="ml-4 flex-grow">
-                    <label 
-                        class="task-label text-lg font-medium ${isCompleted ? 'text-gray-400 task-completed' : 'text-gray-800'}" 
-                        for="item_${task.id}"
-                    >
-                        ${task.description}
-                    </label>
-                    <div class="mt-2">
-                        <input 
-                            type="text" 
-                            name="observacion_${task.id}" 
-                            class="observation-input form-control w-full px-3 py-2 text-sm text-gray-700 bg-gray-50 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 transition" 
-                            placeholder="Añadir observación (opcional)..." 
-                            value="${task.observation}"
-                            ${isCompleted ? 'readonly' : ''}
-                        >
-                    </div>
-                </div>
-            </div>
-        `;
-        return taskWrapper;
-    }
-
-    // Función para cargar y mostrar todas las tareas
-    function loadTasks() {
-        checklistContainer.innerHTML = '';
-        if (initialTasks.length === 0) {
-            emptyState.style.display = 'block';
-            document.querySelector('.bg-white.rounded-xl').style.display = 'none';
-        } else {
-            initialTasks.forEach(task => {
-                const taskElement = renderTask(task);
-                checklistContainer.appendChild(taskElement);
-            });
-        }
+    // Verificar si hay tareas para mostrar el estado vacío
+    if (initialTasks.length === 0) {
+        emptyState.style.display = 'block';
+        document.querySelector('.bg-white.rounded-xl').style.display = 'none';
     }
 
     // Manejar el evento de cambio en los checkboxes para la interactividad visual
-    checklistContainer.addEventListener('change', function(e) {
-        if (e.target.type === 'checkbox') {
-            const taskWrapper = e.target.closest('.task-item');
-            const label = taskWrapper.querySelector('.task-label');
-            const observationInput = taskWrapper.querySelector('.observation-input');
-            const isChecked = e.target.checked;
+    phaseContainers.forEach(container => {
+        container.addEventListener('change', function(e) {
+            if (e.target.type === 'checkbox') {
+                const taskWrapper = e.target.closest('.task-item');
+                const label = taskWrapper.querySelector('.task-label');
+                const observationInput = taskWrapper.querySelector('.observation-input');
+                const isChecked = e.target.checked;
 
-            taskWrapper.classList.toggle('bg-green-50', isChecked);
-            taskWrapper.classList.toggle('border-green-200', isChecked);
-            label.classList.toggle('text-gray-400', isChecked);
-            label.classList.toggle('task-completed', isChecked);
-        }
+                taskWrapper.classList.toggle('bg-green-50', isChecked);
+                taskWrapper.classList.toggle('border-green-200', isChecked);
+                taskWrapper.classList.toggle('bg-white', !isChecked);
+                taskWrapper.classList.toggle('border-gray-200', !isChecked);
+                label.classList.toggle('text-gray-400', isChecked);
+                label.classList.toggle('text-gray-800', !isChecked);
+                label.classList.toggle('task-completed', isChecked);
+            }
+        });
     });
-
-    // Carga inicial de las tareas
-    loadTasks();
 });
 </script>
 {# --- FIN: Lógica JavaScript --- #}

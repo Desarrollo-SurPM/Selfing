@@ -1,0 +1,79 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Bitácora Actual{% endblock %}
+
+{% block content %}
+<div class="container">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2 class="h3 text-secondary">
+            <i class="fas fa-book-open me-2"></i> Bitácora Actual
+        </h2>
+        <a href="{% url 'admin_dashboard' %}" class="btn btn-outline-secondary">
+            <i class="fas fa-arrow-left me-2"></i>Volver al Dashboard
+        </a>
+    </div>
+
+    {% if current_logbook_data %}
+        {% for operator_name, operator_data in current_logbook_data.items %}
+            <div class="card shadow-sm mb-4">
+                <div class="card-header bg-primary text-white">
+                    <h4 class="mb-0">
+                        <i class="fas fa-user me-2"></i>{{ operator_name }}
+                        <small class="text-light ms-2">
+                            (Turno iniciado: {{ operator_data.shift.actual_start_time|date:"d/m/Y H:i" }})
+                        </small>
+                    </h4>
+                </div>
+                <div class="card-body">
+                    {% if operator_data.logbook_data %}
+                        {% for company_name, installations in operator_data.logbook_data.items %}
+                            <div class="company-group mb-4">
+                                <h5 class="h6 text-primary border-bottom pb-2 mb-3">
+                                    <i class="fas fa-building me-2"></i>Empresa: {{ company_name }}
+                                </h5>
+                                
+                                {% for installation_name, logs in installations.items %}
+                                    <div class="installation-group ps-3 mb-3">
+                                        <h6 class="text-dark fw-bold">
+                                            <i class="fas fa-map-marker-alt text-secondary me-2"></i>Instalación: {{ installation_name }}
+                                        </h6>
+                                        <ul class="list-group list-group-flush">
+                                            {% for log in logs %}
+                                                <li class="list-group-item border-0 py-1 d-flex justify-content-between align-items-center">
+                                                    <span>
+                                                        - {{ log.message }}
+                                                        {% if log.is_edited %}
+                                                            <em class="text-muted" style="font-size: 0.8em;">(editado)</em>
+                                                        {% endif %}
+                                                    </span>
+                                                    <span class="badge bg-secondary rounded-pill fw-normal">
+                                                        {% if log.manual_timestamp %}
+                                                            {{ log.manual_timestamp|date:"H:i" }} hrs*
+                                                        {% else %}
+                                                            {{ log.created_at|date:"H:i" }} hrs
+                                                        {% endif %}
+                                                    </span>
+                                                </li>
+                                            {% endfor %}
+                                        </ul>
+                                    </div>
+                                {% endfor %}
+                            </div>
+                        {% empty %}
+                            <p class="text-center text-muted p-3">No se encontraron empresas con novedades.</p>
+                        {% endfor %}
+                    {% else %}
+                        <p class="text-center text-muted p-3">Este operador aún no ha registrado novedades en su turno actual.</p>
+                    {% endif %}
+                </div>
+            </div>
+        {% endfor %}
+    {% else %}
+        <div class="text-center p-5 bg-light rounded shadow">
+            <h1 class="display-5 text-dark mb-4">Sin Operadores en Turno</h1>
+            <p class="lead text-muted">Actualmente no hay operadores con turnos activos.</p>
+        </div>
+    {% endif %}
+</div>
+{% endblock %}

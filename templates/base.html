@@ -11,13 +11,16 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" />
     <link rel="stylesheet" href="{% static 'css/style.css' %}">
     <link rel="stylesheet" href="{% static 'css/style.css' %}?v=1.7">
+    <link rel="stylesheet" href="{% static 'css/color_theme.css' %}">
     
 {% block extra_css %}{% endblock %}
 </head>
 <body>
     <nav class="navbar navbar-expand-lg navbar-dark">
         <div class="container">
-            <a class="navbar-brand" href="{% url 'home' %}">SELFING</a>
+            <a class="navbar-brand d-flex align-items-center" href="{% url 'home' %}">
+                <img src="{% static 'images/Logo.png' %}" alt="SELFING Logo" style="height: 30px;">
+            </a>
             <div class="collapse navbar-collapse" id="navbarNav">
                 <ul class="navbar-nav ms-auto align-items-center">
                     {% if user.is_authenticated %}
@@ -28,13 +31,7 @@
                             </span>
                         </li>
                         {% endif %}
-                         {% if not user.is_superuser %}
-                        <li class="nav-item me-2">
-                            <a href="{% url 'panic_button' %}" target="_blank" class="btn btn-danger">
-                                <i class="fas fa-exclamation-triangle me-1"></i> BOTÓN DE PÁNICO
-                            </a>
-                        </li>
-                        {% endif %}
+
                         <li class="nav-item">
                             <span class="welcome-text">
                                 <i class="fas fa-user"></i>

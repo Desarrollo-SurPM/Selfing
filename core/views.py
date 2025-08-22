@@ -569,10 +569,14 @@ def operator_dashboard(request):
     active_shift = get_active_shift(request.user)
     active_notes = ShiftNote.objects.filter(is_active=True)
     
+    # Formulario para crear notas de turno desde el modal
+    shift_note_form = ShiftNoteForm()
+    
     # Preparamos un contexto base
     context = {
         'active_shift': active_shift,
         'active_notes': active_notes,
+        'shift_note_form': shift_note_form,
         }
     
 
@@ -957,24 +961,37 @@ def checklist_view(request):
         # Redirigir al panel de operador después de guardar.
         return redirect('operator_dashboard')
 
-    # --- Lógica para la petición GET (sin cambios) ---
+    # --- Lógica para la petición GET - Agrupando por fases ---
     checklist_items = get_applicable_checklist_items(active_shift)
     completed_logs_dict = {log.item.id: log for log in ChecklistLog.objects.filter(operator_shift=active_shift)}
 
-    tasks_for_js = [
-        {
+    # Agrupar tareas por fase
+    tasks_by_phase = {
+        'start': [],
+        'during': [],
+        'end': []
+    }
+
+    for item in checklist_items:
+        task_data = {
             'id': item.id,
             'description': item.description,
+            'phase': item.phase,
             'completed': bool(completed_logs_dict.get(item.id)),
             'observation': completed_logs_dict.get(item.id).observacion if completed_logs_dict.get(item.id) else ''
         }
-        for item in checklist_items
-    ]
+        tasks_by_phase[item.phase].append(task_data)
+
+    # Lista completa para compatibilidad con JavaScript existente
+    tasks_for_js = []
+    for phase_tasks in tasks_by_phase.values():
+        tasks_for_js.extend(phase_tasks)
 
     context = {
         'checklist_items': checklist_items,
         'completed_logs_dict': completed_logs_dict,
         'tasks_for_js': tasks_for_js,
+        'tasks_by_phase': tasks_by_phase,
     }
     return render(request, 'checklist.html', context)
     active_shift = OperatorShift.objects.filter(operator=request.user, actual_end_time__isnull=True).first()
@@ -1480,23 +1497,10 @@ def full_logbook_view(request):
         shift_name = log.operator_shift.shift_type.name
         logs_by_shift[shift_name].append(log)
 
-    # Formulario para crear una nueva nota
-    if request.method == 'POST':
-        form = ShiftNoteForm(request.POST)
-        if form.is_valid():
-            note = form.save(commit=False)
-            note.created_by = request.user
-            note.save()
-            messages.success(request, "Nota para el próximo turno guardada con éxito.")
-            return redirect('full_logbook_view')
-    else:
-        form = ShiftNoteForm()
-
     context = {
         'start_time_log': start_time_log,
         'end_time_log': end_time_log,
         'logs_by_shift': dict(logs_by_shift),
-        'form': form
     }
     return render(request, 'full_logbook.html', context)
 
@@ -1511,3 +1515,68 @@ def dismiss_shift_note(request, note_id):
         note.save()
         messages.info(request, "Nota marcada como leída.")
     return redirect('operator_dashboard')
+
+@login_required
+def create_shift_note_modal(request):
+    """
+    Vista para crear una nota de turno desde el modal en el dashboard.
+    """
+    if request.method == 'POST':
+        form = ShiftNoteForm(request.POST)
+        if form.is_valid():
+            note = form.save(commit=False)
+            note.created_by = request.user
+            note.save()
+            messages.success(request, "Nota para el próximo turno guardada con éxito.")
+            return redirect('operator_dashboard')
+        else:
+            messages.error(request, "Error al guardar la nota. Por favor, revisa los datos.")
+    return redirect('operator_dashboard')
+
+@login_required
+@user_passes_test(is_supervisor)
+def current_logbook_view(request):
+    """
+    Muestra al supervisor la bitácora actual del operador en turno.
+    """
+    # Buscar operadores con turnos activos
+    active_shifts = OperatorShift.objects.filter(
+        actual_start_time__isnull=False,
+        actual_end_time__isnull=True
+    ).select_related('operator', 'shift_type')
+    
+    current_logbook_data = {}
+    
+    for shift in active_shifts:
+        operator_name = f"{shift.operator.first_name} {shift.operator.last_name}"
+        
+        # Obtener las novedades del turno actual
+        logs_del_turno = UpdateLog.objects.filter(
+            operator_shift=shift
+        ).select_related('installation', 'installation__company').order_by('-created_at')
+        
+        if logs_del_turno.exists():
+            logbook_data = {}
+            for log in logs_del_turno:
+                if log.installation and log.installation.company:
+                    company_name = log.installation.company.name
+                    installation_name = log.installation.name
+                    
+                    if company_name not in logbook_data:
+                        logbook_data[company_name] = {}
+                    
+                    if installation_name not in logbook_data[company_name]:
+                        logbook_data[company_name][installation_name] = []
+                    
+                    logbook_data[company_name][installation_name].append(log)
+            
+            current_logbook_data[operator_name] = {
+                'shift': shift,
+                'logbook_data': logbook_data
+            }
+    
+    context = {
+        'current_logbook_data': current_logbook_data
+    }
+    
+    return render(request, 'current_logbook.html', context)

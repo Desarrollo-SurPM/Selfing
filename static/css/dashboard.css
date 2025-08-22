@@ -1,7 +1,7 @@
 /* desarrollo-surpm/selfing/Selfing-mejorasorden/static/css/dashboard.css */
 /* Dashboard Styles */
 .dashboard-header {
-    background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+    background: linear-gradient(135deg, #2B3050 0%, #6A4A8F 100%);
     color: white;
     padding: 2rem;
     border-radius: 15px;
@@ -44,8 +44,8 @@
 }
 
 .stat-card.primary::before {
-    --color-primary: #4e73df;
-    --color-secondary: #224abe;
+    --color-primary: #6A4A8F;
+    --color-secondary: #2B3050;
 }
 
 .stat-card.warning::before {
@@ -80,8 +80,8 @@
 }
 
 .stat-card.primary .stat-icon {
-    background: rgba(78, 115, 223, 0.1);
-    color: #4e73df;
+    background: rgba(106, 74, 143, 0.1);
+    color: #6A4A8F;
 }
 
 .stat-card.warning .stat-icon {
@@ -139,7 +139,7 @@
 }
 
 .action-card-header i {
-    color: #4e73df;
+    color: #6A4A8F;
 }
 
 .action-grid {
@@ -177,9 +177,9 @@
 }
 
 .action-btn.primary:hover {
-    background: #4e73df;
+    background: #6A4A8F;
     color: white;
-    border-color: #4e73df;
+    border-color: #6A4A8F;
 }
 
 .action-btn.info:hover {
@@ -330,7 +330,7 @@
     width: 12px;
     height: 12px;
     border-radius: 50%;
-    background: #4e73df;
+    background: #6A4A8F;
     border: 2px solid white;
 }
 .status-card .list-group {

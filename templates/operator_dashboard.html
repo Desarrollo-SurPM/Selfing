@@ -47,7 +47,7 @@
                         <div class="card-header bg-light"><h5 class="mb-0 text-secondary"><i class="fas fa-chart-line me-2"></i>Progreso del Turno</h5></div>
                         <div class="card-body">
                             <div class="progress mb-4" style="height: 28px; border-radius: 8px;">
-                                <div class="progress-bar bg-primary" role="progressbar" style="width: {{ progress_percentage }}%;" aria-valuenow="{{ progress_percentage }}" aria-valuemin="0" aria-valuemax="100">
+                                <div class="progress-bar bg-primary" role="progressbar" style="width: {{ progress_percentage }}%" aria-valuenow="{{ progress_percentage }}" aria-valuemin="0" aria-valuemax="100">
                                     <span class="fw-bold">{{ progress_percentage }}%</span>
                                 </div>
                             </div>
@@ -68,6 +68,7 @@
                                     <a href="{% url 'update_log' %}" class="btn btn-info btn-lg shadow-sm mb-2"><i class="fas fa-edit me-2"></i>Anotar en Bitácora</a>
                                     <a href="{% url 'full_logbook_view' %}" class="btn btn-dark btn-lg shadow-sm mb-2"><i class="fas fa-history me-2"></i>Bitácora 24h / Relevo</a>
                                     <a href="{% url 'my_logbook' %}" class="btn btn-secondary btn-lg shadow-sm mb-2"><i class="fas fa-book me-2"></i>Ver Mi Bitácora</a>
+                                    <button type="button" class="btn btn-warning btn-lg shadow-sm mb-2" data-bs-toggle="modal" data-bs-target="#shiftNoteModal"><i class="fas fa-sticky-note me-2"></i>Nota para Próximo Turno</button>
                                     {% if progress_percentage >= 99 %}
                                     <a href="{% url 'end_turn_preview' %}" class="btn btn-danger btn-lg shadow-sm mb-2 animate__animated animate__heartBeat animate__infinite"><i class="fas fa-power-off me-2"></i>Finalizar Turno</a>
                                     {% endif %}
@@ -77,6 +78,15 @@
                     </div>
                 </div>
                 <div class="col-lg-4">
+                    <!-- Botón de Pánico -->
+                    {% if not user.is_superuser %}
+                    <div class="d-grid mb-3">
+                        <a href="{% url 'panic_button' %}" target="_blank" class="btn btn-danger btn-lg shadow-sm">
+                            <i class="fas fa-exclamation-triangle me-2"></i>BOTÓN DE PÁNICO
+                        </a>
+                    </div>
+                    {% endif %}
+                    
                     <div class="card text-center shadow-sm mb-4 border-primary">
                         <div class="card-header bg-primary text-white">Próxima Ronda Virtual</div>
                         <div class="card-body"><h3 class="display-2 fw-bold text-primary" id="dashboard-round-countdown">--:--</h3></div>
@@ -124,6 +134,33 @@
         </div>
     {% endif %}
 
+</div>
+
+<!-- Modal para Notas de Turno -->
+<div class="modal fade" id="shiftNoteModal" tabindex="-1" aria-labelledby="shiftNoteModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header bg-warning text-dark">
+                <h5 class="modal-title" id="shiftNoteModalLabel">
+                    <i class="fas fa-sticky-note me-2"></i>Nueva Nota para el Siguiente Turno
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <form method="post" action="{% url 'create_shift_note_modal' %}">
+                <div class="modal-body">
+                    {% csrf_token %}
+                    <div class="mb-3">
+                        <label for="id_message" class="form-label">Nueva Nota para el Siguiente Turno <span class="text-danger">*</span></label>
+                        <textarea name="message" cols="40" rows="3" placeholder="Escribe aquí una nota, pendiente o instrucción para el próximo turno..." class="form-control" required id="id_message"></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-primary">Guardar Nota</button>
+                </div>
+            </form>
+        </div>
+    </div>
 </div>
 
 <!-- Elementos para la Alarma (sin cambios) -->
