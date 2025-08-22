@@ -961,24 +961,37 @@ def checklist_view(request):
         # Redirigir al panel de operador después de guardar.
         return redirect('operator_dashboard')
 
-    # --- Lógica para la petición GET (sin cambios) ---
+    # --- Lógica para la petición GET - Agrupando por fases ---
     checklist_items = get_applicable_checklist_items(active_shift)
     completed_logs_dict = {log.item.id: log for log in ChecklistLog.objects.filter(operator_shift=active_shift)}
 
-    tasks_for_js = [
-        {
+    # Agrupar tareas por fase
+    tasks_by_phase = {
+        'start': [],
+        'during': [],
+        'end': []
+    }
+
+    for item in checklist_items:
+        task_data = {
             'id': item.id,
             'description': item.description,
+            'phase': item.phase,
             'completed': bool(completed_logs_dict.get(item.id)),
             'observation': completed_logs_dict.get(item.id).observacion if completed_logs_dict.get(item.id) else ''
         }
-        for item in checklist_items
-    ]
+        tasks_by_phase[item.phase].append(task_data)
+
+    # Lista completa para compatibilidad con JavaScript existente
+    tasks_for_js = []
+    for phase_tasks in tasks_by_phase.values():
+        tasks_for_js.extend(phase_tasks)
 
     context = {
         'checklist_items': checklist_items,
         'completed_logs_dict': completed_logs_dict,
         'tasks_for_js': tasks_for_js,
+        'tasks_by_phase': tasks_by_phase,
     }
     return render(request, 'checklist.html', context)
     active_shift = OperatorShift.objects.filter(operator=request.user, actual_end_time__isnull=True).first()
