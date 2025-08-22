@@ -1511,3 +1511,51 @@ def dismiss_shift_note(request, note_id):
         note.save()
         messages.info(request, "Nota marcada como leída.")
     return redirect('operator_dashboard')
+
+@login_required
+@user_passes_test(is_supervisor)
+def current_logbook_view(request):
+    """
+    Muestra al supervisor la bitácora actual del operador en turno.
+    """
+    # Buscar operadores con turnos activos
+    active_shifts = OperatorShift.objects.filter(
+        actual_start_time__isnull=False,
+        actual_end_time__isnull=True
+    ).select_related('operator', 'shift_type')
+    
+    current_logbook_data = {}
+    
+    for shift in active_shifts:
+        operator_name = f"{shift.operator.first_name} {shift.operator.last_name}"
+        
+        # Obtener las novedades del turno actual
+        logs_del_turno = UpdateLog.objects.filter(
+            operator_shift=shift
+        ).select_related('installation', 'installation__company').order_by('-created_at')
+        
+        if logs_del_turno.exists():
+            logbook_data = {}
+            for log in logs_del_turno:
+                if log.installation and log.installation.company:
+                    company_name = log.installation.company.name
+                    installation_name = log.installation.name
+                    
+                    if company_name not in logbook_data:
+                        logbook_data[company_name] = {}
+                    
+                    if installation_name not in logbook_data[company_name]:
+                        logbook_data[company_name][installation_name] = []
+                    
+                    logbook_data[company_name][installation_name].append(log)
+            
+            current_logbook_data[operator_name] = {
+                'shift': shift,
+                'logbook_data': logbook_data
+            }
+    
+    context = {
+        'current_logbook_data': current_logbook_data
+    }
+    
+    return render(request, 'current_logbook.html', context)

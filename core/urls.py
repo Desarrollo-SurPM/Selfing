@@ -88,6 +88,7 @@ urlpatterns = [
 
     # Mi Bitacora
     path('mi-bitacora/', views.my_logbook_view, name='my_logbook'),
+    path('current_logbook/', views.current_logbook_view, name='current_logbook'),
     # --- Rutas AJAX ---
     path('ajax/get-updates/<int:company_id>/', views.get_updates_for_company, name='ajax_get_updates'),
     path('ajax/get-service-status/', views.get_service_status, name='ajax_get_service_status'),
