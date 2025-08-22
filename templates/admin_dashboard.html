@@ -54,23 +54,39 @@
             <div class="action-card">
                 <div class="action-card-header"><h5><i class="fas fa-cogs"></i>Gestión del Sistema</h5></div>
                 <div class="action-grid">
-                    <a href="{% url 'review_and_send_novedades' %}" class="action-btn success">
+                    <a href="{% url 'review_and_send_novedades' %}" class="action-btn" style="background-color: #28a745; color: white;">
                         <i class="fas fa-paper-plane"></i><span>Enviar Correo de Novedades</span>
                     </a>
-                    <a href="{% url 'current_logbook' %}" class="action-btn" style="background-color: var(--accent-vibrant); color: white;">
+                    <a href="{% url 'current_logbook' %}" class="action-btn" style="background-color: #17a2b8; color: white;">
                         <i class="fas fa-book-open"></i><span>Bitácora Actual</span>
                     </a>
-                    <a href="{% url 'manage_operators' %}" class="action-btn primary"><span>Gestionar Operadores</span></a>
-                    <a href="{% url 'manage_companies' %}" class="action-btn info"><span>Gestionar Empresas</span></a>
-                    <a href="{% url 'manage_checklist_items' %}" class="action-btn secondary"><span>Gestionar Checklist</span></a>
-                    <a href="{% url 'manage_monitored_services' %}" class="action-btn dark"><span>Monitoreo de Servicios</span></a>
-                    <a href="{% url 'manage_shift_types' %}" class="action-btn warning"><span>Tipos de Turno</span></a>
-                    <a href="{% url 'manage_shifts' %}" class="action-btn success"><span>Asignar Turnos</span></a>
-                    <a href="{% url 'shift_calendar' %}" class="action-btn primary"><span>Calendario de Turnos</span></a>
-                    <a href="{% url 'view_turn_reports' %}" class="action-btn secondary"><span>Reportes</span></a>
-                    <a href="{% url 'manage_emergency_contacts' %}" class="action-btn" style="color: #e74a3b;">
-        <i class="fas fa-life-ring"></i><span>Contactos de Emergencia</span>
-    </a>
+                    <a href="{% url 'manage_operators' %}" class="action-btn" style="background-color: #007bff; color: white;">
+                        <i class="fas fa-users"></i><span>Gestionar Operadores</span>
+                    </a>
+                    <a href="{% url 'manage_companies' %}" class="action-btn" style="background-color: #6f42c1; color: white;">
+                        <i class="fas fa-building"></i><span>Gestionar Empresas</span>
+                    </a>
+                    <a href="{% url 'manage_checklist_items' %}" class="action-btn" style="background-color: #fd7e14; color: white;">
+                        <i class="fas fa-tasks"></i><span>Gestionar Checklist</span>
+                    </a>
+                    <a href="{% url 'manage_monitored_services' %}" class="action-btn" style="background-color: #343a40; color: white;">
+                        <i class="fas fa-server"></i><span>Monitoreo de Servicios</span>
+                    </a>
+                    <a href="{% url 'manage_shift_types' %}" class="action-btn" style="background-color: #ffc107; color: #212529;">
+                        <i class="fas fa-clock"></i><span>Tipos de Turno</span>
+                    </a>
+                    <a href="{% url 'manage_shifts' %}" class="action-btn" style="background-color: #20c997; color: white;">
+                        <i class="fas fa-calendar-plus"></i><span>Asignar Turnos</span>
+                    </a>
+                    <a href="{% url 'shift_calendar' %}" class="action-btn" style="background-color: #e83e8c; color: white;">
+                        <i class="fas fa-calendar-alt"></i><span>Calendario de Turnos</span>
+                    </a>
+                    <a href="{% url 'view_turn_reports' %}" class="action-btn" style="background-color: #6c757d; color: white;">
+                        <i class="fas fa-file-alt"></i><span>Reportes</span>
+                    </a>
+                    <a href="{% url 'manage_emergency_contacts' %}" class="action-btn" style="background-color: #dc3545; color: white;">
+                        <i class="fas fa-life-ring"></i><span>Contactos de Emergencia</span>
+                    </a>
                 </div>
             </div>
 
