@@ -78,6 +78,15 @@
                     </div>
                 </div>
                 <div class="col-lg-4">
+                    <!-- Botón de Pánico -->
+                    {% if not user.is_superuser %}
+                    <div class="d-grid mb-3">
+                        <a href="{% url 'panic_button' %}" target="_blank" class="btn btn-danger btn-lg shadow-sm">
+                            <i class="fas fa-exclamation-triangle me-2"></i>BOTÓN DE PÁNICO
+                        </a>
+                    </div>
+                    {% endif %}
+                    
                     <div class="card text-center shadow-sm mb-4 border-primary">
                         <div class="card-header bg-primary text-white">Próxima Ronda Virtual</div>
                         <div class="card-body"><h3 class="display-2 fw-bold text-primary" id="dashboard-round-countdown">--:--</h3></div>
