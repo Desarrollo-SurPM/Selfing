@@ -1,3 +1,4 @@
+{% load static %}
 <!DOCTYPE html>
 <html lang="es">
 <head>
@@ -8,7 +9,10 @@
     <table width="100%" border="0" cellspacing="0" cellpadding="0" style="max-width: 600px; margin: auto; background-color: #ffffff; border: 1px solid #ddd; border-radius: 8px;">
         <tr>
             <td style="padding: 20px;">
-                <h1 style="color: #1e3c72; text-align: center; border-bottom: 2px solid #1e3c72; padding-bottom: 10px;">Reporte de Novedades</h1>
+                <div style="text-align: center; margin-bottom: 20px;">
+                    <img src="{% static 'images/Logo.png' %}" alt="SELFING Logo" style="height: 50px; margin-bottom: 10px;">
+                    <h1 style="color: #1e3c72; border-bottom: 2px solid #1e3c72; padding-bottom: 10px; margin: 0;">Reporte de Novedades</h1>
+                </div>
                 <p>Estimado cliente <strong>{{ company.name }}</strong>,</p>
                 <p>A continuación, se detallan las novedades más recientes registradas por nuestro equipo de monitoreo:</p>
 
