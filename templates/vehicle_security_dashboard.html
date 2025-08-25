@@ -1,0 +1,732 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Seguridad Vehicular - SELFING{% endblock %}
+
+{% block extra_css %}
+    <link rel="stylesheet" href="{% static 'css/dashboard.css' %}">
+    <link rel="stylesheet" href="{% static 'css/color_theme.css' %}">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <style>
+        .vehicle-dashboard {
+            padding: 20px;
+        }
+        .map-container {
+            height: 550px;
+            border-radius: 10px;
+            overflow: hidden;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            position: relative;
+        }
+        #vehicleMap {
+            height: 100%;
+            width: 100%;
+        }
+        .map-controls {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            z-index: 1000;
+            background: white;
+            padding: 10px;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+            min-width: 200px;
+        }
+        .map-controls h6 {
+            margin: 0 0 10px 0;
+            font-size: 0.9em;
+            color: #2d3436;
+        }
+        .control-group {
+            margin-bottom: 8px;
+        }
+        .control-group label {
+            display: flex;
+            align-items: center;
+            font-size: 0.8em;
+            margin: 0;
+            cursor: pointer;
+        }
+        .control-group input[type="checkbox"] {
+            margin-right: 8px;
+        }
+        .weather-popup {
+            max-width: 250px;
+        }
+        .weather-popup .weather-icon {
+            font-size: 2em;
+            text-align: center;
+            margin-bottom: 10px;
+        }
+        .speed-alert {
+            background: #ff6b6b;
+            color: white;
+            padding: 5px 8px;
+            border-radius: 4px;
+            font-size: 0.8em;
+            margin-top: 5px;
+        }
+        .weather-alert {
+            background: #ffa726;
+            color: white;
+            padding: 5px 8px;
+            border-radius: 4px;
+            font-size: 0.8em;
+            margin-top: 5px;
+        }
+        .stats-panel {
+            background: white;
+            border-radius: 10px;
+            padding: 20px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            margin-bottom: 20px;
+        }
+        .weather-widget {
+            background: linear-gradient(135deg, #74b9ff, #0984e3);
+            color: white;
+            border-radius: 8px;
+            padding: 15px;
+            margin-bottom: 15px;
+            font-size: 0.9em;
+        }
+        .weather-compact {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        .weather-info {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+        .weather-temp {
+            font-size: 1.8em;
+            font-weight: bold;
+        }
+        .weather-details {
+            font-size: 0.85em;
+            opacity: 0.9;
+        }
+        .vehicle-status {
+            display: flex;
+            justify-content: space-around;
+            margin-bottom: 20px;
+        }
+        .status-item {
+            text-align: center;
+            padding: 15px;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            flex: 1;
+            margin: 0 5px;
+        }
+        .status-number {
+            font-size: 2em;
+            font-weight: bold;
+            color: #2d3436;
+        }
+        .status-label {
+            color: #636e72;
+            font-size: 0.9em;
+        }
+        .alerts-section {
+            background: white;
+            border-radius: 10px;
+            padding: 20px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            margin-bottom: 20px;
+        }
+        .alert-item {
+            padding: 10px;
+            margin-bottom: 10px;
+            border-left: 4px solid #e17055;
+            background: #ffeaa7;
+            border-radius: 0 5px 5px 0;
+        }
+        .alert-speed { border-left-color: #e17055; }
+        .alert-connection { border-left-color: #fd79a8; }
+        .alert-stopped { border-left-color: #fdcb6e; }
+        .reports-table {
+            background: white;
+            border-radius: 10px;
+            padding: 20px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+        .btn-activity {
+            background: #00b894;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            text-decoration: none;
+            display: inline-block;
+            margin-top: 20px;
+        }
+        .btn-activity:hover {
+            background: #00a085;
+            color: white;
+            text-decoration: none;
+        }
+    </style>
+{% endblock %}
+
+{% block content %}
+<div class="vehicle-dashboard">
+    <div class="dashboard-header">
+        <h2><i class="fas fa-truck me-3"></i>Seguridad Vehicular</h2>
+        <p>Monitoreo en tiempo real de la flota vehicular</p>
+    </div>
+
+    <div class="row">
+        <!-- Mapa y Clima -->
+        <div class="col-lg-8">
+            <!-- Widget del Clima -->
+            <div class="weather-widget">
+                <div class="weather-compact">
+                    <div class="weather-info">
+                        <div class="weather-temp">{{ weather_data.temperature }}°C</div>
+                        <div>
+                            <div><strong id="weather-location">Punta Arenas</strong></div>
+                            <div id="weather-description">{{ weather_data.description }}</div>
+                            <div class="weather-details" id="weather-details">Humedad: {{ weather_data.humidity }}% | Viento: {{ weather_data.wind_speed }} km/h</div>
+                        </div>
+                    </div>
+                    <div>
+                        <i class="fas fa-cloud-sun" style="font-size: 2em; opacity: 0.8;"></i>
+                        <button id="geolocateBtn" class="btn btn-sm btn-light ms-2" title="Obtener mi ubicación">
+                            <i class="fas fa-location-arrow"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Mapa -->
+            <div class="map-container">
+                <div class="map-controls">
+                    <h6><i class="fas fa-layer-group me-1"></i>Controles del Mapa</h6>
+                    <div class="control-group">
+                        <label>
+                            <input type="checkbox" id="showVehicles" checked>
+                            Mostrar Vehículos
+                        </label>
+                    </div>
+                    <div class="control-group">
+                        <label>
+                            <input type="checkbox" id="showWeather" checked>
+                            Información Climática
+                        </label>
+                    </div>
+                    <div class="control-group">
+                        <label>
+                            <input type="checkbox" id="showSpeedAlerts" checked>
+                            Alertas de Velocidad
+                        </label>
+                    </div>
+                    <div class="control-group">
+                        <label>
+                            <input type="checkbox" id="showWeatherAlerts" checked>
+                            Alertas Climáticas
+                        </label>
+                    </div>
+                    <div class="control-group">
+                        <label>
+                            <input type="checkbox" id="showTraffic">
+                            Estado del Tráfico
+                        </label>
+                    </div>
+                </div>
+                <div id="vehicleMap"></div>
+            </div>
+        </div>
+
+        <!-- Panel de Datos -->
+        <div class="col-lg-4">
+            <!-- Estados de Vehículos -->
+            <div class="stats-panel">
+                <h5><i class="fas fa-chart-bar me-2"></i>Estado de Vehículos</h5>
+                <div class="vehicle-status">
+                    <div class="status-item">
+                        <div class="status-number text-success">{{ vehicles_on_route }}</div>
+                        <div class="status-label">En Ruta</div>
+                    </div>
+                    <div class="status-item">
+                        <div class="status-number text-warning">{{ vehicles_stopped }}</div>
+                        <div class="status-label">Detenidos</div>
+                    </div>
+                    <div class="status-item">
+                        <div class="status-number text-danger">{{ vehicles_disconnected }}</div>
+                        <div class="status-label">Sin Conexión</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Estadísticas -->
+            <div class="stats-panel">
+                <h5><i class="fas fa-tachometer-alt me-2"></i>Estadísticas</h5>
+                <div class="mb-2">
+                    <strong>Excesos de Velocidad:</strong> {{ stats.speed_violations }}
+                </div>
+                <div class="mb-2">
+                    <strong>Tiempo Detenido Promedio:</strong> {{ stats.stopped_time_avg }} min
+                </div>
+                <div class="mb-2">
+                    <strong>Mayor Tiempo Manejando:</strong> {{ stats.longest_drive_time }} hrs
+                </div>
+                <div class="mb-2">
+                    <strong>Problemas de Conexión:</strong> {{ stats.connection_issues }}
+                </div>
+            </div>
+
+            <!-- Alertas -->
+            <div class="alerts-section">
+                <h5><i class="fas fa-exclamation-triangle me-2"></i>Alertas Activas</h5>
+                {% for alert in demo_alerts %}
+                    <div class="alert-item alert-{{ alert.type }}">
+                        <strong>{{ alert.vehicle }}</strong> - {{ alert.time }}<br>
+                        <small>{{ alert.message }}</small>
+                    </div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Historial de Reportes -->
+    <div class="reports-table">
+        <h5><i class="fas fa-history me-2"></i>Historial de Reportes</h5>
+        <div class="table-responsive">
+            <table class="table table-striped">
+                <thead>
+                    <tr>
+                        <th>Patente</th>
+                        <th>Conductor</th>
+                        <th>Tiempo</th>
+                        <th>Incidencia</th>
+                        <th>Estado</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for report in demo_reports %}
+                        <tr>
+                            <td><strong>{{ report.vehicle }}</strong></td>
+                            <td>{{ report.driver }}</td>
+                            <td>{{ report.time }}</td>
+                            <td>{{ report.issue }}</td>
+                            <td>
+                                {% if report.issue == 'Ruta completada' %}
+                                    <span class="badge bg-success">Completado</span>
+                                {% else %}
+                                    <span class="badge bg-warning">Pendiente</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        
+        <a href="{% url 'vehicle_activity_log' %}" class="btn-activity">
+            <i class="fas fa-list me-2"></i>Ver Registro de Actividades
+        </a>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            // Datos de vehículos con información climática (demo) - Punta Arenas, Chile
+            var vehicles = [
+                {id: 1, name: 'ABC-123', lat: -53.1638, lng: -70.9171, speed: 35, status: 'En ruta', driver: 'Juan Pérez', weather: {temp: 8, condition: 'Viento fuerte', icon: '💨'}, speedLimit: 50, fuel: 75, odometer: 45230, lastMaintenance: '15/11/2024', model: 'Toyota Hilux 2022', engine: 'Encendido', doors: 'Cerradas', battery: 95},
+                {id: 2, name: 'DEF-456', lat: -53.1558, lng: -70.9098, speed: 0, status: 'Detenido', driver: 'María González', weather: {temp: 6, condition: 'Nublado', icon: '☁️'}, speedLimit: 60, fuel: 45, odometer: 38750, lastMaintenance: '08/11/2024', model: 'Ford Ranger 2021', engine: 'Apagado', doors: 'Cerradas', battery: 88},
+                {id: 3, name: 'GHI-789', lat: -53.1478, lng: -70.8925, speed: 45, status: 'En ruta', driver: 'Carlos López', weather: {temp: 4, condition: 'Lluvia ligera', icon: '🌧️'}, speedLimit: 50, fuel: 20, odometer: 52100, lastMaintenance: '02/11/2024', model: 'Chevrolet S10 2023', engine: 'Encendido', doors: 'Cerradas', battery: 92},
+                {id: 4, name: 'JKL-012', lat: -53.1398, lng: -70.8752, speed: 25, status: 'En ruta', driver: 'Ana Martínez', weather: {temp: 7, condition: 'Parcialmente nublado', icon: '⛅'}, speedLimit: 40, fuel: 85, odometer: 29800, lastMaintenance: '20/11/2024', model: 'Nissan Frontier 2022', engine: 'Encendido', doors: 'Cerradas', battery: 97},
+                {id: 5, name: 'MNO-345', lat: -53.1318, lng: -70.8579, speed: 0, status: 'Offline', driver: 'Pedro Martín', weather: {temp: 3, condition: 'Niebla', icon: '🌫️'}, speedLimit: 60, fuel: 10, odometer: 67450, lastMaintenance: '25/10/2024', model: 'Mitsubishi L200 2020', engine: 'Apagado', doors: 'Abiertas', battery: 45}
+            ];
+            
+            // Inicializar mapa - Punta Arenas, Chile
+            var map = L.map('vehicleMap').setView([-53.1638, -70.9171], 12);
+            
+            // Agregar capa de mapa
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                attribution: '© OpenStreetMap contributors'
+            }).addTo(map);
+            
+            // Grupos de capas
+            var vehicleMarkers = L.layerGroup().addTo(map);
+            var weatherMarkers = L.layerGroup().addTo(map);
+            var speedAlertMarkers = L.layerGroup().addTo(map);
+            var weatherAlertMarkers = L.layerGroup().addTo(map);
+            var trafficMarkers = L.layerGroup();
+            
+            // Función para determinar alertas
+            function getVehicleAlerts(vehicle) {
+                var alerts = [];
+                
+                // Alerta de velocidad según clima
+                var weatherSpeedLimit = vehicle.speedLimit;
+                if (vehicle.weather.condition === 'Lluvia ligera' || vehicle.weather.condition === 'Niebla') {
+                    weatherSpeedLimit = vehicle.speedLimit * 0.8; // Reducir 20% en mal clima
+                }
+                
+                if (vehicle.speed > weatherSpeedLimit && vehicle.status === 'En ruta') {
+                    alerts.push({
+                        type: 'speed',
+                        message: `Velocidad excesiva para condiciones climáticas (${vehicle.speed} km/h en ${vehicle.weather.condition})`
+                    });
+                }
+                
+                return alerts;
+            }
+            
+            // Función para crear popup de vehículo
+            function createVehiclePopup(vehicle) {
+                var alerts = getVehicleAlerts(vehicle);
+                var alertsHtml = '';
+                
+                alerts.forEach(function(alert) {
+                    var alertClass = alert.type === 'speed' ? 'speed-alert' : 'weather-alert';
+                    alertsHtml += `<div class="${alertClass}">${alert.message}</div>`;
+                });
+                
+                var fuelColor = vehicle.fuel > 50 ? '#00b894' : vehicle.fuel > 25 ? '#fdcb6e' : '#e17055';
+                var batteryColor = vehicle.battery > 70 ? '#00b894' : vehicle.battery > 40 ? '#fdcb6e' : '#e17055';
+                
+                return `
+                    <div class="weather-popup" style="min-width: 280px;">
+                        <div style="border-bottom: 2px solid #ddd; padding-bottom: 8px; margin-bottom: 8px;">
+                            <strong style="font-size: 16px;">${vehicle.name}</strong>
+                            <div style="font-size: 12px; color: #666;">${vehicle.model}</div>
+                        </div>
+                        
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 8px;">
+                            <div><strong>Conductor:</strong><br>${vehicle.driver}</div>
+                            <div><strong>Estado:</strong><br><span style="color: ${vehicle.status === 'En ruta' ? '#00b894' : vehicle.status === 'Detenido' ? '#fdcb6e' : '#e17055'};">${vehicle.status}</span></div>
+                        </div>
+                        
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 8px;">
+                            <div><strong>Velocidad:</strong><br>${vehicle.speed} km/h</div>
+                            <div><strong>Kilometraje:</strong><br>${vehicle.odometer.toLocaleString()} km</div>
+                        </div>
+                        
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 8px;">
+                            <div><strong>Combustible:</strong><br><span style="color: ${fuelColor}; font-weight: bold;">${vehicle.fuel}%</span></div>
+                            <div><strong>Batería:</strong><br><span style="color: ${batteryColor}; font-weight: bold;">${vehicle.battery}%</span></div>
+                        </div>
+                        
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 8px;">
+                            <div><strong>Motor:</strong><br>${vehicle.engine}</div>
+                            <div><strong>Puertas:</strong><br><span style="color: ${vehicle.doors === 'Cerradas' ? '#00b894' : '#e17055'};">${vehicle.doors}</span></div>
+                        </div>
+                        
+                        <div style="margin-bottom: 8px;">
+                            <strong>Última Mantención:</strong> ${vehicle.lastMaintenance}
+                        </div>
+                        
+                        <hr style="margin: 8px 0; border: 1px solid #eee;">
+                        
+                        <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 4px;">
+                            <div class="weather-icon" style="font-size: 20px;">${vehicle.weather.icon}</div>
+                            <div>
+                                <strong>Clima:</strong> ${vehicle.weather.condition}<br>
+                                <strong>Temperatura:</strong> ${vehicle.weather.temp}°C
+                            </div>
+                        </div>
+                        
+                        <div style="font-size: 12px; color: #666;">
+                            <strong>Límite sugerido:</strong> ${vehicle.weather.condition === 'Lluvia ligera' || vehicle.weather.condition === 'Niebla' ? Math.round(vehicle.speedLimit * 0.8) : vehicle.speedLimit} km/h
+                        </div>
+                        
+                        ${alertsHtml}
+                    </div>
+                `;
+            }
+            
+            // Agregar marcadores de vehículos
+            function addVehicleMarkers() {
+                vehicleMarkers.clearLayers();
+                
+                vehicles.forEach(function(vehicle) {
+                    var alerts = getVehicleAlerts(vehicle);
+                    var hasSpeedAlert = alerts.some(a => a.type === 'speed');
+                    var hasWeatherAlert = alerts.some(a => a.type === 'weather');
+                    
+                    var color = vehicle.status === 'En ruta' ? 
+                               (hasSpeedAlert ? '#e17055' : '#00b894') : 
+                               vehicle.status === 'Detenido' ? '#fdcb6e' : '#636e72';
+                    
+                    var marker = L.circleMarker([vehicle.lat, vehicle.lng], {
+                        color: color,
+                        fillColor: color,
+                        fillOpacity: 0.8,
+                        radius: hasSpeedAlert || hasWeatherAlert ? 12 : 8,
+                        weight: hasSpeedAlert || hasWeatherAlert ? 3 : 2
+                    });
+                    
+                    marker.bindPopup(createVehiclePopup(vehicle));
+                    vehicleMarkers.addLayer(marker);
+                });
+            }
+            
+            // Agregar marcadores de clima
+            function addWeatherMarkers() {
+                weatherMarkers.clearLayers();
+                
+                vehicles.forEach(function(vehicle) {
+                    var weatherIcon = L.divIcon({
+                        html: `<div style="font-size: 20px; text-shadow: 1px 1px 2px rgba(0,0,0,0.5);">${vehicle.weather.icon}</div>`,
+                        iconSize: [25, 25],
+                        className: 'weather-icon-marker'
+                    });
+                    
+                    var marker = L.marker([vehicle.lat + 0.005, vehicle.lng + 0.005], {icon: weatherIcon});
+                    marker.bindPopup(`
+                        <strong>Clima en ${vehicle.name}</strong><br>
+                        ${vehicle.weather.condition}<br>
+                        Temperatura: ${vehicle.weather.temp}°C
+                    `);
+                    weatherMarkers.addLayer(marker);
+                });
+            }
+            
+            // Agregar marcadores de alertas de velocidad
+            function addSpeedAlertMarkers() {
+                speedAlertMarkers.clearLayers();
+                
+                vehicles.forEach(function(vehicle) {
+                    var alerts = getVehicleAlerts(vehicle);
+                    var speedAlert = alerts.find(a => a.type === 'speed');
+                    
+                    if (speedAlert) {
+                        var alertIcon = L.divIcon({
+                            html: '<div style="background: #e17055; color: white; border-radius: 50%; width: 20px; height: 20px; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 12px; border: 2px solid white; box-shadow: 0 2px 4px rgba(0,0,0,0.3);">!</div>',
+                            iconSize: [20, 20],
+                            className: 'speed-alert-marker'
+                        });
+                        
+                        var marker = L.marker([vehicle.lat - 0.005, vehicle.lng - 0.005], {icon: alertIcon});
+                        marker.bindPopup(`<strong>Alerta de Velocidad</strong><br>${speedAlert.message}`);
+                        speedAlertMarkers.addLayer(marker);
+                    }
+                });
+            }
+            
+            // Agregar marcadores de alertas climáticas
+            function addWeatherAlertMarkers() {
+                weatherAlertMarkers.clearLayers();
+                
+                vehicles.forEach(function(vehicle) {
+                    var alerts = getVehicleAlerts(vehicle);
+                    var weatherAlert = alerts.find(a => a.type === 'weather');
+                    
+                    if (weatherAlert) {
+                        var alertIcon = L.divIcon({
+                            html: '<div style="background: #ffa726; color: white; border-radius: 50%; width: 20px; height: 20px; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 12px; border: 2px solid white; box-shadow: 0 2px 4px rgba(0,0,0,0.3);">⚠</div>',
+                            iconSize: [20, 20],
+                            className: 'weather-alert-marker'
+                        });
+                        
+                        var marker = L.marker([vehicle.lat + 0.005, vehicle.lng - 0.005], {icon: alertIcon});
+                        marker.bindPopup(`<strong>Alerta Climática</strong><br>${weatherAlert.message}`);
+                        weatherAlertMarkers.addLayer(marker);
+                    }
+                });
+            }
+            
+            // Agregar marcadores de tráfico (demo)
+            function addTrafficMarkers() {
+                trafficMarkers.clearLayers();
+                
+                var trafficPoints = [
+                    {lat: -33.4400, lng: -70.6600, level: 'Alto', color: '#e17055'},
+                    {lat: -33.4300, lng: -70.6200, level: 'Medio', color: '#fdcb6e'},
+                    {lat: -33.4100, lng: -70.5800, level: 'Bajo', color: '#00b894'}
+                ];
+                
+                trafficPoints.forEach(function(point) {
+                    var trafficIcon = L.divIcon({
+                        html: `<div style="background: ${point.color}; color: white; border-radius: 4px; padding: 2px 6px; font-size: 10px; font-weight: bold; border: 1px solid white; box-shadow: 0 1px 3px rgba(0,0,0,0.3);">🚗</div>`,
+                        iconSize: [30, 20],
+                        className: 'traffic-marker'
+                    });
+                    
+                    var marker = L.marker([point.lat, point.lng], {icon: trafficIcon});
+                    marker.bindPopup(`<strong>Tráfico ${point.level}</strong><br>Nivel de congestión: ${point.level}`);
+                    trafficMarkers.addLayer(marker);
+                });
+            }
+            
+            // Inicializar marcadores
+            addVehicleMarkers();
+            addWeatherMarkers();
+            addSpeedAlertMarkers();
+            addWeatherAlertMarkers();
+            addTrafficMarkers();
+            
+            // Controles de capas
+            document.getElementById('showVehicles').addEventListener('change', function() {
+                if (this.checked) {
+                    map.addLayer(vehicleMarkers);
+                } else {
+                    map.removeLayer(vehicleMarkers);
+                }
+            });
+            
+            document.getElementById('showWeather').addEventListener('change', function() {
+                if (this.checked) {
+                    map.addLayer(weatherMarkers);
+                } else {
+                    map.removeLayer(weatherMarkers);
+                }
+            });
+            
+            document.getElementById('showSpeedAlerts').addEventListener('change', function() {
+                if (this.checked) {
+                    map.addLayer(speedAlertMarkers);
+                } else {
+                    map.removeLayer(speedAlertMarkers);
+                }
+            });
+            
+            document.getElementById('showWeatherAlerts').addEventListener('change', function() {
+                if (this.checked) {
+                    map.addLayer(weatherAlertMarkers);
+                } else {
+                    map.removeLayer(weatherAlertMarkers);
+                }
+            });
+            
+            document.getElementById('showTraffic').addEventListener('change', function() {
+                if (this.checked) {
+                    map.addLayer(trafficMarkers);
+                } else {
+                    map.removeLayer(trafficMarkers);
+                }
+            });
+            
+            // Función para obtener clima por coordenadas
+            async function getWeatherByCoords(lat, lng, locationName = '') {
+                try {
+                    // Simulación de API de clima (en producción usar API real)
+                    const weatherConditions = ['Soleado', 'Nublado', 'Lluvia ligera', 'Viento fuerte', 'Niebla', 'Parcialmente nublado'];
+                    const randomCondition = weatherConditions[Math.floor(Math.random() * weatherConditions.length)];
+                    const randomTemp = Math.floor(Math.random() * 15) + 2; // 2-17°C para Punta Arenas
+                    const randomHumidity = Math.floor(Math.random() * 40) + 60; // 60-100%
+                    const randomWind = Math.floor(Math.random() * 30) + 10; // 10-40 km/h
+                    
+                    return {
+                        temperature: randomTemp,
+                        description: randomCondition,
+                        humidity: randomHumidity,
+                        wind_speed: randomWind,
+                        location: locationName || `Lat: ${lat.toFixed(4)}, Lng: ${lng.toFixed(4)}`
+                    };
+                } catch (error) {
+                    console.error('Error obteniendo clima:', error);
+                    return null;
+                }
+            }
+            
+            // Función para actualizar widget del clima
+            function updateWeatherWidget(weatherData) {
+                if (weatherData) {
+                    document.getElementById('weather-location').textContent = weatherData.location;
+                    document.querySelector('.weather-temp').textContent = weatherData.temperature + '°C';
+                    document.getElementById('weather-description').textContent = weatherData.description;
+                    document.getElementById('weather-details').textContent = 
+                        `Humedad: ${weatherData.humidity}% | Viento: ${weatherData.wind_speed} km/h`;
+                }
+            }
+            
+            // Geolocalización
+            document.getElementById('geolocateBtn').addEventListener('click', function() {
+                if (navigator.geolocation) {
+                    this.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+                    navigator.geolocation.getCurrentPosition(
+                        async function(position) {
+                            const lat = position.coords.latitude;
+                            const lng = position.coords.longitude;
+                            
+                            // Centrar mapa en ubicación actual
+                            map.setView([lat, lng], 13);
+                            
+                            // Agregar marcador temporal
+                            if (window.currentLocationMarker) {
+                                map.removeLayer(window.currentLocationMarker);
+                            }
+                            
+                            window.currentLocationMarker = L.marker([lat, lng], {
+                                icon: L.divIcon({
+                                    html: '<div style="background: #e17055; color: white; border-radius: 50%; width: 20px; height: 20px; display: flex; align-items: center; justify-content: center; font-weight: bold; border: 2px solid white; box-shadow: 0 2px 4px rgba(0,0,0,0.3);">📍</div>',
+                                    iconSize: [20, 20],
+                                    className: 'current-location-marker'
+                                })
+                            }).addTo(map);
+                            
+                            // Obtener y mostrar clima
+                            const weatherData = await getWeatherByCoords(lat, lng, 'Mi Ubicación');
+                            updateWeatherWidget(weatherData);
+                            
+                            document.getElementById('geolocateBtn').innerHTML = '<i class="fas fa-location-arrow"></i>';
+                        },
+                        function(error) {
+                            console.error('Error de geolocalización:', error);
+                            alert('No se pudo obtener tu ubicación. Verifica los permisos del navegador.');
+                            document.getElementById('geolocateBtn').innerHTML = '<i class="fas fa-location-arrow"></i>';
+                        }
+                    );
+                } else {
+                    alert('La geolocalización no está soportada en este navegador.');
+                }
+            });
+            
+            // Click en el mapa para obtener clima
+            map.on('click', async function(e) {
+                const lat = e.latlng.lat;
+                const lng = e.latlng.lng;
+                
+                // Remover marcador anterior
+                if (window.clickLocationMarker) {
+                    map.removeLayer(window.clickLocationMarker);
+                }
+                
+                // Agregar nuevo marcador
+                window.clickLocationMarker = L.marker([lat, lng], {
+                    icon: L.divIcon({
+                        html: '<div style="background: #0984e3; color: white; border-radius: 50%; width: 16px; height: 16px; display: flex; align-items: center; justify-content: center; font-weight: bold; border: 2px solid white; box-shadow: 0 2px 4px rgba(0,0,0,0.3);">📍</div>',
+                        iconSize: [16, 16],
+                        className: 'click-location-marker'
+                    })
+                }).addTo(map);
+                
+                // Obtener y mostrar clima
+                const weatherData = await getWeatherByCoords(lat, lng, 'Ubicación Seleccionada');
+                updateWeatherWidget(weatherData);
+                
+                // Mostrar popup temporal
+                L.popup()
+                    .setLatLng(e.latlng)
+                    .setContent(`
+                        <div style="text-align: center;">
+                            <strong>Clima en esta ubicación</strong><br>
+                            ${weatherData.description}<br>
+                            <strong>${weatherData.temperature}°C</strong>
+                        </div>
+                    `)
+                    .openOn(map);
+            });
+            
+            // Actualizar datos cada 30 segundos
+            setInterval(function() {
+                // Aquí se podría hacer una llamada AJAX para actualizar posiciones
+                console.log('Actualizando posiciones de vehículos...');
+                addVehicleMarkers();
+                addWeatherMarkers();
+                addSpeedAlertMarkers();
+                addWeatherAlertMarkers();
+            }, 30000);
+        });
+    </script>
+{% endblock %}
