@@ -21,7 +21,7 @@
     </div>
 {% if active_notes %}
     <div class="mb-4">
-        <h4 class="h5 text-warning"><i class="fas fa-exclamation-circle me-2"></i> Notas / Pendientes del Turno Anterior</h4>
+        <h4 class="h5 text-warning"><i class="fas fa-exclamation-circle me-2"></i> Notas </h4>
         {% for note in active_notes %}
         <div class="alert alert-warning alert-dismissible fade show" role="alert">
             <strong>{{ note.created_by.username }} ({{ note.created_at|timesince }} atrás):</strong>
@@ -64,10 +64,10 @@
                             <div class="mt-4 pt-4 border-top text-center">
                                 <h5 class="mb-3 text-secondary">Acciones Rápidas</h5>
                                 <div class="d-grid gap-2 d-md-flex justify-content-center flex-wrap">
-                                    <a href="{% url 'checklist' %}" class="btn btn-primary btn-lg shadow-sm mb-2"><i class="fas fa-list-check me-2"></i>Ir al Checklist</a>
-                                    <a href="{% url 'update_log' %}" class="btn btn-info btn-lg shadow-sm mb-2"><i class="fas fa-edit me-2"></i>Anotar en Bitácora</a>
-                                    <a href="{% url 'full_logbook_view' %}" class="btn btn-dark btn-lg shadow-sm mb-2"><i class="fas fa-history me-2"></i>Bitácora 24h / Relevo</a>
-                                    <a href="{% url 'my_logbook' %}" class="btn btn-secondary btn-lg shadow-sm mb-2"><i class="fas fa-book me-2"></i>Ver Mi Bitácora</a>
+                                    <a href="{% url 'checklist' %}" class="btn btn-primary btn-lg shadow-sm mb-2"><i class="fas fa-list-check me-2"></i>Checklist</a>
+                                    <a href="{% url 'update_log' %}" class="btn btn-info btn-lg shadow-sm mb-2"><i class="fas fa-edit me-2"></i>Bitácora</a>
+                                    <a href="{% url 'full_logbook_view' %}" class="btn btn-dark btn-lg shadow-sm mb-2"><i class="fas fa-history me-2"></i>Bitácora del día</a>
+                                    <a href="{% url 'my_logbook' %}" class="btn btn-secondary btn-lg shadow-sm mb-2"><i class="fas fa-book me-2"></i>Mi Bitácora actual</a>
                                     <button type="button" class="btn btn-warning btn-lg shadow-sm mb-2" data-bs-toggle="modal" data-bs-target="#shiftNoteModal"><i class="fas fa-sticky-note me-2"></i>Nota para Próximo Turno</button>
                                     {% if progress_percentage >= 99 %}
                                     <a href="{% url 'end_turn_preview' %}" class="btn btn-danger btn-lg shadow-sm mb-2 animate__animated animate__heartBeat animate__infinite"><i class="fas fa-power-off me-2"></i>Finalizar Turno</a>
@@ -88,7 +88,7 @@
                     {% endif %}
                     
                     <div class="card text-center shadow-sm mb-4 border-primary">
-                        <div class="card-header bg-primary text-white">Próxima Ronda Virtual</div>
+                        <div class="card-header bg-primary text-white">Tiempo para realizar Ronda Virtual</div>
                         <div class="card-body"><h3 class="display-2 fw-bold text-primary" id="dashboard-round-countdown">--:--</h3></div>
                         {# --- CORRECCIÓN AQUÍ: Se restauró el pie de página con los botones de la ronda --- #}
                         <div class="card-footer bg-light">
@@ -96,7 +96,7 @@
                                 <form method="post" action="{% url 'start_virtual_round' %}" class="d-grid">
                                     {% csrf_token %}
                                     <button type="submit" class="btn btn-primary">
-                                        <i class="fas fa-play-circle me-2"></i>Iniciar Ronda Manualmente
+                                        <i class="fas fa-play-circle me-2"></i>Iniciar Ronda
                                     </button>
                                 </form>
                             {% else %}

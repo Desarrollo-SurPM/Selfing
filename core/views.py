@@ -584,7 +584,7 @@ def operator_dashboard(request):
     if active_shift and active_shift.actual_start_time:
         progress_tasks = {}
         completed_tasks_count = 0
-        total_tasks = 3 
+        total_tasks = 2 
         
         # 1. Lógica de Progreso
         total_rondas_requeridas = 7
@@ -597,10 +597,6 @@ def operator_dashboard(request):
         progress_tasks['bitacora'] = {'completed': (len(ids_empresas_con_log) >= empresas_con_instalaciones.count()), 'text': f"Bitácora ({len(ids_empresas_con_log)}/{empresas_con_instalaciones.count()})"}
         if progress_tasks['bitacora']['completed']: completed_tasks_count += 1
         
-        todas_las_empresas = Company.objects.all()
-        ids_empresas_con_correo = Email.objects.filter(operator=request.user, created_at__gte=active_shift.actual_start_time).values_list('company_id', flat=True)
-        progress_tasks['correos'] = {'completed': (len(ids_empresas_con_correo) >= todas_las_empresas.count()), 'text': f"Correos ({len(ids_empresas_con_correo)}/{todas_las_empresas.count()})"}
-        if progress_tasks['correos']['completed']: completed_tasks_count += 1
         
         context['progress_percentage'] = int((completed_tasks_count / total_tasks) * 100) if total_tasks > 0 else 0
         context['progress_tasks'] = progress_tasks
