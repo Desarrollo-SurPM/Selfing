@@ -275,3 +275,91 @@ class ShiftNote(models.Model):
 
     def __str__(self):
         return f"Nota de {self.created_by.username} el {self.created_at.strftime('%d/%m/%Y')}"
+
+# Modelos para Seguridad Vehicular
+class Vehicle(models.Model):
+    license_plate = models.CharField(max_length=20, unique=True, verbose_name="Patente")
+    driver_name = models.CharField(max_length=100, verbose_name="Conductor")
+    vehicle_type = models.CharField(max_length=50, choices=[
+        ('truck', 'Camión'),
+        ('van', 'Furgoneta'),
+        ('car', 'Automóvil'),
+        ('motorcycle', 'Motocicleta'),
+        ('other', 'Otro')
+    ], default='truck', verbose_name="Tipo de Vehículo")
+    company = models.ForeignKey(Company, on_delete=models.CASCADE, related_name='vehicles', verbose_name="Empresa")
+    is_active = models.BooleanField(default=True, verbose_name="Activo")
+    created_at = models.DateTimeField(auto_now_add=True)
+    
+    class Meta:
+        verbose_name = "Vehículo"
+        verbose_name_plural = "Vehículos"
+        ordering = ['license_plate']
+    
+    def __str__(self):
+        return f"{self.license_plate} - {self.driver_name}"
+
+class VehiclePosition(models.Model):
+    vehicle = models.ForeignKey(Vehicle, on_delete=models.CASCADE, related_name='positions')
+    latitude = models.DecimalField(max_digits=10, decimal_places=8, verbose_name="Latitud")
+    longitude = models.DecimalField(max_digits=11, decimal_places=8, verbose_name="Longitud")
+    speed = models.FloatField(default=0, verbose_name="Velocidad (km/h)")
+    timestamp = models.DateTimeField(auto_now_add=True)
+    is_connected = models.BooleanField(default=True, verbose_name="Conectado")
+    
+    class Meta:
+        verbose_name = "Posición de Vehículo"
+        verbose_name_plural = "Posiciones de Vehículos"
+        ordering = ['-timestamp']
+    
+    def __str__(self):
+        return f"{self.vehicle.license_plate} - {self.timestamp.strftime('%d/%m/%Y %H:%M')}"
+
+class VehicleAlert(models.Model):
+    ALERT_TYPES = [
+        ('speed', 'Exceso de Velocidad'),
+        ('weather', 'Mal Clima'),
+        ('traffic', 'Atascamiento'),
+        ('route_cut', 'Corte de Ruta'),
+        ('connection', 'Sin Conexión'),
+        ('stopped', 'Tiempo Detenido Excesivo')
+    ]
+    
+    vehicle = models.ForeignKey(Vehicle, on_delete=models.CASCADE, related_name='alerts')
+    alert_type = models.CharField(max_length=20, choices=ALERT_TYPES, verbose_name="Tipo de Alerta")
+    message = models.TextField(verbose_name="Mensaje")
+    latitude = models.DecimalField(max_digits=10, decimal_places=8, null=True, blank=True)
+    longitude = models.DecimalField(max_digits=11, decimal_places=8, null=True, blank=True)
+    is_resolved = models.BooleanField(default=False, verbose_name="Resuelta")
+    created_at = models.DateTimeField(auto_now_add=True)
+    resolved_at = models.DateTimeField(null=True, blank=True)
+    
+    class Meta:
+        verbose_name = "Alerta de Vehículo"
+        verbose_name_plural = "Alertas de Vehículos"
+        ordering = ['-created_at']
+    
+    def __str__(self):
+        return f"{self.vehicle.license_plate} - {self.get_alert_type_display()}"
+
+class VehicleRoute(models.Model):
+    vehicle = models.ForeignKey(Vehicle, on_delete=models.CASCADE, related_name='routes')
+    start_time = models.DateTimeField(verbose_name="Hora de Inicio")
+    end_time = models.DateTimeField(null=True, blank=True, verbose_name="Hora de Fin")
+    start_latitude = models.DecimalField(max_digits=10, decimal_places=8)
+    start_longitude = models.DecimalField(max_digits=11, decimal_places=8)
+    end_latitude = models.DecimalField(max_digits=10, decimal_places=8, null=True, blank=True)
+    end_longitude = models.DecimalField(max_digits=11, decimal_places=8, null=True, blank=True)
+    total_distance = models.FloatField(default=0, verbose_name="Distancia Total (km)")
+    average_speed = models.FloatField(default=0, verbose_name="Velocidad Promedio (km/h)")
+    max_speed = models.FloatField(default=0, verbose_name="Velocidad Máxima (km/h)")
+    stop_time_minutes = models.IntegerField(default=0, verbose_name="Tiempo Detenido (minutos)")
+    weather_conditions = models.TextField(blank=True, null=True, verbose_name="Condiciones Climáticas")
+    
+    class Meta:
+        verbose_name = "Ruta de Vehículo"
+        verbose_name_plural = "Rutas de Vehículos"
+        ordering = ['-start_time']
+    
+    def __str__(self):
+        return f"{self.vehicle.license_plate} - {self.start_time.strftime('%d/%m/%Y %H:%M')}"

@@ -94,4 +94,10 @@ urlpatterns = [
     path('ajax/get-updates/<int:company_id>/', views.get_updates_for_company, name='ajax_get_updates'),
     path('ajax/get-service-status/', views.get_service_status, name='ajax_get_service_status'),
     path('ajax/shifts/', views.get_shifts_for_calendar, name='ajax_get_shifts_for_calendar'),
+    
+    # Rutas para Seguridad Vehicular
+    path('dashboard/vehicle-security/', views.vehicle_security_dashboard, name='vehicle_security_dashboard'),
+    path('dashboard/vehicle-activity/', views.vehicle_activity_log, name='vehicle_activity_log'),
+    path('dashboard/vehicle-route/<int:activity_id>/', views.vehicle_route_detail, name='vehicle_route_detail'),
+    path('api/weather/', views.get_weather_data, name='get_weather_data'),
 ]

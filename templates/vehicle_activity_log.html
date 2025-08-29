@@ -1,0 +1,218 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Registro de Actividades - Seguridad Vehicular{% endblock %}
+
+{% block extra_css %}
+    <link rel="stylesheet" href="{% static 'css/dashboard.css' %}">
+    <link rel="stylesheet" href="{% static 'css/color_theme.css' %}">
+    <style>
+        .activity-dashboard {
+            padding: 20px;
+        }
+        .activity-card {
+            background: white;
+            border-radius: 10px;
+            padding: 20px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            margin-bottom: 20px;
+        }
+        .activity-item {
+            border: 1px solid #e9ecef;
+            border-radius: 8px;
+            padding: 15px;
+            margin-bottom: 15px;
+            transition: all 0.3s ease;
+            cursor: pointer;
+        }
+        .activity-item:hover {
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+            transform: translateY(-2px);
+        }
+        .vehicle-badge {
+            background: #74b9ff;
+            color: white;
+            padding: 5px 10px;
+            border-radius: 15px;
+            font-size: 0.9em;
+            font-weight: bold;
+        }
+        .status-badge {
+            padding: 3px 8px;
+            border-radius: 12px;
+            font-size: 0.8em;
+            font-weight: bold;
+        }
+        .status-completed {
+            background: #00b894;
+            color: white;
+        }
+        .status-warning {
+            background: #fdcb6e;
+            color: #2d3436;
+        }
+        .btn-back {
+            background: #636e72;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            text-decoration: none;
+            display: inline-block;
+            margin-bottom: 20px;
+        }
+        .btn-back:hover {
+            background: #2d3436;
+            color: white;
+            text-decoration: none;
+        }
+        .activity-stats {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 10px;
+        }
+        .stat-item {
+            text-align: center;
+            flex: 1;
+        }
+        .stat-value {
+            font-weight: bold;
+            color: #2d3436;
+        }
+        .stat-label {
+            font-size: 0.8em;
+            color: #636e72;
+        }
+    </style>
+{% endblock %}
+
+{% block content %}
+<div class="activity-dashboard">
+    <div class="dashboard-header">
+        <a href="{% url 'vehicle_security_dashboard' %}" class="btn-back">
+            <i class="fas fa-arrow-left me-2"></i>Volver al Dashboard
+        </a>
+        <h2><i class="fas fa-list me-3"></i>Registro de Actividades</h2>
+        <p>Historial detallado de rutas y actividades de vehículos</p>
+    </div>
+
+    <div class="activity-card">
+        <h5><i class="fas fa-route me-2"></i>Actividades Recientes</h5>
+        
+        {% for activity in activities %}
+            <div class="activity-item" data-url="{% url 'vehicle_route_detail' activity.id %}" style="cursor: pointer;">
+                <div class="d-flex justify-content-between align-items-start">
+                    <div class="flex-grow-1">
+                        <div class="d-flex align-items-center mb-2">
+                            <span class="vehicle-badge me-3">{{ activity.vehicle }}</span>
+                            <strong>{{ activity.driver }}</strong>
+                        </div>
+                        <div class="mb-2">
+                            <i class="fas fa-route me-2 text-primary"></i>
+                            <strong>{{ activity.route }}</strong>
+                        </div>
+                        <div class="mb-2">
+                            <i class="fas fa-clock me-2 text-secondary"></i>
+                            {{ activity.start_time }} - {{ activity.end_time }}
+                        </div>
+                        
+                        <div class="activity-stats">
+                            <div class="stat-item">
+                                <div class="stat-value">{{ activity.distance }}</div>
+                                <div class="stat-label">Distancia</div>
+                            </div>
+                            <div class="stat-item">
+                                <div class="stat-value">{{ activity.avg_speed }}</div>
+                                <div class="stat-label">Vel. Promedio</div>
+                            </div>
+                            <div class="stat-item">
+                                <div class="stat-value">{{ activity.max_speed }}</div>
+                                <div class="stat-label">Vel. Máxima</div>
+                            </div>
+                            <div class="stat-item">
+                                <div class="stat-value">{{ activity.stop_time }}</div>
+                                <div class="stat-label">Tiempo Detenido</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="text-end">
+                        <div class="mb-2">
+                            {% if 'exceso' in activity.max_speed or 'Melipilla' in activity.route %}
+                                <span class="status-badge status-warning">Con Alertas</span>
+                            {% else %}
+                                <span class="status-badge status-completed">Completado</span>
+                            {% endif %}
+                        </div>
+                        <div class="text-muted">
+                            <i class="fas fa-cloud me-1"></i>{{ activity.weather }}
+                        </div>
+                        <div class="mt-2">
+                            <i class="fas fa-chevron-right text-primary"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        {% empty %}
+            <div class="text-center py-5 text-muted">
+                <i class="fas fa-inbox fa-3x mb-3 d-block"></i>
+                <p class="mb-0">No hay actividades registradas</p>
+            </div>
+        {% endfor %}
+    </div>
+
+    <!-- Resumen de Estadísticas -->
+    <div class="row">
+        <div class="col-md-3">
+            <div class="activity-card text-center">
+                <h3 class="text-primary">{{ activities|length }}</h3>
+                <p class="mb-0">Rutas Completadas</p>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="activity-card text-center">
+                <h3 class="text-success">272 km</h3>
+                <p class="mb-0">Distancia Total</p>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="activity-card text-center">
+                <h3 class="text-warning">65 km/h</h3>
+                <p class="mb-0">Velocidad Promedio</p>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="activity-card text-center">
+                <h3 class="text-info">3h 15min</h3>
+                <p class="mb-0">Tiempo Total Detenido</p>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            // Agregar efectos de hover y animaciones
+            const activityItems = document.querySelectorAll('.activity-item');
+            
+            activityItems.forEach(item => {
+                item.addEventListener('mouseenter', function() {
+                    this.style.borderColor = '#74b9ff';
+                });
+                
+                item.addEventListener('mouseleave', function() {
+                    this.style.borderColor = '#e9ecef';
+                });
+                
+                // Manejar click para navegación
+                item.addEventListener('click', function() {
+                    const url = this.getAttribute('data-url');
+                    if (url) {
+                        window.location.href = url;
+                    }
+                });
+            });
+        });
+    </script>
+{% endblock %}

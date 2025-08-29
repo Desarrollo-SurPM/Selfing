@@ -27,7 +27,8 @@ import re # Importar el módulo de expresiones regulares
 from .models import (
     Company, Installation, OperatorProfile, ShiftType, OperatorShift,
     ChecklistItem, ChecklistLog, VirtualRoundLog, UpdateLog, Email, EmergencyContact,
-    TurnReport, MonitoredService, ServiceStatusLog, TraceabilityLog, ShiftNote
+    TurnReport, MonitoredService, ServiceStatusLog, TraceabilityLog, ShiftNote,
+    Vehicle, VehiclePosition, VehicleAlert, VehicleRoute
 )
 from .forms import (
     UpdateLogForm, OperatorCreationForm, ShiftNoteForm,
@@ -1576,3 +1577,302 @@ def current_logbook_view(request):
     }
     
     return render(request, 'current_logbook.html', context)
+
+# Vistas para Seguridad Vehicular
+@login_required
+@user_passes_test(is_supervisor)
+def vehicle_security_dashboard(request):
+    """Vista principal del dashboard de seguridad vehicular"""
+    import requests
+    from datetime import datetime, timedelta
+    
+    # Obtener datos de vehículos
+    vehicles = Vehicle.objects.filter(is_active=True)
+    
+    # Estadísticas generales
+    total_vehicles = vehicles.count()
+    vehicles_on_route = 0
+    vehicles_stopped = 0
+    vehicles_disconnected = 0
+    
+    # Datos de prueba para demostración - Punta Arenas, Chile
+    demo_positions = [
+        {'vehicle': 'ABC-123', 'lat': -53.1638, 'lng': -70.9171, 'speed': 35, 'connected': True, 'driver': 'Juan Pérez'},
+        {'vehicle': 'DEF-456', 'lat': -53.1558, 'lng': -70.9098, 'speed': 0, 'connected': True, 'driver': 'María González'},
+        {'vehicle': 'GHI-789', 'lat': -53.1478, 'lng': -70.8925, 'speed': 45, 'connected': False, 'driver': 'Carlos López'},
+        {'vehicle': 'JKL-012', 'lat': -53.1398, 'lng': -70.8752, 'speed': 25, 'connected': True, 'driver': 'Ana Martínez'},
+    ]
+    
+    # Contar estados de vehículos
+    for pos in demo_positions:
+        if not pos['connected']:
+            vehicles_disconnected += 1
+        elif pos['speed'] > 5:
+            vehicles_on_route += 1
+        else:
+            vehicles_stopped += 1
+    
+    # Alertas de prueba
+    demo_alerts = [
+        {'vehicle': 'ABC-123', 'type': 'speed', 'message': 'Exceso de velocidad detectado: 85 km/h en zona de 60 km/h', 'time': '10:30'},
+        {'vehicle': 'GHI-789', 'type': 'connection', 'message': 'Vehículo sin conexión desde hace 15 minutos', 'time': '09:45'},
+        {'vehicle': 'DEF-456', 'type': 'stopped', 'message': 'Vehículo detenido por más de 2 horas', 'time': '08:20'},
+    ]
+    
+    # Historial de reportes de prueba
+    demo_reports = [
+        {'vehicle': 'ABC-123', 'driver': 'Juan Pérez', 'time': '2 horas', 'issue': 'Exceso de velocidad'},
+        {'vehicle': 'DEF-456', 'driver': 'María González', 'time': '3 horas', 'issue': 'Tiempo detenido excesivo'},
+        {'vehicle': 'GHI-789', 'driver': 'Carlos López', 'time': '1 hora', 'issue': 'Sin conexión'},
+        {'vehicle': 'JKL-012', 'driver': 'Ana Martínez', 'time': '4 horas', 'issue': 'Ruta completada'},
+    ]
+    
+    # Obtener clima para Punta Arenas, Chile
+    try:
+        # API Key de OpenWeatherMap (deberías configurar esto en settings.py)
+        api_key = "tu_api_key_aqui"  # Reemplazar con tu API key real
+        city = "Punta Arenas"
+        country = "CL"
+        
+        weather_url = f"http://api.openweathermap.org/data/2.5/weather?q={city},{country}&appid={api_key}&units=metric&lang=es"
+        response = requests.get(weather_url, timeout=5)
+        
+        if response.status_code == 200:
+            weather_json = response.json()
+            weather_data = {
+                'temperature': round(weather_json['main']['temp']),
+                'description': weather_json['weather'][0]['description'].capitalize(),
+                'humidity': weather_json['main']['humidity'],
+                'wind_speed': round(weather_json['wind']['speed'] * 3.6)  # Convertir m/s a km/h
+            }
+        else:
+            # Datos de respaldo para Punta Arenas
+            weather_data = {
+                'temperature': 8,
+                'description': 'Viento fuerte',
+                'humidity': 75,
+                'wind_speed': 35
+            }
+    except Exception as e:
+        # Datos de respaldo en caso de error
+        weather_data = {
+            'temperature': 8,
+            'description': 'Viento fuerte',
+            'humidity': 75,
+            'wind_speed': 35
+        }
+    
+    # Estadísticas adicionales
+    stats = {
+        'speed_violations': 3,
+        'stopped_time_avg': 45,  # minutos
+        'longest_drive_time': 8,  # horas
+        'connection_issues': 2
+    }
+    
+    context = {
+        'vehicles': vehicles,
+        'demo_positions': demo_positions,
+        'demo_alerts': demo_alerts,
+        'demo_reports': demo_reports,
+        'weather_data': weather_data,
+        'stats': stats,
+        'total_vehicles': len(demo_positions),
+        'vehicles_on_route': vehicles_on_route,
+        'vehicles_stopped': vehicles_stopped,
+        'vehicles_disconnected': vehicles_disconnected,
+    }
+    
+    return render(request, 'vehicle_security_dashboard.html', context)
+
+@login_required
+@user_passes_test(is_supervisor)
+def vehicle_activity_log(request):
+    """Vista del registro de actividades de vehículos"""
+    
+    # Datos de prueba para el registro de actividades
+    demo_activities = [
+        {
+            'id': 1,
+            'vehicle': 'ABC-123',
+            'driver': 'Juan Pérez',
+            'start_time': '08:00',
+            'end_time': '16:30',
+            'route': 'Santiago - Valparaíso',
+            'distance': '120 km',
+            'avg_speed': '65 km/h',
+            'max_speed': '85 km/h',
+            'stop_time': '45 min',
+            'weather': 'Soleado'
+        },
+        {
+            'id': 2,
+            'vehicle': 'DEF-456',
+            'driver': 'María González',
+            'start_time': '09:15',
+            'end_time': '17:45',
+            'route': 'Santiago - Rancagua',
+            'distance': '87 km',
+            'avg_speed': '58 km/h',
+            'max_speed': '75 km/h',
+            'stop_time': '120 min',
+            'weather': 'Nublado'
+        },
+        {
+            'id': 3,
+            'vehicle': 'GHI-789',
+            'driver': 'Carlos López',
+            'start_time': '07:30',
+            'end_time': '15:00',
+            'route': 'Santiago - Melipilla',
+            'distance': '65 km',
+            'avg_speed': '72 km/h',
+            'max_speed': '90 km/h',
+            'stop_time': '30 min',
+            'weather': 'Lluvia ligera'
+        }
+    ]
+    
+    context = {
+        'activities': demo_activities
+    }
+    
+    return render(request, 'vehicle_activity_log.html', context)
+
+@login_required
+@user_passes_test(is_supervisor)
+def vehicle_route_detail(request, activity_id):
+    """Vista del detalle de una ruta específica"""
+    
+    # Datos de prueba para el detalle de ruta
+    demo_route_details = {
+        1: {
+            'vehicle': 'ABC-123',
+            'driver': 'Juan Pérez',
+            'start_time': '08:00',
+            'end_time': '16:30',
+            'duration': '8h 30min',
+            'route': 'Santiago - Valparaíso',
+            'distance': '120 km',
+            'avg_speed': '65 km/h',
+            'max_speed': '85 km/h',
+            'stop_time': '45 min',
+            'weather_start': 'Soleado, 18°C',
+            'weather_end': 'Parcialmente nublado, 22°C',
+            'route_points': [
+                {'lat': -33.4489, 'lng': -70.6693, 'time': '08:00', 'speed': 0},
+                {'lat': -33.4200, 'lng': -70.7000, 'time': '08:30', 'speed': 60},
+                {'lat': -33.3500, 'lng': -70.8000, 'time': '09:15', 'speed': 70},
+                {'lat': -33.0472, 'lng': -71.6127, 'time': '10:30', 'speed': 0},  # Valparaíso
+            ],
+            'stops': [
+                {'location': 'Estación de Servicio Quilpué', 'duration': '15 min', 'time': '10:15'},
+                {'location': 'Centro de Distribución Valparaíso', 'duration': '30 min', 'time': '11:00'},
+            ],
+            'alerts': [
+                {'type': 'speed', 'message': 'Exceso de velocidad: 85 km/h', 'time': '09:45', 'location': 'Ruta 68 km 45'},
+            ]
+        },
+        2: {
+            'vehicle': 'DEF-456',
+            'driver': 'María González',
+            'start_time': '09:15',
+            'end_time': '17:45',
+            'duration': '8h 30min',
+            'route': 'Santiago - Rancagua',
+            'distance': '87 km',
+            'avg_speed': '58 km/h',
+            'max_speed': '75 km/h',
+            'stop_time': '120 min',
+            'weather_start': 'Nublado, 16°C',
+            'weather_end': 'Nublado, 19°C',
+            'route_points': [
+                {'lat': -33.4489, 'lng': -70.6693, 'time': '09:15', 'speed': 0},
+                {'lat': -33.5000, 'lng': -70.7000, 'time': '09:45', 'speed': 55},
+                {'lat': -34.1694, 'lng': -70.7407, 'time': '11:00', 'speed': 0},  # Rancagua
+            ],
+            'stops': [
+                {'location': 'Centro Logístico Rancagua', 'duration': '90 min', 'time': '11:30'},
+                {'location': 'Almuerzo', 'duration': '30 min', 'time': '13:00'},
+            ],
+            'alerts': []
+        },
+        3: {
+            'vehicle': 'GHI-789',
+            'driver': 'Carlos López',
+            'start_time': '07:30',
+            'end_time': '15:00',
+            'duration': '7h 30min',
+            'route': 'Santiago - Melipilla',
+            'distance': '65 km',
+            'avg_speed': '72 km/h',
+            'max_speed': '90 km/h',
+            'stop_time': '30 min',
+            'weather_start': 'Lluvia ligera, 14°C',
+            'weather_end': 'Lluvia ligera, 16°C',
+            'route_points': [
+                {'lat': -33.4489, 'lng': -70.6693, 'time': '07:30', 'speed': 0},
+                {'lat': -33.5000, 'lng': -70.8000, 'time': '08:00', 'speed': 65},
+                {'lat': -33.6881, 'lng': -71.2156, 'time': '08:45', 'speed': 0},  # Melipilla
+            ],
+            'stops': [
+                {'location': 'Planta Melipilla', 'duration': '30 min', 'time': '09:00'},
+            ],
+            'alerts': [
+                {'type': 'speed', 'message': 'Exceso de velocidad: 90 km/h en lluvia', 'time': '08:15', 'location': 'Ruta 78 km 25'},
+                {'type': 'weather', 'message': 'Conducción en condiciones de lluvia', 'time': '07:30', 'location': 'Todo el trayecto'},
+            ]
+        }
+    }
+    
+    route_detail = demo_route_details.get(activity_id, demo_route_details[1])
+    
+    context = {
+        'route_detail': route_detail,
+        'activity_id': activity_id
+    }
+    
+    return render(request, 'vehicle_route_detail.html', context)
+
+@login_required
+@user_passes_test(is_supervisor)
+def get_weather_data(request):
+    """API para obtener datos del clima usando OpenWeatherMap"""
+    import requests
+    
+    lat = request.GET.get('lat', -33.4489)  # Santiago por defecto
+    lon = request.GET.get('lon', -70.6693)
+    
+    api_key = 'af043322c5d5657c7b6c16a888ecd196'
+    url = f'https://api.openweathermap.org/data/2.5/weather?lat={lat}&lon={lon}&appid={api_key}&units=metric&lang=es'
+    
+    try:
+        response = requests.get(url, timeout=5)
+        if response.status_code == 200:
+            data = response.json()
+            weather_data = {
+                'temperature': round(data['main']['temp']),
+                'description': data['weather'][0]['description'].title(),
+                'humidity': data['main']['humidity'],
+                'wind_speed': round(data['wind']['speed'] * 3.6),  # Convertir m/s a km/h
+                'icon': data['weather'][0]['icon']
+            }
+            return JsonResponse(weather_data)
+        else:
+            # Datos de respaldo si la API falla
+            return JsonResponse({
+                'temperature': 20,
+                'description': 'Datos no disponibles',
+                'humidity': 60,
+                'wind_speed': 10,
+                'icon': '01d'
+            })
+    except Exception as e:
+        # Datos de respaldo en caso de error
+        return JsonResponse({
+            'temperature': 20,
+            'description': 'Error al obtener datos',
+            'humidity': 60,
+            'wind_speed': 10,
+            'icon': '01d'
+        })
