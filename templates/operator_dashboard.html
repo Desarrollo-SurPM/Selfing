@@ -97,9 +97,9 @@
                     <!-- Botón de Pánico -->
                     {% if not user.is_superuser %}
                     <div class="d-grid mb-3">
-                        <a href="{% url 'panic_button' %}" target="_blank" class="btn btn-danger btn-lg shadow-sm">
+                        <button type="button" class="btn btn-danger btn-lg shadow-sm" data-bs-toggle="modal" data-bs-target="#panicModal">
                             <i class="fas fa-exclamation-triangle me-2"></i>BOTÓN DE PÁNICO
-                        </a>
+                        </button>
                     </div>
                     {% endif %}
                     
@@ -195,6 +195,34 @@
         </div>
     </div>
 </div>
+
+<!-- Modal de Pánico -->
+<div class="modal fade" id="panicModal" tabindex="-1" aria-labelledby="panicModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+        <div class="modal-content border-danger">
+            <div class="modal-header bg-danger text-white">
+                <h5 class="modal-title" id="panicModalLabel">
+                    <i class="fas fa-exclamation-triangle me-2"></i>CONTACTOS DE EMERGENCIA
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="text-center mb-4">
+                    <h4 class="text-danger">Mantén la calma. Contacta al servicio que necesites.</h4>
+                </div>
+                
+                <div id="emergency-contacts-content">
+                    <div class="text-center py-4">
+                        <div class="spinner-border text-danger" role="status">
+                            <span class="visually-hidden">Cargando...</span>
+                        </div>
+                        <p class="mt-2">Cargando contactos de emergencia...</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
 {% endblock content %}
 
 {% block extra_js %}
@@ -231,6 +259,72 @@ document.addEventListener('DOMContentLoaded', function() {
         setInterval(checkApiForAlarms, 600000); 
         
         setTimeout(checkApiForAlarms, 5000);
+    }
+    
+    // Modal de Pánico
+    const panicModal = document.getElementById('panicModal');
+    if (panicModal) {
+        panicModal.addEventListener('show.bs.modal', function () {
+            loadEmergencyContacts();
+        });
+    }
+    
+    function loadEmergencyContacts() {
+        const contentDiv = document.getElementById('emergency-contacts-content');
+        
+        fetch("{% url 'panic_button' %}")
+            .then(response => response.text())
+            .then(html => {
+                // Extraer solo el contenido del body del HTML recibido
+                const parser = new DOMParser();
+                const doc = parser.parseFromString(html, 'text/html');
+                const bodyContent = doc.querySelector('body').innerHTML;
+                
+                // Crear el contenido adaptado para el modal
+                const adaptedContent = bodyContent
+                    .replace(/class="container py-5"/g, 'class=""')
+                    .replace(/class="display-4 text-danger"/g, 'class="h4 text-danger"')
+                    .replace(/class="lead"/g, 'class=""');
+                
+                contentDiv.innerHTML = adaptedContent;
+                
+                // Agregar estilos específicos para el modal
+                const style = document.createElement('style');
+                style.textContent = `
+                    #panicModal .contact-card {
+                        border-left: 5px solid #dc3545;
+                        transition: all 0.2s ease-in-out;
+                        margin-bottom: 1rem;
+                    }
+                    #panicModal .contact-card:hover {
+                        transform: scale(1.02);
+                        box-shadow: 0 .5rem 1rem rgba(0,0,0,.15)!important;
+                    }
+                    #panicModal .phone-number {
+                        font-size: 1.5rem;
+                        font-weight: bold;
+                        color: #343a40;
+                    }
+                    #panicModal .contact-name {
+                        font-size: 1.1rem;
+                        color: #495057;
+                    }
+                    #panicModal a.phone-link {
+                        text-decoration: none;
+                    }
+                `;
+                document.head.appendChild(style);
+            })
+            .catch(error => {
+                console.error('Error al cargar contactos de emergencia:', error);
+                contentDiv.innerHTML = `
+                    <div class="text-center py-4 text-danger">
+                        <i class="fas fa-exclamation-circle fa-3x mb-3"></i>
+                        <p>Error al cargar los contactos de emergencia.</p>
+                        <p>Por favor, contacta directamente a los servicios de emergencia.</p>
+                    </div>
+                `;
+            });
     }
 });
 </script>
