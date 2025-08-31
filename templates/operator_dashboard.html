@@ -3,6 +3,10 @@
 
 {% block title %}Panel del Operador{% endblock %}
 
+{% block extra_css %}
+    <link rel="stylesheet" href="{% static 'css/dashboard.css' %}">
+{% endblock %}
+
 {% block content %}
 <div class="container-fluid py-4">
 
@@ -63,14 +67,26 @@
                             </ul>
                             <div class="mt-4 pt-4 border-top text-center">
                                 <h5 class="mb-3 text-secondary">Acciones Rápidas</h5>
-                                <div class="d-grid gap-2 d-md-flex justify-content-center flex-wrap">
-                                    <a href="{% url 'checklist' %}" class="btn btn-primary btn-lg shadow-sm mb-2"><i class="fas fa-list-check me-2"></i>Checklist</a>
-                                    <a href="{% url 'update_log' %}" class="btn btn-info btn-lg shadow-sm mb-2"><i class="fas fa-edit me-2"></i>Bitácora</a>
-                                    <a href="{% url 'full_logbook_view' %}" class="btn btn-dark btn-lg shadow-sm mb-2"><i class="fas fa-history me-2"></i>Bitácora del día</a>
-                                    <a href="{% url 'my_logbook' %}" class="btn btn-secondary btn-lg shadow-sm mb-2"><i class="fas fa-book me-2"></i>Mi Bitácora actual</a>
-                                    <button type="button" class="btn btn-warning btn-lg shadow-sm mb-2" data-bs-toggle="modal" data-bs-target="#shiftNoteModal"><i class="fas fa-sticky-note me-2"></i>Nota para Próximo Turno</button>
+                                <div class="action-grid">
+                                    <a href="{% url 'checklist' %}" class="action-btn" style="background-color: #007bff; color: white;">
+                                        <i class="fas fa-list-check"></i><span>Checklist</span>
+                                    </a>
+                                    <a href="{% url 'update_log' %}" class="action-btn" style="background-color: #17a2b8; color: white;">
+                                        <i class="fas fa-edit"></i><span>Bitácora</span>
+                                    </a>
+                                    <a href="{% url 'full_logbook_view' %}" class="action-btn" style="background-color: #343a40; color: white;">
+                                        <i class="fas fa-history"></i><span>Bitácora del día</span>
+                                    </a>
+                                    <a href="{% url 'my_logbook' %}" class="action-btn" style="background-color: #6c757d; color: white;">
+                                        <i class="fas fa-book"></i><span>Mi Bitácora actual</span>
+                                    </a>
+                                    <button type="button" class="action-btn" style="background-color: #ffc107; color: #212529;" data-bs-toggle="modal" data-bs-target="#shiftNoteModal">
+                                        <i class="fas fa-sticky-note"></i><span>Nota para Próximo Turno</span>
+                                    </button>
                                     {% if progress_percentage >= 99 %}
-                                    <a href="{% url 'end_turn_preview' %}" class="btn btn-danger btn-lg shadow-sm mb-2 animate__animated animate__heartBeat animate__infinite"><i class="fas fa-power-off me-2"></i>Finalizar Turno</a>
+                                    <a href="{% url 'end_turn_preview' %}" class="action-btn animate__animated animate__heartBeat animate__infinite" style="background-color: #dc3545; color: white;">
+                                        <i class="fas fa-power-off"></i><span>Finalizar Turno</span>
+                                    </a>
                                     {% endif %}
                                 </div>
                             </div>
