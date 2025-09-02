@@ -7,7 +7,7 @@
             {% elif service.status is False %}
                 <i class="fas fa-exclamation-triangle text-danger me-2"></i>
             {% else %}
-                <i class="fas fa-question-circle text-secondary me-2"></i>
+                <i class="fas fa-spinner fa-spin text-warning me-2"></i>
             {% endif %}
             {{ service.name }}
         </span>
@@ -16,7 +16,7 @@
         {% elif service.status is False %}
             <span class="badge bg-danger">Caído</span>
         {% else %}
-            <span class="badge bg-secondary">Pendiente</span>
+            <span class="badge bg-warning">Conectando...</span>
         {% endif %}
     </li>
     {% empty %}

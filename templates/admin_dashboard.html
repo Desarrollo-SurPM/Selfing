@@ -155,18 +155,43 @@
         function updateServiceStatus() {
             const url = `{% url 'ajax_get_service_status' %}?timestamp=${new Date().getTime()}`;
             fetch(url)
-                .then(response => response.text())
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error(`HTTP error! status: ${response.status}`);
+                    }
+                    return response.text();
+                })
                 .then(html => {
-                    const contentArea = statusPanel.querySelector('.p-3, .list-group');
+                    // Buscar el contenedor de contenido dentro del panel
+                    let contentArea = statusPanel.querySelector('.list-group');
+                    if (!contentArea) {
+                        contentArea = statusPanel.querySelector('.p-3');
+                    }
+                    
                     if (contentArea) {
                         contentArea.outerHTML = html;
+                    } else {
+                        // Si no encuentra el contenedor, insertar después del header
+                        const header = statusPanel.querySelector('.action-card-header');
+                        if (header) {
+                            header.insertAdjacentHTML('afterend', html);
+                        }
                     }
                 })
                 .catch(error => {
                     console.error('Error al actualizar servicios:', error);
-                    const contentArea = statusPanel.querySelector('.p-3, .list-group');
+                    let contentArea = statusPanel.querySelector('.list-group');
+                    if (!contentArea) {
+                        contentArea = statusPanel.querySelector('.p-3');
+                    }
+                    
                     if (contentArea) {
-                        contentArea.innerHTML = `<div class="p-3 text-center text-danger"><i class="fas fa-exclamation-circle fa-2x mb-2"></i><p class="mb-0">Error al cargar servicios</p></div>`;
+                        contentArea.innerHTML = `<div class="text-center text-danger py-3"><i class="fas fa-exclamation-circle fa-2x mb-2"></i><p class="mb-0">Error al cargar servicios</p></div>`;
+                    } else {
+                        const header = statusPanel.querySelector('.action-card-header');
+                        if (header) {
+                            header.insertAdjacentHTML('afterend', '<div class="p-3 text-center text-danger"><i class="fas fa-exclamation-circle fa-2x mb-2"></i><p class="mb-0">Error al cargar servicios</p></div>');
+                        }
                     }
                 });
         }
