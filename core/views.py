@@ -1586,7 +1586,17 @@ def vehicle_security_dashboard(request):
     import requests
     from datetime import datetime, timedelta
     
+    CIUDADES_CHILE = {
+        'punta arenas': {'lat': -53.162, 'lon': -70.917},
+        'puerto natales': {'lat': -51.723, 'lon': -72.497},
+        'santiago': {'lat': -33.45, 'lon': -70.66},
+        'valparaiso': {'lat': -33.045, 'lon': -71.619},
+        'concepcion': {'lat': -36.826, 'lon': -73.050},
+    }
     # Obtener datos de vehículos
+    ciudad_buscada = request.GET.get('ciudad', 'punta arenas').lower()
+    coordenadas = CIUDADES_CHILE.get(ciudad_buscada, CIUDADES_CHILE['punta arenas'])
+    
     vehicles = Vehicle.objects.filter(is_active=True)
     
     # Estadísticas generales
@@ -1671,6 +1681,9 @@ def vehicle_security_dashboard(request):
     }
     
     context = {
+        'waze_lat': coordenadas['lat'],
+        'waze_lon': coordenadas['lon'],
+        'ciudad_actual': ciudad_buscada.title(),
         'vehicles': vehicles,
         'demo_positions': demo_positions,
         'demo_alerts': demo_alerts,

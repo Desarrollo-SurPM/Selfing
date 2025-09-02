@@ -440,7 +440,30 @@
             </div>
         </div>
 
-
+<div class="row mt-4">
+        <div class="col-12">
+            <div class="card shadow-sm">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="fab fa-waze me-2"></i>Visor de Tráfico en Vivo (Waze)</h5>
+                </div>
+                <div class="card-body">
+                    <form method="GET" action="{% url 'vehicle_security_dashboard' %}" class="mb-3">
+                        <div class="input-group">
+                            <input type="text" name="ciudad" class="form-control" placeholder="Buscar ciudad (ej: Punta Arenas, Santiago)..." value="{{ ciudad_actual }}">
+                            <button class="btn btn-primary" type="submit"><i class="fas fa-search me-2"></i>Buscar</button>
+                        </div>
+                    </form>
+                    
+                    <div class="map-container" style="height: 60vh;">
+                        <iframe 
+                            src="https://embed.waze.com/iframe?zoom=12&lat={{ waze_lat }}&lon={{ waze_lon }}&ct=livemap"
+                            style="width: 100%; height: 100%; border: none; border-radius: 8px;">
+                        </iframe>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
 </div>
 {% endblock %}
 
