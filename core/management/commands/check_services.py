@@ -1,8 +1,12 @@
 import time
-import subprocess
-import platform
+import requests
+import urllib3
+from urllib.parse import urlparse
 from django.core.management.base import BaseCommand
 from core.models import MonitoredService, ServiceStatusLog
+
+# Deshabilitar advertencias SSL para evitar spam en logs
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 class Command(BaseCommand):
     help = 'Realiza un ping a todos los servicios activos y registra su estado.'
@@ -21,44 +25,63 @@ class Command(BaseCommand):
             self.stdout.write(f'Haciendo ping a: {service.name} ({service.ip_address})...')
             
             try:
-                # Usamos el comando ping del sistema operativo con reintentos
-                system = platform.system().lower()
+                # Usamos HTTP requests en lugar de ping para mejor compatibilidad
                 is_up = False
-                avg_rtt = None
+                response_time = None
+                
+                # Preparar la URL para la solicitud HTTP
+                url = service.ip_address
+                if not url.startswith(('http://', 'https://')):
+                    url = f'https://{url}'
                 
                 # Intentamos hasta 3 veces para evitar falsos negativos
                 for attempt in range(3):
-                    if system == "windows":
-                        cmd = ["ping", "-n", "1", "-w", "5000", service.ip_address]
-                    else:  # Linux, macOS, etc.
-                        cmd = ["ping", "-c", "1", "-W", "5000", service.ip_address]
-                    
                     try:
-                        result = subprocess.run(cmd, capture_output=True, text=True, timeout=8)
-                        if result.returncode == 0:
+                        start_time = time.time()
+                        response = requests.get(
+                            url, 
+                            timeout=8, 
+                            verify=False,  # Ignorar certificados SSL inválidos
+                            allow_redirects=True
+                        )
+                        end_time = time.time()
+                        
+                        # Consideramos exitoso cualquier respuesta HTTP (incluso errores 4xx/5xx)
+                        # ya que indica que el servidor está respondiendo
+                        if response.status_code < 600:
                             is_up = True
-                            # Intentar extraer el tiempo de respuesta del output
-                            if result.stdout and "time=" in result.stdout:
-                                try:
-                                    time_part = result.stdout.split("time=")[1].split()[0]
-                                    avg_rtt = float(time_part.replace("ms", ""))
-                                except (IndexError, ValueError):
-                                    pass
-                            break  # Si fue exitoso, salir del loop
+                            response_time = (end_time - start_time) * 1000  # Convertir a ms
+                            break
                         else:
-                            # Si falló, esperar un poco antes del siguiente intento
-                            if attempt < 2:  # No esperar en el último intento
+                            if attempt < 2:
                                 time.sleep(1)
-                    except subprocess.TimeoutExpired:
+                                
+                    except requests.exceptions.SSLError:
+                        # Si falla HTTPS, intentar con HTTP
+                        try:
+                            http_url = url.replace('https://', 'http://')
+                            start_time = time.time()
+                            response = requests.get(http_url, timeout=8, allow_redirects=True)
+                            end_time = time.time()
+                            
+                            if response.status_code < 600:
+                                is_up = True
+                                response_time = (end_time - start_time) * 1000
+                                break
+                        except:
+                            pass
+                        
+                        if attempt < 2:
+                            time.sleep(1)
+                            
+                    except (requests.exceptions.RequestException, requests.exceptions.Timeout):
                         if attempt < 2:
                             time.sleep(1)
                         continue
-                
-
 
                 if is_up:
-                    if avg_rtt:
-                        self.stdout.write(self.style.SUCCESS(f' -> Éxito! Tiempo de respuesta: {avg_rtt:.2f} ms'))
+                    if response_time:
+                        self.stdout.write(self.style.SUCCESS(f' -> Éxito! Tiempo de respuesta: {response_time:.2f} ms'))
                     else:
                         self.stdout.write(self.style.SUCCESS(' -> Éxito! Servicio disponible'))
                 else:
@@ -68,12 +91,12 @@ class Command(BaseCommand):
                 ServiceStatusLog.objects.create(
                     service=service,
                     is_up=is_up,
-                    response_time=avg_rtt
+                    response_time=response_time
                 )
 
             except Exception as e:
-                # Capturamos cualquier otro error (ej: no se puede resolver el dominio)
-                self.stdout.write(self.style.ERROR(f' -> Error al hacer ping: {e}'))
+                # Capturamos cualquier otro error
+                self.stdout.write(self.style.ERROR(f' -> Error al verificar servicio: {e}'))
                 ServiceStatusLog.objects.create(
                     service=service,
                     is_up=False,
