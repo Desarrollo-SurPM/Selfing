@@ -1876,3 +1876,90 @@ def get_weather_data(request):
             'wind_speed': 10,
             'icon': '01d'
         })
+
+@login_required
+@user_passes_test(is_supervisor)
+def get_multiple_cities_weather(request):
+    """API para obtener datos del clima de múltiples ciudades"""
+    import requests
+    
+    # Ciudades predefinidas con sus coordenadas - Cobertura completa de Chile
+    cities = {
+        'arica': {'name': 'Arica', 'lat': -18.4783, 'lon': -70.3126, 'country': 'CL'},
+        'iquique': {'name': 'Iquique', 'lat': -20.2307, 'lon': -70.1355, 'country': 'CL'},
+        'antofagasta': {'name': 'Antofagasta', 'lat': -23.6509, 'lon': -70.3975, 'country': 'CL'},
+        'calama': {'name': 'Calama', 'lat': -22.4667, 'lon': -68.9333, 'country': 'CL'},
+        'copiapo': {'name': 'Copiapó', 'lat': -27.3668, 'lon': -70.3323, 'country': 'CL'},
+        'la_serena': {'name': 'La Serena', 'lat': -29.9027, 'lon': -71.2519, 'country': 'CL'},
+        'coquimbo': {'name': 'Coquimbo', 'lat': -29.9533, 'lon': -71.3436, 'country': 'CL'},
+        'valparaiso': {'name': 'Valparaíso', 'lat': -33.0458, 'lon': -71.6197, 'country': 'CL'},
+        'vina_del_mar': {'name': 'Viña del Mar', 'lat': -33.0153, 'lon': -71.5500, 'country': 'CL'},
+        'santiago': {'name': 'Santiago', 'lat': -33.4489, 'lon': -70.6693, 'country': 'CL'},
+        'rancagua': {'name': 'Rancagua', 'lat': -34.1708, 'lon': -70.7394, 'country': 'CL'},
+        'talca': {'name': 'Talca', 'lat': -35.4264, 'lon': -71.6554, 'country': 'CL'},
+        'curico': {'name': 'Curicó', 'lat': -34.9833, 'lon': -71.2394, 'country': 'CL'},
+        'chillan': {'name': 'Chillán', 'lat': -36.6061, 'lon': -72.1039, 'country': 'CL'},
+        'concepcion': {'name': 'Concepción', 'lat': -36.8201, 'lon': -73.0444, 'country': 'CL'},
+        'talcahuano': {'name': 'Talcahuano', 'lat': -36.7167, 'lon': -73.1167, 'country': 'CL'},
+        'los_angeles': {'name': 'Los Ángeles', 'lat': -37.4689, 'lon': -72.3539, 'country': 'CL'},
+        'temuco': {'name': 'Temuco', 'lat': -38.7359, 'lon': -72.5904, 'country': 'CL'},
+        'valdivia': {'name': 'Valdivia', 'lat': -39.8142, 'lon': -73.2459, 'country': 'CL'},
+        'osorno': {'name': 'Osorno', 'lat': -40.5742, 'lon': -73.1317, 'country': 'CL'},
+        'puerto_montt': {'name': 'Puerto Montt', 'lat': -41.4693, 'lon': -72.9424, 'country': 'CL'},
+        'castro': {'name': 'Castro', 'lat': -42.4833, 'lon': -73.7667, 'country': 'CL'},
+        'coyhaique': {'name': 'Coyhaique', 'lat': -45.5752, 'lon': -72.0662, 'country': 'CL'},
+        'punta_arenas': {'name': 'Punta Arenas', 'lat': -53.1638, 'lon': -70.9171, 'country': 'CL'},
+        'puerto_natales': {'name': 'Puerto Natales', 'lat': -51.7236, 'lon': -72.5064, 'country': 'CL'}
+    }
+    
+    # Obtener ciudades solicitadas (por defecto todas)
+    requested_cities = request.GET.get('cities', 'santiago,punta_arenas,valparaiso').split(',')
+    
+    api_key = 'af043322c5d5657c7b6c16a888ecd196'
+    weather_results = {}
+    
+    for city_key in requested_cities:
+        if city_key in cities:
+            city_info = cities[city_key]
+            url = f'https://api.openweathermap.org/data/2.5/weather?lat={city_info["lat"]}&lon={city_info["lon"]}&appid={api_key}&units=metric&lang=es'
+            
+            try:
+                response = requests.get(url, timeout=5)
+                if response.status_code == 200:
+                    data = response.json()
+                    weather_results[city_key] = {
+                        'name': city_info['name'],
+                        'temperature': round(data['main']['temp']),
+                        'description': data['weather'][0]['description'].title(),
+                        'humidity': data['main']['humidity'],
+                        'wind_speed': round(data['wind']['speed'] * 3.6),
+                        'icon': data['weather'][0]['icon'],
+                        'lat': city_info['lat'],
+                        'lon': city_info['lon']
+                    }
+                else:
+                    # Datos de respaldo si la API falla
+                    weather_results[city_key] = {
+                        'name': city_info['name'],
+                        'temperature': 15,
+                        'description': 'Datos no disponibles',
+                        'humidity': 60,
+                        'wind_speed': 15,
+                        'icon': '01d',
+                        'lat': city_info['lat'],
+                        'lon': city_info['lon']
+                    }
+            except Exception as e:
+                # Datos de respaldo en caso de error
+                weather_results[city_key] = {
+                    'name': city_info['name'],
+                    'temperature': 15,
+                    'description': 'Error al obtener datos',
+                    'humidity': 60,
+                    'wind_speed': 15,
+                    'icon': '01d',
+                    'lat': city_info['lat'],
+                    'lon': city_info['lon']
+                }
+    
+    return JsonResponse(weather_results)

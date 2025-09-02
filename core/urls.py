@@ -100,4 +100,5 @@ urlpatterns = [
     path('dashboard/vehicle-activity/', views.vehicle_activity_log, name='vehicle_activity_log'),
     path('dashboard/vehicle-route/<int:activity_id>/', views.vehicle_route_detail, name='vehicle_route_detail'),
     path('api/weather/', views.get_weather_data, name='get_weather_data'),
+    path('api/weather/cities/', views.get_multiple_cities_weather, name='get_multiple_cities_weather'),
 ]
