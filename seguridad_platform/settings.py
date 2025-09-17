@@ -76,24 +76,15 @@ WSGI_APPLICATION = 'seguridad_platform.wsgi.application'
 
 DATABASE_URL = os.getenv(
     "DATABASE_URL",
-    "postgresql://postgres:izzKIkbPLmeXCwRlcKRUStwyFGzBlsrS@maglev.proxy.rlwy.net:28215/railway",
+    "postgresql://postgres:fXmqrCobAIItTbRXuGRLFqzIAqTdBCya@metro.proxy.rlwy.net:17664/railway",
 )
 
-if DATABASE_URL:
-    # Parseamos la URL de conexión entregada por Railway usando dj_database_url
-    DATABASES = {
-        "default": dj_database_url.parse(
-            DATABASE_URL, conn_max_age=600, ssl_require=True  # ssl_require asegura TLS en Railway
-        )
-    }
-else:
-    # Fallback a SQLite para desarrollo local
-    DATABASES = {
-        "default": {
-            "ENGINE": "django.db.backends.sqlite3",
-            "NAME": BASE_DIR / "db.sqlite3",
-        }
-    }
+# Parseamos la URL de conexión usando dj_database_url
+DATABASES = {
+    "default": dj_database_url.parse(
+        DATABASE_URL, conn_max_age=600, ssl_require=True  # ssl_require asegura TLS en Railway
+    )
+}
 
 # Password validation
 AUTH_PASSWORD_VALIDATORS = [
