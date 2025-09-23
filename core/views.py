@@ -86,6 +86,16 @@ def admin_dashboard(request):
 @login_required
 @user_passes_test(is_supervisor)
 def review_and_send_novedades(request):
+    today = timezone.now().date()
+    active_shifts_today = OperatorShift.objects.filter(
+        date=today, 
+        actual_end_time__isnull=True
+    ).exists()
+
+    if active_shifts_today:
+        messages.warning(request, "Aún hay turnos activos. Debe esperar a que todos los turnos del día finalicen para poder enviar el reporte de novedades.")
+        return render(request, 'review_and_send.html', {'shifts_active': True})
+
     company_id = request.GET.get('company_id')
     selected_company = None
     novedades_pendientes = None
@@ -94,19 +104,27 @@ def review_and_send_novedades(request):
         selected_ids = request.POST.getlist('updates_to_send')
         observations = request.POST.get('observations', '')
         company_id_form = request.POST.get('company_id')
-
-        if not selected_ids:
-            messages.warning(request, "Debe seleccionar al menos una novedad para enviar.")
-            return redirect(f"{request.path_info}?company_id={company_id_form}")
-
         company = get_object_or_404(Company, id=company_id_form)
-        updates = UpdateLog.objects.filter(id__in=selected_ids).order_by('installation__name', 'created_at')
+
+        # --- INICIO DE LA MODIFICACIÓN CLAVE ---
+
+        # 1. Identificamos las novedades que SÍ se van a incluir en el correo.
+        updates_to_send_in_email = UpdateLog.objects.filter(id__in=selected_ids).order_by('installation__name', 'created_at')
+
+        # 2. Identificamos TODAS las novedades que estaban pendientes para esta empresa.
+        all_pending_updates_for_company = UpdateLog.objects.filter(
+            installation__company=company, is_sent=False
+        ).exclude(
+            operator_shift__shift_type__name__iexact='Turno Mañana'
+        )
+
+        # --- FIN DE LA MODIFICACIÓN CLAVE ---
 
         if company.email:
             try:
                 email_context = {
                     'company': company,
-                    'updates': updates,
+                    'updates': updates_to_send_in_email, # Usamos solo las seleccionadas para el cuerpo del correo.
                     'observations': observations,
                     'enviado_por': request.user,
                 }
@@ -121,7 +139,11 @@ def review_and_send_novedades(request):
                     html_message=html_message
                 )
                 
-                updates.update(is_sent=True)
+                # --- AQUÍ OCURRE LA MAGIA ---
+                # Marcamos TODAS las novedades pendientes de la empresa como "enviadas",
+                # limpiando la lista para el próximo ciclo.
+                all_pending_updates_for_company.update(is_sent=True)
+                
                 TraceabilityLog.objects.create(user=request.user, action=f"Envió correo de novedades a {company.name}.")
                 messages.success(request, f"Correo enviado correctamente a {company.name}.")
 
@@ -133,7 +155,7 @@ def review_and_send_novedades(request):
 
         return redirect('review_and_send_novedades')
 
-    # --- LÓGICA GET (CUANDO SE CARGA LA PÁGINA) ---
+    # La lógica GET para mostrar la página no cambia.
     if company_id:
         selected_company = get_object_or_404(Company, id=company_id)
         novedades_pendientes = UpdateLog.objects.filter(
@@ -155,7 +177,6 @@ def review_and_send_novedades(request):
         'selected_company': selected_company,
         'novedades_pendientes': novedades_pendientes
     }
-    # --- LA LÍNEA QUE FALTABA Y SOLUCIONA EL ERROR ---
     return render(request, 'review_and_send.html', context)
 
 @login_required
