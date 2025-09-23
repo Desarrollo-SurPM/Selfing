@@ -101,6 +101,24 @@
         </a>
     </div>
 
+    <!-- Barra de Progreso -->
+    <div class="bg-white rounded-xl shadow-md p-6 mb-6">
+        <div class="flex justify-between items-center mb-3">
+            <h3 class="text-lg font-semibold text-gray-700">
+                <i class="fas fa-chart-line me-2 text-blue-500"></i>Progreso del Checklist
+            </h3>
+            <span id="progress-text" class="text-sm font-medium text-gray-600">0 de 0 tareas completadas</span>
+        </div>
+        <div class="w-full bg-gray-200 rounded-full h-4 overflow-hidden">
+            <div id="progress-bar" class="bg-gradient-to-r from-blue-500 to-green-500 h-4 rounded-full transition-all duration-500 ease-out" style="width: 0%"></div>
+        </div>
+        <div class="flex justify-between items-center mt-2">
+            <span class="text-xs text-gray-500">0%</span>
+            <span id="progress-percentage" class="text-xs font-medium text-gray-700">0%</span>
+            <span class="text-xs text-gray-500">100%</span>
+        </div>
+    </div>
+
     <!-- Contenedor del Checklist en Tres Columnas -->
     <div class="bg-white rounded-xl shadow-md overflow-hidden">
         {# El formulario y el token CSRF son necesarios para enviar los datos de forma segura #}
@@ -256,6 +274,32 @@
         <p class="text-gray-400 mt-2">¡Buen trabajo! Parece que todo está en orden.</p>
     </div>
 
+    <!-- Modal de Confirmación -->
+    <div class="modal fade" id="confirmTaskModal" tabindex="-1" aria-labelledby="confirmTaskModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header bg-primary text-white">
+                    <h5 class="modal-title" id="confirmTaskModalLabel">
+                        <i class="fas fa-check-circle me-2"></i>Confirmar Tarea
+                    </h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body text-center py-4">
+                    <div class="mb-3">
+                        <i class="fas fa-question-circle fa-3x text-primary mb-3"></i>
+                    </div>
+                    <h6 class="mb-3">¿Seguro que quieres marcar esta tarea como realizada?</h6>
+                    <p class="text-muted mb-0" id="taskDescription">Esta acción marcará la tarea como completada.</p>
+                </div>
+                <div class="modal-footer justify-content-center">
+                    <button type="button" class="btn btn-success" id="confirmTaskBtn">
+                        <i class="fas fa-check me-1"></i>Sí, marcar como realizada
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
 </div>
 
 {# --- INICIO: Lógica JavaScript --- #}
@@ -270,32 +314,128 @@ document.addEventListener('DOMContentLoaded', function () {
     const emptyState = document.getElementById('empty-state');
     const checklistForm = document.getElementById('checklist-form');
     const phaseContainers = document.querySelectorAll('.phase-tasks');
+    
+    // Variables para el modal de confirmación
+    const confirmModal = new bootstrap.Modal(document.getElementById('confirmTaskModal'));
+    const confirmBtn = document.getElementById('confirmTaskBtn');
+    const taskDescriptionElement = document.getElementById('taskDescription');
+    let currentCheckbox = null;
+
+    // Variables para la barra de progreso
+    const progressBar = document.getElementById('progress-bar');
+    const progressText = document.getElementById('progress-text');
+    const progressPercentage = document.getElementById('progress-percentage');
+
+    // Función para actualizar la barra de progreso
+    function updateProgressBar() {
+        const allCheckboxes = document.querySelectorAll('input[type="checkbox"][name="items"]');
+        const completedCheckboxes = document.querySelectorAll('input[type="checkbox"][name="items"]:checked');
+        
+        const totalTasks = allCheckboxes.length;
+        const completedTasks = completedCheckboxes.length;
+        const percentage = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
+        
+        // Actualizar elementos de la barra de progreso
+        progressBar.style.width = percentage + '%';
+        progressText.textContent = `${completedTasks} de ${totalTasks} tareas completadas`;
+        progressPercentage.textContent = percentage + '%';
+        
+        // Cambiar color de la barra según el progreso
+        if (percentage === 100) {
+            progressBar.className = 'bg-gradient-to-r from-green-500 to-green-600 h-4 rounded-full transition-all duration-500 ease-out';
+        } else if (percentage >= 75) {
+            progressBar.className = 'bg-gradient-to-r from-blue-500 to-green-500 h-4 rounded-full transition-all duration-500 ease-out';
+        } else if (percentage >= 50) {
+            progressBar.className = 'bg-gradient-to-r from-yellow-500 to-blue-500 h-4 rounded-full transition-all duration-500 ease-out';
+        } else {
+            progressBar.className = 'bg-gradient-to-r from-red-500 to-yellow-500 h-4 rounded-full transition-all duration-500 ease-out';
+        }
+    }
 
     // Verificar si hay tareas para mostrar el estado vacío
     if (initialTasks.length === 0) {
         emptyState.style.display = 'block';
         document.querySelector('.bg-white.rounded-xl').style.display = 'none';
+    } else {
+        // Inicializar la barra de progreso al cargar la página
+        updateProgressBar();
     }
 
     // Manejar el evento de cambio en los checkboxes para la interactividad visual
     phaseContainers.forEach(container => {
         container.addEventListener('change', function(e) {
             if (e.target.type === 'checkbox') {
-                const taskWrapper = e.target.closest('.task-item');
+                // Prevenir el cambio automático del checkbox
+                e.preventDefault();
+                
+                const checkbox = e.target;
+                const taskWrapper = checkbox.closest('.task-item');
                 const label = taskWrapper.querySelector('.task-label');
-                const observationInput = taskWrapper.querySelector('.observation-input');
-                const isChecked = e.target.checked;
-
-                taskWrapper.classList.toggle('bg-green-50', isChecked);
-                taskWrapper.classList.toggle('border-green-200', isChecked);
-                taskWrapper.classList.toggle('bg-white', !isChecked);
-                taskWrapper.classList.toggle('border-gray-200', !isChecked);
-                label.classList.toggle('text-gray-400', isChecked);
-                label.classList.toggle('text-gray-800', !isChecked);
-                label.classList.toggle('task-completed', isChecked);
+                
+                // Si la tarea ya está completada, no hacer nada
+                if (checkbox.disabled) {
+                    return;
+                }
+                
+                // Si se está intentando marcar como completada
+                if (!checkbox.checked) {
+                    // Guardar referencia al checkbox actual
+                    currentCheckbox = checkbox;
+                    
+                    // Actualizar el texto del modal con la descripción de la tarea
+                    taskDescriptionElement.textContent = `Tarea: "${label.textContent.trim()}"`;
+                    
+                    // Mostrar el modal de confirmación
+                    confirmModal.show();
+                } else {
+                    // Si se está desmarcando, permitir el cambio directo
+                    updateTaskVisualState(checkbox, false);
+                    // Actualizar la barra de progreso
+                    updateProgressBar();
+                }
             }
         });
     });
+    
+    // Manejar la confirmación del modal
+    confirmBtn.addEventListener('click', function() {
+        if (currentCheckbox) {
+            // Marcar el checkbox como checked
+            currentCheckbox.checked = true;
+            
+            // Actualizar el estado visual
+            updateTaskVisualState(currentCheckbox, true);
+            
+            // Actualizar la barra de progreso
+            updateProgressBar();
+            
+            // Cerrar el modal
+            confirmModal.hide();
+            
+            // Limpiar la referencia
+            currentCheckbox = null;
+        }
+    });
+    
+    // Limpiar la referencia cuando se cierra el modal sin confirmar
+    document.getElementById('confirmTaskModal').addEventListener('hidden.bs.modal', function() {
+        currentCheckbox = null;
+    });
+    
+    // Función para actualizar el estado visual de la tarea
+    function updateTaskVisualState(checkbox, isChecked) {
+        const taskWrapper = checkbox.closest('.task-item');
+        const label = taskWrapper.querySelector('.task-label');
+        const observationInput = taskWrapper.querySelector('.observation-input');
+
+        taskWrapper.classList.toggle('bg-green-50', isChecked);
+        taskWrapper.classList.toggle('border-green-200', isChecked);
+        taskWrapper.classList.toggle('bg-white', !isChecked);
+        taskWrapper.classList.toggle('border-gray-200', !isChecked);
+        label.classList.toggle('text-gray-400', isChecked);
+        label.classList.toggle('text-gray-800', !isChecked);
+        label.classList.toggle('task-completed', isChecked);
+    }
 });
 </script>
 {# --- FIN: Lógica JavaScript --- #}
