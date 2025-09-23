@@ -15,10 +15,21 @@
         <div class="row g-4 justify-content-center">
             {% for company in companies %}
             <div class="col-md-3">
-                <div class="card h-100 card-option company-card" data-company-id="{{ company.id }}" data-company-name="{{ company.name }}">
-                    <div class="card-body d-flex flex-column justify-content-center align-items-center">
-                        <i class="fas fa-building fa-3x text-primary mb-3"></i>
-                        <h5 class="card-title h6">{{ company.name }}</h5>
+                <div class="card h-100 card-option company-card company-unique-{{ forloop.counter0|add:0 }}" 
+                     data-company-id="{{ company.id }}" 
+                     data-company-name="{{ company.name }}"
+                     style="border-left: 5px solid {% cycle '#4e73df' '#1cc88a' '#36b9cc' '#f6c23e' '#e74a3b' '#9b59b6' '#fd7e14' '#20c997' '#6f42c1' '#dc3545' %}; 
+                            box-shadow: 0 4px 8px rgba(0,0,0,0.1); 
+                            transition: all 0.3s ease;"
+                     onmouseover="this.style.transform='translateY(-5px)'; this.style.boxShadow='0 8px 16px rgba(0,0,0,0.2)';"
+                     onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='0 4px 8px rgba(0,0,0,0.1)';">
+                    <div class="card-body d-flex flex-column justify-content-center align-items-center" 
+                         style="background: {% cycle 'linear-gradient(135deg, #4e73df, #224abe)' 'linear-gradient(135deg, #1cc88a, #17a673)' 'linear-gradient(135deg, #36b9cc, #2c9faf)' 'linear-gradient(135deg, #f6c23e, #dda20a)' 'linear-gradient(135deg, #e74a3b, #c0392b)' 'linear-gradient(135deg, #9b59b6, #8e44ad)' 'linear-gradient(135deg, #fd7e14, #e8590c)' 'linear-gradient(135deg, #20c997, #1ba085)' 'linear-gradient(135deg, #6f42c1, #59359a)' 'linear-gradient(135deg, #dc3545, #c82333)' %}; 
+                                color: white; 
+                                border-radius: 0.375rem;">
+                        <i class="fas {% cycle 'fa-building' 'fa-industry' 'fa-store' 'fa-home' 'fa-hospital' 'fa-school' 'fa-university' 'fa-clinic-medical' 'fa-fire-station' 'fa-warehouse' %} fa-3x mb-3" 
+                           style="color: rgba(255,255,255,0.9);"></i>
+                        <h5 class="card-title h6 text-center" style="color: white; font-weight: 600;">{{ company.name }}</h5>
                     </div>
                 </div>
             </div>
@@ -154,15 +165,37 @@ document.addEventListener('DOMContentLoaded', function() {
         const companyInstallations = installationsData[companyId].installations;
         document.getElementById('company-name-for-installations').textContent = companyName;
 
-        companyInstallations.forEach(inst => {
+        // Array de colores y estilos únicos para cada instalación
+        const installationStyles = [
+            { color: '#4e73df', gradient: 'linear-gradient(135deg, #4e73df, #224abe)', icon: 'fa-warehouse' },
+            { color: '#1cc88a', gradient: 'linear-gradient(135deg, #1cc88a, #17a673)', icon: 'fa-industry' },
+            { color: '#36b9cc', gradient: 'linear-gradient(135deg, #36b9cc, #2c9faf)', icon: 'fa-building' },
+            { color: '#f6c23e', gradient: 'linear-gradient(135deg, #f6c23e, #dda20a)', icon: 'fa-store' },
+            { color: '#e74a3b', gradient: 'linear-gradient(135deg, #e74a3b, #c0392b)', icon: 'fa-home' },
+            { color: '#9b59b6', gradient: 'linear-gradient(135deg, #9b59b6, #8e44ad)', icon: 'fa-hospital' },
+            { color: '#fd7e14', gradient: 'linear-gradient(135deg, #fd7e14, #e8590c)', icon: 'fa-school' },
+            { color: '#20c997', gradient: 'linear-gradient(135deg, #20c997, #1ba085)', icon: 'fa-university' },
+            { color: '#6f42c1', gradient: 'linear-gradient(135deg, #6f42c1, #59359a)', icon: 'fa-clinic-medical' },
+            { color: '#dc3545', gradient: 'linear-gradient(135deg, #dc3545, #c82333)', icon: 'fa-fire-station' }
+        ];
+
+        companyInstallations.forEach((inst, index) => {
+            // Usar el índice para seleccionar un estilo único, con ciclo si hay más instalaciones que estilos
+            const styleIndex = index % installationStyles.length;
+            const style = installationStyles[styleIndex];
+            
             installationListDiv.innerHTML += `
                 <div class="col-md-3">
-                    <div class="card h-100 card-option installation-card" 
+                    <div class="card h-100 card-option installation-card installation-unique-${styleIndex}" 
                          data-installation-id="${inst.id}" 
-                         data-installation-name="${inst.name}">
-                        <div class="card-body d-flex flex-column justify-content-center align-items-center">
-                            <i class="fas fa-warehouse fa-3x text-primary mb-3"></i>
-                            <h5 class="card-title h6">${inst.name}</h5>
+                         data-installation-name="${inst.name}"
+                         style="border-left: 5px solid ${style.color}; box-shadow: 0 4px 8px rgba(0,0,0,0.1); transition: all 0.3s ease;"
+                         onmouseover="this.style.transform='translateY(-5px)'; this.style.boxShadow='0 8px 16px rgba(0,0,0,0.2)';"
+                         onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='0 4px 8px rgba(0,0,0,0.1)';">
+                        <div class="card-body d-flex flex-column justify-content-center align-items-center" 
+                             style="background: ${style.gradient}; color: white; border-radius: 0.375rem;">
+                            <i class="fas ${style.icon} fa-3x mb-3" style="color: rgba(255,255,255,0.9);"></i>
+                            <h5 class="card-title h6 text-center" style="color: white; font-weight: 600;">${inst.name}</h5>
                         </div>
                     </div>
                 </div>`;

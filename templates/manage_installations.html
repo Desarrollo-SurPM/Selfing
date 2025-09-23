@@ -18,8 +18,14 @@
     </thead>
     <tbody>
         {% for installation in installations %}
-        <tr>
-            <td>{{ installation.name }}</td>
+        <tr style="border-left: 4px solid {% cycle '#4e73df' '#1cc88a' '#36b9cc' '#f6c23e' '#e74a3b' '#9b59b6' '#fd7e14' '#20c997' '#6f42c1' '#dc3545' %};">
+            <td>
+                <div style="display: flex; align-items: center;">
+                    <i class="fas {% cycle 'fa-building' 'fa-warehouse' 'fa-store' 'fa-home' 'fa-hospital' 'fa-school' 'fa-university' 'fa-clinic-medical' 'fa-fire-station' 'fa-industry' %} me-2" 
+                       style="color: {% cycle '#4e73df' '#1cc88a' '#36b9cc' '#f6c23e' '#e74a3b' '#9b59b6' '#fd7e14' '#20c997' '#6f42c1' '#dc3545' %}; font-size: 1.2em;"></i>
+                    <span style="color: {% cycle '#4e73df' '#1cc88a' '#36b9cc' '#f6c23e' '#e74a3b' '#9b59b6' '#fd7e14' '#20c997' '#6f42c1' '#dc3545' %}; font-weight: 600;">{{ installation.name }}</span>
+                </div>
+            </td>
             <td>{{ installation.address|default:"N/A" }}</td>
             <td>
                 <a href="{% url 'edit_installation' installation.id %}" class="btn btn-sm btn-warning">Editar</a>

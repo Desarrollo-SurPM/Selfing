@@ -70,9 +70,9 @@
                 <tr>
                     <td>
                         <div class="user-info">
-                            <div class="user-avatar" style="background-color: #1cc88a;">{{ company.name|first|upper }}</div>
+                            <div class="user-avatar" style="background: {% cycle 'linear-gradient(135deg, #4e73df, #224abe)' 'linear-gradient(135deg, #1cc88a, #17a673)' 'linear-gradient(135deg, #36b9cc, #2c9faf)' 'linear-gradient(135deg, #f6c23e, #dda20a)' 'linear-gradient(135deg, #e74a3b, #c0392b)' 'linear-gradient(135deg, #9b59b6, #8e44ad)' 'linear-gradient(135deg, #fd7e14, #e8590c)' 'linear-gradient(135deg, #20c997, #1ba085)' 'linear-gradient(135deg, #6f42c1, #59359a)' 'linear-gradient(135deg, #dc3545, #c82333)' %}; color: white; border: 2px solid {% cycle '#4e73df' '#1cc88a' '#36b9cc' '#f6c23e' '#e74a3b' '#9b59b6' '#fd7e14' '#20c997' '#6f42c1' '#dc3545' %};">{{ company.name|first|upper }}</div>
                             <div class="user-details">
-                                <div class="username">{{ company.name }}</div>
+                                <div class="username" style="color: {% cycle '#4e73df' '#1cc88a' '#36b9cc' '#f6c23e' '#e74a3b' '#9b59b6' '#fd7e14' '#20c997' '#6f42c1' '#dc3545' %}; font-weight: 600;">{{ company.name }}</div>
                                 <div class="role">{{ company.installations.count }} Instalaciones</div>
                             </div>
                         </div>
