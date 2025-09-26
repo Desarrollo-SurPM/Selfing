@@ -353,7 +353,7 @@
                                 </tr>
                             </thead>
                             <tbody>
-                                {% for report in demo_reports %}
+                                {% for report in vehicle_reports %}
                                     <tr>
                                         <td><strong>{{ report.vehicle }}</strong></td>
                                         <td>{{ report.driver }}</td>
@@ -429,7 +429,7 @@
                 <!-- Alertas -->
                 <div class="alerts-section">
                     <h5><i class="fas fa-exclamation-triangle me-2"></i>Alertas Activas</h5>
-                    {% for alert in demo_alerts %}
+                    {% for alert in vehicle_alerts %}
                         <div class="alert-item alert-{{ alert.type }}">
                             <strong>{{ alert.vehicle }}</strong> - {{ alert.time }}<br>
                             <small>{{ alert.message }}</small>
@@ -471,14 +471,14 @@
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script>
         document.addEventListener('DOMContentLoaded', function() {
-            // Datos de vehículos con información climática (demo) - Punta Arenas, Chile
-            var vehicles = [
-                {id: 1, name: 'ABC-123', lat: -53.1638, lng: -70.9171, speed: 35, status: 'En ruta', driver: 'Juan Pérez', weather: {temp: 8, condition: 'Viento fuerte', icon: '💨'}, speedLimit: 50, fuel: 75, odometer: 45230, lastMaintenance: '15/11/2024', model: 'Toyota Hilux 2022', engine: 'Encendido', doors: 'Cerradas', battery: 95},
-                {id: 2, name: 'DEF-456', lat: -53.1558, lng: -70.9098, speed: 0, status: 'Detenido', driver: 'María González', weather: {temp: 6, condition: 'Nublado', icon: '☁️'}, speedLimit: 60, fuel: 45, odometer: 38750, lastMaintenance: '08/11/2024', model: 'Ford Ranger 2021', engine: 'Apagado', doors: 'Cerradas', battery: 88},
-                {id: 3, name: 'GHI-789', lat: -53.1478, lng: -70.8925, speed: 45, status: 'En ruta', driver: 'Carlos López', weather: {temp: 4, condition: 'Lluvia ligera', icon: '🌧️'}, speedLimit: 50, fuel: 20, odometer: 52100, lastMaintenance: '02/11/2024', model: 'Chevrolet S10 2023', engine: 'Encendido', doors: 'Cerradas', battery: 92},
-                {id: 4, name: 'JKL-012', lat: -53.1398, lng: -70.8752, speed: 25, status: 'En ruta', driver: 'Ana Martínez', weather: {temp: 7, condition: 'Parcialmente nublado', icon: '⛅'}, speedLimit: 40, fuel: 85, odometer: 29800, lastMaintenance: '20/11/2024', model: 'Nissan Frontier 2022', engine: 'Encendido', doors: 'Cerradas', battery: 97},
-                {id: 5, name: 'MNO-345', lat: -53.1318, lng: -70.8579, speed: 0, status: 'Offline', driver: 'Pedro Martín', weather: {temp: 3, condition: 'Niebla', icon: '🌫️'}, speedLimit: 60, fuel: 10, odometer: 67450, lastMaintenance: '25/10/2024', model: 'Mitsubishi L200 2020', engine: 'Apagado', doors: 'Abiertas', battery: 45}
-            ];
+            // Datos de vehículos dinámicos desde el backend
+            var vehicles = {{ vehicles_data|safe }};
+            
+            // Si no hay datos dinámicos, usar lista vacía
+            if (!vehicles || vehicles.length === 0) {
+                vehicles = [];
+                console.log('No hay vehículos disponibles');
+            }
             
             // Inicializar mapa - Punta Arenas, Chile
             var map = L.map('vehicleMap').setView([-53.1638, -70.9171], 12);
@@ -669,7 +669,7 @@
                 });
             }
             
-            // Agregar marcadores de tráfico (demo)
+            // Agregar marcadores de tráfico
             function addTrafficMarkers() {
                 trafficMarkers.clearLayers();
                 

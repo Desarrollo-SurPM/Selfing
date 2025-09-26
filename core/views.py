@@ -1636,16 +1636,22 @@ def vehicle_security_dashboard(request):
     vehicles_stopped = 0
     vehicles_disconnected = 0
     
-    # Datos de prueba para demostración - Punta Arenas, Chile
-    demo_positions = [
-        {'vehicle': 'ABC-123', 'lat': -53.1638, 'lng': -70.9171, 'speed': 35, 'connected': True, 'driver': 'Juan Pérez'},
-        {'vehicle': 'DEF-456', 'lat': -53.1558, 'lng': -70.9098, 'speed': 0, 'connected': True, 'driver': 'María González'},
-        {'vehicle': 'GHI-789', 'lat': -53.1478, 'lng': -70.8925, 'speed': 45, 'connected': False, 'driver': 'Carlos López'},
-        {'vehicle': 'JKL-012', 'lat': -53.1398, 'lng': -70.8752, 'speed': 25, 'connected': True, 'driver': 'Ana Martínez'},
-    ]
+    # Obtener posiciones más recientes de cada vehículo
+    vehicle_positions = []
+    for vehicle in vehicles:
+        latest_position = VehiclePosition.objects.filter(vehicle=vehicle).order_by('-timestamp').first()
+        if latest_position:
+            vehicle_positions.append({
+                'vehicle': vehicle.license_plate,
+                'lat': float(latest_position.latitude),
+                'lng': float(latest_position.longitude),
+                'speed': latest_position.speed,
+                'connected': latest_position.is_connected,
+                'driver': vehicle.driver_name
+            })
     
     # Contar estados de vehículos
-    for pos in demo_positions:
+    for pos in vehicle_positions:
         if not pos['connected']:
             vehicles_disconnected += 1
         elif pos['speed'] > 5:
@@ -1653,20 +1659,37 @@ def vehicle_security_dashboard(request):
         else:
             vehicles_stopped += 1
     
-    # Alertas de prueba
-    demo_alerts = [
-        {'vehicle': 'ABC-123', 'type': 'speed', 'message': 'Exceso de velocidad detectado: 85 km/h en zona de 60 km/h', 'time': '10:30'},
-        {'vehicle': 'GHI-789', 'type': 'connection', 'message': 'Vehículo sin conexión desde hace 15 minutos', 'time': '09:45'},
-        {'vehicle': 'DEF-456', 'type': 'stopped', 'message': 'Vehículo detenido por más de 2 horas', 'time': '08:20'},
-    ]
+    # Obtener alertas activas desde la base de datos
+    active_alerts = VehicleAlert.objects.filter(
+        is_resolved=False,
+        vehicle__is_active=True
+    ).select_related('vehicle').order_by('-created_at')[:10]
     
-    # Historial de reportes de prueba
-    demo_reports = [
-        {'vehicle': 'ABC-123', 'driver': 'Juan Pérez', 'time': '2 horas', 'issue': 'Exceso de velocidad'},
-        {'vehicle': 'DEF-456', 'driver': 'María González', 'time': '3 horas', 'issue': 'Tiempo detenido excesivo'},
-        {'vehicle': 'GHI-789', 'driver': 'Carlos López', 'time': '1 hora', 'issue': 'Sin conexión'},
-        {'vehicle': 'JKL-012', 'driver': 'Ana Martínez', 'time': '4 horas', 'issue': 'Ruta completada'},
-    ]
+    vehicle_alerts = []
+    for alert in active_alerts:
+        vehicle_alerts.append({
+            'vehicle': alert.vehicle.license_plate,
+            'type': alert.alert_type,
+            'message': alert.message,
+            'time': alert.created_at.strftime('%H:%M')
+        })
+    
+    # Obtener rutas recientes para reportes
+    recent_routes = VehicleRoute.objects.filter(
+        vehicle__is_active=True,
+        start_time__date=timezone.now().date()
+    ).select_related('vehicle').order_by('-start_time')[:10]
+    
+    vehicle_reports = []
+    for route in recent_routes:
+        status = 'Ruta completada' if route.end_time else 'En progreso'
+        time_info = f'{route.total_distance:.1f} km' if route.total_distance else 'N/A'
+        vehicle_reports.append({
+            'vehicle': route.vehicle.license_plate,
+            'driver': route.vehicle.driver_name,
+            'time': time_info,
+            'issue': status
+        })
     
     # Obtener clima para Punta Arenas, Chile
     try:
@@ -1711,17 +1734,50 @@ def vehicle_security_dashboard(request):
         'connection_issues': 2
     }
     
+    # Preparar datos de vehículos para JavaScript
+    vehicles_data = []
+    for vehicle in vehicles:
+        latest_position = VehiclePosition.objects.filter(vehicle=vehicle).order_by('-timestamp').first()
+        if latest_position:
+            vehicles_data.append({
+                'id': vehicle.id,
+                'name': vehicle.license_plate,
+                'lat': float(latest_position.latitude),
+                'lng': float(latest_position.longitude),
+                'speed': latest_position.speed,
+                'status': 'En ruta' if latest_position.speed > 5 else ('Offline' if not latest_position.is_connected else 'Detenido'),
+                'driver': vehicle.driver_name,
+                'weather': {
+                    'temp': 8,  # Datos climáticos por defecto - se pueden integrar con API externa
+                    'condition': 'Viento fuerte',
+                    'icon': '💨'
+                },
+                'speedLimit': 50,  # Límite por defecto
+                'fuel': 75,  # Datos por defecto - se pueden agregar campos al modelo
+                'odometer': 45230,
+                'lastMaintenance': '15/11/2024',
+                'model': f'{vehicle.get_vehicle_type_display()} {vehicle.created_at.year}',
+                'engine': 'Encendido' if latest_position.speed > 0 else 'Apagado',
+                'doors': 'Cerradas',
+                'battery': 95
+            })
+    
+    # Si no hay vehículos con posiciones, usar lista vacía
+    if not vehicles_data:
+        vehicles_data = []
+    
     context = {
         'waze_lat': coordenadas['lat'],
         'waze_lon': coordenadas['lon'],
         'ciudad_actual': ciudad_buscada.title(),
         'vehicles': vehicles,
-        'demo_positions': demo_positions,
-        'demo_alerts': demo_alerts,
-        'demo_reports': demo_reports,
+        'vehicles_data': json.dumps(vehicles_data),  # Datos serializados para JavaScript
+        'vehicle_positions': vehicle_positions,
+        'vehicle_alerts': vehicle_alerts,
+        'vehicle_reports': vehicle_reports,
         'weather_data': weather_data,
         'stats': stats,
-        'total_vehicles': len(demo_positions),
+        'total_vehicles': len(vehicle_positions),
         'vehicles_on_route': vehicles_on_route,
         'vehicles_stopped': vehicles_stopped,
         'vehicles_disconnected': vehicles_disconnected,
