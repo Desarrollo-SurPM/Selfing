@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import Company, OperatorProfile, ChecklistItem, ChecklistLog, UpdateLog, Email, TraceabilityLog,  EmergencyContact, ShiftNote
+from .models import Company, OperatorProfile, ChecklistItem, ChecklistLog, UpdateLog, Email, TraceabilityLog,  EmergencyContact, ShiftNote, OperatorShift
 
 admin.site.register(Company)
 admin.site.register(OperatorProfile)
@@ -10,3 +10,4 @@ admin.site.register(Email)
 admin.site.register(TraceabilityLog)
 admin.site.register(EmergencyContact)
 admin.site.register(ShiftNote)
+admin.site.register(OperatorShift)

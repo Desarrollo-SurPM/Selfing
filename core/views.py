@@ -525,25 +525,27 @@ def get_shifts_for_calendar(request):
     return JsonResponse(events, safe=False)
 
 def get_active_shift(user):
-    """Función robusta para obtener el turno activo más reciente de un operador."""
-    shift = OperatorShift.objects.filter(
-        operator=user,
-        actual_end_time__isnull=True
-    ).order_by('-date').first()
-    return shift
     """
     Función robusta para obtener el turno activo más reciente de un operador.
-    Busca el último turno asignado que aún no ha sido finalizado.
+    Prioriza los turnos iniciados en las últimas 18 horas para evitar 'turnos pegados'.
     """
-    # Esta consulta ordena por fecha descendente, asegurando que siempre
-    # obtengamos el turno más nuevo, solucionando el problema de la medianoche.
+    # 1. Búsqueda prioritaria: turnos iniciados en las últimas 18 horas.
+    time_threshold = timezone.now() - timedelta(hours=18)
+
     shift = OperatorShift.objects.filter(
         operator=user,
-        actual_end_time__isnull=True
-    ).order_by('-date').first()
-    
+        actual_end_time__isnull=True,
+        actual_start_time__gte=time_threshold
+    ).order_by('-actual_start_time').first()
+
+    # 2. Búsqueda de respaldo: si no se encuentra uno reciente, busca el último sin cerrar.
+    if not shift:
+        shift = OperatorShift.objects.filter(
+            operator=user,
+            actual_end_time__isnull=True
+        ).order_by('-date', '-shift_type__start_time').first()
+
     return shift
-# --- VISTAS DE OPERADOR ---
 
 @login_required
 def start_shift(request):
@@ -1238,26 +1240,34 @@ def finish_virtual_round(request, round_id):
 def sign_turn_report(request, report_id):
     report = get_object_or_404(TurnReport, id=report_id, operator=request.user)
 
-    # Buscamos el turno activo asociado a este reporte
-    active_shift = get_active_shift(request.user)
-
     if request.method == 'POST':
-        # 1. Marca el reporte como firmado
-        report.is_signed = True
-        report.signed_at = timezone.now()
-        report.save()
+        # Directamente obtenemos el turno desde el reporte para evitar ambigüedades
+        shift_to_close = report.operator_shift
 
-        # 2. --- ESTA ES LA LÓGICA CLAVE QUE FALTABA ---
-        #    Marca el turno como finalizado
-        if active_shift:
-            active_shift.actual_end_time = timezone.now()
-            active_shift.save()
+        if shift_to_close:
+            # 1. Marca el turno como finalizado
+            shift_to_close.actual_end_time = timezone.now()
+            shift_to_close.save()
 
-        TraceabilityLog.objects.create(user=request.user, action="Firmó y finalizó su reporte de turno.")
+            # 2. Marca el reporte como firmado
+            report.is_signed = True
+            report.signed_at = timezone.now()
+            report.save()
 
-        # 3. Cierra la sesión del usuario
-        logout(request)
-        return redirect('login')
+            # 3. Crea el registro de trazabilidad
+            TraceabilityLog.objects.create(user=request.user, action="Firmó y finalizó su reporte de turno.")
+
+            # 4. Cierra la sesión del usuario
+            user_was_logged_in = request.user.is_authenticated
+            if user_was_logged_in:
+                logout(request)
+
+            # 5. Redirige a la página de login con un mensaje de éxito
+            messages.success(request, "Turno finalizado con éxito. Por favor, inicie sesión nuevamente si es necesario.")
+            return redirect('login')
+        else:
+            messages.error(request, "Error: No se pudo encontrar el turno asociado a este reporte.")
+            return redirect('operator_dashboard')
 
     return render(request, 'turn_report_preview.html', {'report': report})
 
