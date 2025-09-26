@@ -15,7 +15,12 @@ class UpdateLogForm(forms.ModelForm):
         fields = ['installation', 'message', 'manual_timestamp']
         widgets = {
             'installation': forms.HiddenInput(),
-            'message': forms.Textarea(attrs={'rows': 4, 'placeholder': 'Describa la novedad...'}),
+            'message': forms.Textarea(attrs={
+                'rows': 4, 
+                'placeholder': 'Describa la novedad...',
+                'spellcheck': 'true',
+                'lang': 'es-LA'
+            }),
             # Añadimos un widget para que el input sea de tipo datetime-local
             'manual_timestamp': forms.TimeInput(attrs={'type': 'time'}, format='%H:%M'),
         }

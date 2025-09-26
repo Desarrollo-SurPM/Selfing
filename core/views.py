@@ -1183,7 +1183,22 @@ def finish_virtual_round(request, round_id):
             active_round.end_time = end_time
             active_round.duration_seconds = duration.total_seconds()
             active_round.save()
-            TraceabilityLog.objects.create(user=request.user, action=f"Finalizó ronda virtual. Duración: {int(duration.total_seconds())}s.")
+            
+            # --- 👇 INICIO DE LA CORRECCIÓN 👇 ---
+            # 1. Obtenemos el total de segundos como un número entero.
+            total_seconds = int(duration.total_seconds())
+            
+            # 2. Usamos divmod para obtener los minutos y segundos restantes.
+            minutes, seconds = divmod(total_seconds, 60)
+            
+            # 3. Creamos el texto formateado.
+            formatted_duration = f"{minutes} min {seconds} seg"
+            
+            # 4. Guardamos el registro de actividad con el nuevo formato.
+            TraceabilityLog.objects.create(
+                user=request.user, 
+                action=f"Finalizó ronda virtual. Duración: {formatted_duration}."
+            )
             if 'active_round_id' in request.session: del request.session['active_round_id']
             return redirect('operator_dashboard')
     else:
