@@ -1,4 +1,5 @@
 {% load static %}
+{% load duration_filters %}
 <!DOCTYPE html>
 <html>
 <head>
@@ -302,9 +303,9 @@
                             <div class="item-list">
                                 {# Finalmente, mostramos las novedades ordenadas por hora #}
                                 {% for update in installation.list|dictsort:"created_at" %}
-                                    <div class="item-entry">
-                                        <div class="item-content">{{ update.message }}</div>
-                                        <div class="item-time">{{ update.created_at|date:"H:i" }}</div>
+                                    <div class="item-entry" style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px;">
+                                        <div class="item-content" style="flex: 1; margin-right: 15px;">{{ update.message }}</div>
+                                        <div class="item-time" style="font-weight: bold; color: #666; white-space: nowrap;">{{ update.created_at|date:"H:i" }}</div>
                                     </div>
                                 {% endfor %}
                             </div>
@@ -338,7 +339,7 @@
                                 <td><strong>Ronda {{ forloop.counter }}</strong></td>
                                 <td>{{ ronda.start_time|date:"H:i:s" }}</td>
                                 <td>{{ ronda.end_time|date:"H:i:s" }}</td>
-                                <td>{{ ronda.duration_seconds|floatformat:0 }} segundos</td>
+                                <td>{{ ronda.duration_seconds|format_duration }}</td>
                             </tr>
                         {% endfor %}
                     </tbody>
@@ -354,22 +355,40 @@
         <div class="section">
             <div class="section-header">CHECKLIST COMPLETADO</div>
             {% if completed_checklist %}
-                <table class="data-table">
-                    <thead>
-                        <tr>
-                            <th>Hora</th>
-                            <th>Descripción</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% for log in completed_checklist|dictsort:"completed_at" %}
-                            <tr>
-                                <td><strong>{{ log.completed_at|date:"H:i" }}</strong></td>
-                                <td>{{ log.item.description }}</td>
-                            </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
+                <!-- Agrupar por fases -->
+                {% regroup completed_checklist by item.phase as phase_groups %}
+                
+                {% for phase_group in phase_groups %}
+                    <div style="margin-bottom: 20px;">
+                        <h4 style="color: #333; margin-bottom: 10px; padding: 8px; background-color: #f8f9fa; border-left: 4px solid 
+                            {% if phase_group.grouper == 'start' %}#28a745
+                            {% elif phase_group.grouper == 'during' %}#007bff
+                            {% else %}#dc3545{% endif %};">
+                            {% if phase_group.grouper == 'start' %}🚀 INICIO DE TURNO
+                            {% elif phase_group.grouper == 'during' %}⏰ DURANTE EL TURNO
+                            {% else %}🏁 FINALIZACIÓN DE TURNO{% endif %}
+                        </h4>
+                        
+                        <table class="data-table" style="margin-bottom: 15px;">
+                            <thead>
+                                <tr>
+                                    <th>Hora</th>
+                                    <th>Descripción</th>
+                                    <th>Observación</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for log in phase_group.list|dictsort:"completed_at" %}
+                                    <tr>
+                                        <td><strong>{{ log.completed_at|date:"H:i" }}</strong></td>
+                                        <td>{{ log.item.description }}</td>
+                                        <td>{{ log.observacion|default:"—" }}</td>
+                                    </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                {% endfor %}
             {% else %}
                 <div class="no-data">
                     No se completaron tareas del checklist en este turno
