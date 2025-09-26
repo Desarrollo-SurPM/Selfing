@@ -266,17 +266,22 @@ document.addEventListener('DOMContentLoaded', function() {
         const overdueTaskDescription = document.getElementById('overdue-task-description');
         let isAlarmModalVisible = false;
 
+        let hasInitialCheckRun = false;
+
         function checkApiForAlarms() {
             if (isAlarmModalVisible) return;
 
             fetch("{% url 'check_pending_alarms' %}")
                 .then(response => response.json())
                 .then(data => {
-                    if (data.overdue_tasks && data.overdue_tasks.length > 0) {
+                    // Solo mostrar alarma si ya pasó la verificación inicial y hay tareas vencidas
+                    if (hasInitialCheckRun && data.overdue_tasks && data.overdue_tasks.length > 0) {
                         overdueTaskDescription.textContent = data.overdue_tasks[0].description;
                         alarmSound.play().catch(e => console.error("Error al reproducir sonido:", e));
                         alarmModal.show();
                     }
+                    // Marcar que ya se ejecutó la verificación inicial
+                    hasInitialCheckRun = true;
                 })
                 .catch(error => console.error('Error al verificar alarmas:', error));
         }
@@ -284,11 +289,11 @@ document.addEventListener('DOMContentLoaded', function() {
         alarmModalElement.addEventListener('show.bs.modal', () => { isAlarmModalVisible = true; });
         alarmModalElement.addEventListener('hidden.bs.modal', () => { isAlarmModalVisible = false; });
 
-        // --- CAMBIO APLICADO AQUÍ ---
-        // Se cambió de 60000 (1 min) a 600000 (10 min)
+        // Verificar cada 10 minutos
         setInterval(checkApiForAlarms, 600000); 
         
-        setTimeout(checkApiForAlarms, 5000);
+        // Verificación inicial silenciosa después de 30 segundos
+        setTimeout(checkApiForAlarms, 30000);
     }
     
     // Funcionalidad del Modal de Pánico

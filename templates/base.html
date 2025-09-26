@@ -90,6 +90,7 @@
         const roundModal = new bootstrap.Modal(document.getElementById('roundAlarmModal'));
         const alarmSound = document.getElementById('alarm-sound');
         let isAlarmActive = false;
+        let hasInitialChecklistCheckRun = false;
 
         // --- LÓGICA DE ALARMA DE CHECKLIST (vía API) ---
         function checkChecklistAlarm() {
@@ -97,15 +98,19 @@
             fetch("{% url 'check_pending_alarms' %}")
                 .then(response => response.json())
                 .then(data => {
-                    if (data.pending_checklist) {
+                    // Solo mostrar alarma si ya pasó la verificación inicial y hay checklist pendiente
+                    if (hasInitialChecklistCheckRun && data.pending_checklist) {
                         isAlarmActive = true;
                         checklistModal.show();
                         if(alarmSound) alarmSound.play().catch(e => {});
                     }
+                    // Marcar que ya se ejecutó la verificación inicial
+                    hasInitialChecklistCheckRun = true;
                 });
         }
         setInterval(checkChecklistAlarm, 60000); // Revisa cada minuto
-        checkChecklistAlarm(); // Revisa al cargar
+        // Verificación inicial silenciosa después de 30 segundos
+        setTimeout(checkChecklistAlarm, 30000);
 
         // --- LÓGICA DE TEMPORIZADOR Y ALARMA DE RONDA (CLIENT-SIDE) ---
         const countdownElementIds = ['global-round-countdown', 'dashboard-round-countdown'];
