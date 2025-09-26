@@ -1917,6 +1917,24 @@ def get_weather_data(request):
         })
 
 @login_required
+def check_first_round_started(request):
+    """
+    Verifica si ya se ha iniciado alguna ronda en el turno activo.
+    Usado por el JavaScript del contador de rondas.
+    """
+    active_shift = get_active_shift(request.user)
+    
+    if active_shift:
+        has_rounds = VirtualRoundLog.objects.filter(
+            operator_shift=active_shift
+        ).exists()
+        
+        return JsonResponse({'has_rounds': has_rounds})
+    
+    return JsonResponse({'has_rounds': False})
+
+
+@login_required
 @user_passes_test(is_supervisor)
 def get_multiple_cities_weather(request):
     """API para obtener datos del clima de múltiples ciudades"""

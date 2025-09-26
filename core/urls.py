@@ -94,6 +94,7 @@ urlpatterns = [
     path('ajax/get-updates/<int:company_id>/', views.get_updates_for_company, name='ajax_get_updates'),
     path('ajax/get-service-status/', views.get_service_status, name='ajax_get_service_status'),
     path('ajax/shifts/', views.get_shifts_for_calendar, name='ajax_get_shifts_for_calendar'),
+    path('ajax/check-first-round-started/', views.check_first_round_started, name='ajax_check_first_round_started'),
     
     # Rutas para Seguridad Vehicular
     path('dashboard/vehicle-security/', views.vehicle_security_dashboard, name='vehicle_security_dashboard'),

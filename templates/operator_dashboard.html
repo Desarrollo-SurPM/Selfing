@@ -84,7 +84,7 @@
                                         <i class="fas fa-sticky-note"></i><span>Nota para Próximo Turno</span>
                                     </button>
                                     {% if progress_percentage >= 99 %}
-                                    <a href="{% url 'end_turn_preview' %}" class="action-btn animate__animated animate__heartBeat animate__infinite" style="background-color: #dc3545; color: white;">
+                                    <a href="{% url 'end_turn_preview' %}" class="action-btn animate__animated animate__heartBeat animate__infinite" style="background-color: #dc3545; color: white;" onclick="pauseRoundTimer()">
                                         <i class="fas fa-power-off"></i><span>Finalizar Turno</span>
                                     </a>
                                     {% endif %}
@@ -109,7 +109,7 @@
                         {# --- CORRECCIÓN AQUÍ: Se restauró el pie de página con los botones de la ronda --- #}
                         <div class="card-footer bg-light">
                             {% if not active_round_id %}
-                                <form method="post" action="{% url 'start_virtual_round' %}" class="d-grid">
+                                <form method="post" action="{% url 'start_virtual_round' %}" class="d-grid" onsubmit="startRoundTimer()">
                                     {% csrf_token %}
                                     <button type="submit" class="btn btn-primary">
                                         <i class="fas fa-play-circle me-2"></i>Iniciar Ronda
@@ -135,11 +135,47 @@
             <div class="text-center p-5 bg-light rounded shadow-lg animate__animated animate__fadeIn">
                 <h1 class="display-4 text-dark mb-4">¡Listo para Empezar!</h1>
                 <p class="lead text-muted">Presiona el botón para registrar el inicio de tu jornada de trabajo.</p>
-                <form method="post" action="{% url 'start_shift' %}">
+                <form method="post" action="{% url 'start_shift' %}" id="start-shift-form">
                     {% csrf_token %}
-                    <button type="submit" class="btn btn-success btn-lg mt-3 shadow-sm animate__animated animate__pulse animate__infinite"><i class="fas fa-play-circle me-2"></i>Iniciar Turno</button>
+                    <button type="submit" id="start-shift-btn" class="btn btn-success btn-lg mt-3 shadow-sm animate__animated animate__pulse animate__infinite">
+                        <span id="btn-text"><i class="fas fa-play-circle me-2"></i>Iniciar Turno</span>
+                        <span id="btn-loading" class="d-none"><i class="fas fa-spinner fa-spin me-2"></i>Iniciando...</span>
+                    </button>
                 </form>
             </div>
+
+            <script>
+                document.addEventListener('DOMContentLoaded', function() {
+                    const form = document.getElementById('start-shift-form');
+                    const button = document.getElementById('start-shift-btn');
+                    const btnText = document.getElementById('btn-text');
+                    const btnLoading = document.getElementById('btn-loading');
+                    let isSubmitting = false;
+
+                    form.addEventListener('submit', function(e) {
+                        // Prevenir múltiples envíos
+                        if (isSubmitting) {
+                            e.preventDefault();
+                            return false;
+                        }
+
+                        // Marcar como enviando
+                        isSubmitting = true;
+                        
+                        // Deshabilitar el botón
+                        button.disabled = true;
+                        button.classList.remove('animate__pulse', 'animate__infinite');
+                        
+                        // Cambiar el texto del botón
+                        btnText.classList.add('d-none');
+                        btnLoading.classList.remove('d-none');
+                        
+                        // Cambiar el color del botón a indicar procesamiento
+                        button.classList.remove('btn-success');
+                        button.classList.add('btn-warning');
+                    });
+                });
+            </script>
         {% endif %}
 
     {% else %}

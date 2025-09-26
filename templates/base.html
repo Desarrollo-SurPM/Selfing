@@ -108,23 +108,51 @@
         checkChecklistAlarm(); // Revisa al cargar
 
         // --- LÓGICA DE TEMPORIZADOR Y ALARMA DE RONDA (CLIENT-SIDE) ---
-       const countdownElementIds = ['global-round-countdown', 'dashboard-round-countdown'];
+        const countdownElementIds = ['global-round-countdown', 'dashboard-round-countdown'];
         
         const shiftStartTime = new Date("{{ global_active_shift.actual_start_time.isoformat }}");
+        let timerPaused = true; // El contador inicia pausado
+        let hasFirstRoundStarted = false; // Flag para saber si ya se inició la primera ronda
+
+        // Verificar si ya hay rondas iniciadas al cargar la página
+        {% if global_active_shift %}
+            fetch('/ajax/check-first-round-started/')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.has_rounds) {
+                        hasFirstRoundStarted = true;
+                        timerPaused = false;
+                    }
+                })
+                .catch(error => console.error('Error checking rounds:', error));
+        {% endif %}
 
         function updateRoundCountdown() {
             const now = new Date();
-            const elapsedMilliseconds = now - shiftStartTime;
-            const hourInMilliseconds = 3600000;
-            const nextHourMark = Math.floor(elapsedMilliseconds / hourInMilliseconds) + 1;
-            const nextRoundTime = new Date(shiftStartTime.getTime() + nextHourMark * hourInMilliseconds);
-            const timeRemaining = nextRoundTime - now;
+            let formattedTime = "59:59"; // Valor inicial pausado
+            
+            if (!timerPaused && hasFirstRoundStarted) {
+                const elapsedMilliseconds = now - shiftStartTime;
+                const hourInMilliseconds = 3600000;
+                const nextHourMark = Math.floor(elapsedMilliseconds / hourInMilliseconds) + 1;
+                const nextRoundTime = new Date(shiftStartTime.getTime() + nextHourMark * hourInMilliseconds);
+                const timeRemaining = nextRoundTime - now;
 
-            let formattedTime = "--:--"; // Valor por defecto
-            if (timeRemaining > 0) {
-                const minutes = String(Math.floor((timeRemaining % hourInMilliseconds) / 60000)).padStart(2, '0');
-                const seconds = String(Math.floor((timeRemaining % 60000) / 1000)).padStart(2, '0');
-                formattedTime = `${minutes}:${seconds}`;
+                if (timeRemaining > 0) {
+                    const minutes = String(Math.floor((timeRemaining % hourInMilliseconds) / 60000)).padStart(2, '0');
+                    const seconds = String(Math.floor((timeRemaining % 60000) / 1000)).padStart(2, '0');
+                    formattedTime = `${minutes}:${seconds}`;
+                } else {
+                    formattedTime = "00:00";
+                }
+
+                // Disparar la alarma en el minuto :00 de cada hora del turno
+                if (now.getMinutes() === 0 && now.getSeconds() === 0) {
+                     if (isAlarmActive) return;
+                     isAlarmActive = true;
+                     roundModal.show();
+                     if(alarmSound) alarmSound.play().catch(e => {});
+                }
             }
 
             // Bucle que actualiza cada temporizador en la página
@@ -133,15 +161,26 @@
                 if (element) { // Solo si el elemento existe en la página actual
                     element.textContent = formattedTime;
                 }
-            })
+            });
+        }
 
-            // Disparar la alarma en el minuto :00 de cada hora del turno
-            if (now.getMinutes() === 0 && now.getSeconds() === 0) {
-                 if (isAlarmActive) return;
-                 isAlarmActive = true;
-                 roundModal.show();
-                 if(alarmSound) alarmSound.play().catch(e => {});
-            }
+        // Función para activar el contador cuando se inicia la primera ronda
+        function startRoundTimer() {
+            hasFirstRoundStarted = true;
+            timerPaused = false;
+        }
+
+        // Función para pausar el contador al finalizar el turno
+        function pauseRoundTimer() {
+            timerPaused = true;
+            hasFirstRoundStarted = false;
+            // Actualizar display a 00:00
+            countdownElementIds.forEach(id => {
+                const element = document.getElementById(id);
+                if (element) {
+                    element.textContent = "00:00";
+                }
+            });
         }
         setInterval(updateRoundCountdown, 1000);
         updateRoundCountdown();
