@@ -1468,6 +1468,11 @@ def panic_button_view(request):
         'general_contacts': general_contacts,
         'contacts_by_company': dict(contacts_by_company)
     }
+    
+    # Convertir defaultdicts anidados a dicts normales
+    for company_name in context['contacts_by_company']:
+        context['contacts_by_company'][company_name] = dict(context['contacts_by_company'][company_name])
+    
     return render(request, 'panic_button.html', context)
 
 @csrf_exempt # Deshabilitamos CSRF para esta vista AJAX

@@ -58,46 +58,25 @@
         {% for company_name, details in contacts_by_company.items %}
             <h3 class="mb-3"><i class="fas fa-building me-2"></i> {{ company_name }}</h3>
             
-            <!-- Contactos generales de la empresa -->
-            {% if details.company_contacts %}
-                <h5 class="mb-3 text-primary"><i class="fas fa-phone me-2"></i>Contactos Generales</h5>
+            <!-- Contactos por instalación específica -->
+            {% for installation_name, contacts in details.items %}
+                <!-- Contactos de instalación específica -->
+                <h5 class="mb-3 text-success"><i class="fas fa-map-marker-alt me-2"></i>{{ installation_name }}</h5>
                 <div class="row g-4 mb-4">
-                    {% for contact in details.company_contacts %}
+                    {% for contact in contacts %}
                     <div class="col-md-4">
                         <a href="tel:{{ contact.phone_number }}" class="phone-link">
-                            <div class="card contact-card shadow-sm h-100" style="border-left: 5px solid #0d6efd;">
+                            <div class="card contact-card shadow-sm h-100" style="border-left: 5px solid #198754;">
                                 <div class="card-body text-center">
                                     <p class="contact-name">{{ contact.name }}</p>
-                                    <p class="badge bg-primary mb-2">General</p>
                                     <p class="phone-number">{{ contact.phone_number }}</p>
+                                    <p class="badge bg-success mb-2">{{ installation_name }}</p>
                                 </div>
                             </div>
                         </a>
                     </div>
                     {% endfor %}
                 </div>
-            {% endif %}
-
-            <!-- Contactos por instalación específica -->
-            {% for installation_name, contacts in details.items %}
-                {% if installation_name != 'company_contacts' %}
-                    <h5 class="mb-3 text-success"><i class="fas fa-map-marker-alt me-2"></i>{{ installation_name }}</h5>
-                    <div class="row g-4 mb-4">
-                        {% for contact in contacts %}
-                        <div class="col-md-4">
-                            <a href="tel:{{ contact.phone_number }}" class="phone-link">
-                                <div class="card contact-card shadow-sm h-100" style="border-left: 5px solid #198754;">
-                                    <div class="card-body text-center">
-                                        <p class="contact-name">{{ contact.name }}</p>
-                                        <p class="badge bg-success mb-2">{{ installation_name }}</p>
-                                        <p class="phone-number">{{ contact.phone_number }}</p>
-                                    </div>
-                                </div>
-                            </a>
-                        </div>
-                        {% endfor %}
-                    </div>
-                {% endif %}
             {% endfor %}
         {% endfor %}
     </div>
