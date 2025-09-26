@@ -84,7 +84,7 @@
                                         <i class="fas fa-sticky-note"></i><span>Nota para Próximo Turno</span>
                                     </button>
                                     {% if progress_percentage >= 99 %}
-                                    <a href="{% url 'end_turn_preview' %}" class="action-btn animate__animated animate__heartBeat animate__infinite" style="background-color: #dc3545; color: white;">
+                                    <a href="{% url 'end_turn_preview' %}" class="action-btn animate__animated animate__heartBeat animate__infinite" style="background-color: #dc3545; color: white;" onclick="pauseRoundTimer()">
                                         <i class="fas fa-power-off"></i><span>Finalizar Turno</span>
                                     </a>
                                     {% endif %}
@@ -109,7 +109,7 @@
                         {# --- CORRECCIÓN AQUÍ: Se restauró el pie de página con los botones de la ronda --- #}
                         <div class="card-footer bg-light">
                             {% if not active_round_id %}
-                                <form method="post" action="{% url 'start_virtual_round' %}" class="d-grid">
+                                <form method="post" action="{% url 'start_virtual_round' %}" class="d-grid" onsubmit="startRoundTimer()">
                                     {% csrf_token %}
                                     <button type="submit" class="btn btn-primary">
                                         <i class="fas fa-play-circle me-2"></i>Iniciar Ronda
