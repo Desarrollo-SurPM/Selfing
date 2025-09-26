@@ -1081,11 +1081,6 @@ def end_turn_preview(request):
     if empresas_faltantes_bitacora:
         validation_errors.append(f"Falta registrar en bitácora para: {', '.join(empresas_faltantes_bitacora)}.")
 
-    todas_las_empresas = Company.objects.all()
-    ids_empresas_con_correo = Email.objects.filter(operator=request.user, created_at__gte=active_shift.actual_start_time).values_list('company_id', flat=True)
-    empresas_faltantes_correo = [c.name for c in todas_las_empresas if c.id not in ids_empresas_con_correo]
-    if empresas_faltantes_correo:
-        validation_errors.append(f"Falta generar correo para: {', '.join(empresas_faltantes_correo)}.")
         
     if validation_errors:
         full_error_message = "No puedes finalizar el turno. Tareas pendientes: " + " ".join(validation_errors)
