@@ -420,6 +420,34 @@ document.addEventListener('DOMContentLoaded', function() {
         setInterval(mainTimerLoop, 1000);
         mainTimerLoop(); // Ejecutar una vez al cargar para mostrar el estado correcto inmediatamente
     }
+const statusPanel = document.getElementById('service-status-panel');
+    
+    function updateServiceStatus() {
+        if (!statusPanel) return;
+
+        // Añadimos un timestamp para evitar problemas de caché
+        const url = `{% url 'ajax_get_service_status' %}?timestamp=${new Date().getTime()}`;
+        
+        fetch(url)
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error(`Error en la respuesta del servidor: ${response.status}`);
+                }
+                return response.text();
+            })
+            .then(html => {
+                statusPanel.innerHTML = html;
+            })
+            .catch(error => {
+                console.error('Error al actualizar servicios:', error);
+                statusPanel.innerHTML = `<div class="p-3 text-center text-danger"><i class="fas fa-exclamation-circle"></i> Error al cargar</div>`;
+            });
+    }
+    
+    // Actualizar inmediatamente al cargar la página y luego cada 5 segundos.
+    updateServiceStatus();
+    setInterval(updateServiceStatus, 5000);
+
 });
 </script>
 {% endblock extra_js %}
