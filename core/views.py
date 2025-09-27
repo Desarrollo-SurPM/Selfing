@@ -85,15 +85,35 @@ def admin_dashboard(request):
 @login_required
 @user_passes_test(is_supervisor)
 def review_and_send_novedades(request):
-    today = timezone.now().date()
-    active_shifts_today = OperatorShift.objects.filter(
-        date=today, 
-        actual_end_time__isnull=True
-    ).exists()
+    """
+    Gestiona la revisión y envío de novedades basado en el ciclo de turnos
+    que se cierra con la finalización del último "Turno de noche".
+    """
+    # --- INICIO DE LA LÓGICA DE CICLO BASADO EN TURNOS ---
+    
+    # 1. Encontrar el último turno de noche que haya finalizado.
+    last_night_shift_ended = OperatorShift.objects.filter(
+        shift_type__name__iexact='Turno de noche', 
+        actual_end_time__isnull=False
+    ).order_by('-actual_end_time').first()
 
-    if active_shifts_today:
-        messages.warning(request, "Aún hay turnos activos. Debe esperar a que todos los turnos del día finalicen para poder enviar el reporte de novedades.")
-        return render(request, 'review_and_send.html', {'shifts_active': True})
+    # Si no se ha cerrado ningún turno de noche, no hay ciclo que reportar.
+    if not last_night_shift_ended:
+        messages.info(request, "Aún no ha finalizado un ciclo completo de turnos para generar un reporte.")
+        return render(request, 'review_and_send.html', {'companies': None})
+
+    # 2. Determinar el inicio del ciclo: el final del turno de noche ANTERIOR.
+    previous_night_shift_ended = OperatorShift.objects.filter(
+        shift_type__name__iexact='Turno de noche',
+        actual_end_time__isnull=False,
+        actual_end_time__lt=last_night_shift_ended.actual_end_time
+    ).order_by('-actual_end_time').first()
+
+    # Si no hay uno anterior, usamos una fecha muy antigua para incluir todo desde el principio.
+    start_of_cycle = previous_night_shift_ended.actual_end_time if previous_night_shift_ended else timezone.make_aware(datetime.min)
+    end_of_cycle = last_night_shift_ended.actual_end_time
+    
+    # --- FIN DE LA NUEVA LÓGICA DE CICLO ---
 
     company_id = request.GET.get('company_id')
     selected_company = None
@@ -105,76 +125,87 @@ def review_and_send_novedades(request):
         company_id_form = request.POST.get('company_id')
         company = get_object_or_404(Company, id=company_id_form)
 
-        # --- INICIO DE LA MODIFICACIÓN CLAVE ---
+        # Guardar ediciones del admin antes de enviar
+        with transaction.atomic():
+            for update_id in selected_ids:
+                new_message = request.POST.get(f'message_{update_id}')
+                if new_message:
+                    log_to_update = UpdateLog.objects.get(id=update_id)
+                    if log_to_update.message != new_message:
+                        log_to_update.message = new_message
+                        log_to_update.is_edited = True
+                        log_to_update.edited_at = timezone.now()
+                        log_to_update.save()
 
-        # 1. Identificamos las novedades que SÍ se van a incluir en el correo.
-        updates_to_send_in_email = UpdateLog.objects.filter(id__in=selected_ids).order_by('installation__name', 'created_at')
+        # Obtenemos las novedades (ya actualizadas) para el cuerpo del correo
+        updates_to_send_in_email = UpdateLog.objects.filter(id__in=selected_ids).order_by('created_at')
 
-        # 2. Identificamos TODAS las novedades que estaban pendientes para esta empresa.
-        all_pending_updates_for_company = UpdateLog.objects.filter(
-            installation__company=company, is_sent=False
-        ).exclude(
-            operator_shift__shift_type__name__iexact='Turno Mañana'
-        )
+        # Procesar múltiples correos
+        email_string = company.email or ""
+        recipient_list = [email.strip() for email in email_string.split(',') if email.strip()]
 
-        # --- FIN DE LA MODIFICACIÓN CLAVE ---
-
-        if company.email:
+        if recipient_list:
             try:
                 email_context = {
                     'company': company,
-                    'updates': updates_to_send_in_email, # Usamos solo las seleccionadas para el cuerpo del correo.
+                    'updates': updates_to_send_in_email,
                     'observations': observations,
                     'enviado_por': request.user,
                 }
                 html_message = render_to_string('emails/reporte_novedades.html', email_context)
                 
                 send_mail(
-                    subject=f"Reporte de Novedades - {company.name} - {timezone.now().strftime('%d/%m/%Y')}",
+                    subject=f"Reporte de Novedades - {company.name} - {end_of_cycle.strftime('%d/%m/%Y')}",
                     message="",
                     from_email=None,
-                    recipient_list=[company.email],
+                    recipient_list=recipient_list,
                     fail_silently=False,
                     html_message=html_message
                 )
                 
-                # --- AQUÍ OCURRE LA MAGIA ---
-                # Marcamos TODAS las novedades pendientes de la empresa como "enviadas",
-                # limpiando la lista para el próximo ciclo.
-                all_pending_updates_for_company.update(is_sent=True)
+                # Marcar como enviadas solo las novedades DEL CICLO CORRESPONDIENTE
+                updates_to_mark_as_sent = UpdateLog.objects.filter(
+                    installation__company=company,
+                    is_sent=False,
+                    created_at__gte=start_of_cycle,
+                    created_at__lte=end_of_cycle
+                )
+                updates_to_mark_as_sent.update(is_sent=True)
                 
                 TraceabilityLog.objects.create(user=request.user, action=f"Envió correo de novedades a {company.name}.")
-                messages.success(request, f"Correo enviado correctamente a {company.name}.")
+                messages.success(request, f"Correo para el ciclo finalizado ha sido enviado a {company.name}.")
 
             except Exception as e:
                 messages.error(request, f"Error al enviar el correo: {e}")
-                return redirect(f"{request.path_info}?company_id={company_id_form}")
         else:
             messages.warning(request, f"La empresa {company.name} no tiene un correo configurado.")
 
         return redirect('review_and_send_novedades')
 
-    # La lógica GET para mostrar la página no cambia.
+    # Lógica GET para mostrar la página
+    q_filter = Q(
+        installations__updatelog__is_sent=False,
+        installations__updatelog__created_at__gte=start_of_cycle,
+        installations__updatelog__created_at__lte=end_of_cycle
+    )
+    companies_with_pending_updates = Company.objects.filter(q_filter).annotate(
+        pending_count=Count('installations__updatelog', filter=q_filter)
+    ).filter(pending_count__gt=0).distinct()
+
     if company_id:
         selected_company = get_object_or_404(Company, id=company_id)
         novedades_pendientes = UpdateLog.objects.filter(
-            installation__company=selected_company, is_sent=False
-        ).exclude(
-            operator_shift__shift_type__name__iexact='Turno Mañana'
-        ).select_related('operator_shift__operator', 'installation').order_by('installation__name', '-created_at')
-
-    companies_with_pending_updates = Company.objects.filter(
-        installations__updatelog__is_sent=False
-    ).exclude(
-        installations__updatelog__operator_shift__shift_type__name__iexact='Turno Mañana'
-    ).annotate(
-        pending_count=Count('installations__updatelog', filter=Q(installations__updatelog__is_sent=False))
-    ).filter(pending_count__gt=0).distinct()
+            installation__company=selected_company,
+            is_sent=False,
+            created_at__gte=start_of_cycle,
+            created_at__lte=end_of_cycle
+        ).select_related('operator_shift__operator', 'installation').order_by('created_at')
 
     context = {
         'companies': companies_with_pending_updates,
         'selected_company': selected_company,
-        'novedades_pendientes': novedades_pendientes
+        'novedades_pendientes': novedades_pendientes,
+        'cycle_end': end_of_cycle, # Para mostrar en la plantilla
     }
     return render(request, 'review_and_send.html', context)
 
