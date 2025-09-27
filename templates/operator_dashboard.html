@@ -268,6 +268,7 @@
 
 {% endblock content %}
 
+{# Pasamos los datos del backend a JavaScript de forma segura #}
 {% block extra_js %}
 
 {# Pasamos los datos del backend a JavaScript de forma segura #}
@@ -349,9 +350,6 @@ document.addEventListener('DOMContentLoaded', function() {
     // =================================================================
     // LÓGICA FINAL Y CORRECTA DEL TEMPORIZADOR DE RONDAS (XX:30)
     // =================================================================
-     // =================================================================
-    // LÓGICA DE TEMPORIZADOR DE RONDAS (CORREGIDA PARA TODOS LOS TURNOS)
-    // =================================================================
     const timerDataElement = document.getElementById('round-timer-data');
     if (!timerDataElement) return;
 
@@ -365,27 +363,42 @@ document.addEventListener('DOMContentLoaded', function() {
 
     function mainTimerLoop() {
         const now = new Date();
+
+        // 1. Detectar si ha comenzado un nuevo ciclo (a los 30 min de cada hora)
         if (now.getMinutes() === 30 && lastCheckedMinute !== 30) {
             lastCheckedMinute = 30;
-            roundCompletedThisCycle = false;
-            if (roundAlarmSound) roundAlarmSound.play().catch(e => {});
-            roundModal.show();
+            
+            // La última alarma suena a las 07:30. No se reinicia el ciclo a las 08:30.
+            if (now.getHours() !== 8) {
+                roundCompletedThisCycle = false; // <<< ESTA LÍNEA ES CLAVE PARA REINICIAR
+                if (roundAlarmSound) roundAlarmSound.play().catch(e => {});
+                roundModal.show();
+            }
         } else if (now.getMinutes() !== 30) {
             lastCheckedMinute = now.getMinutes();
         }
 
         let timeToDisplay = "00:00";
         
-        if (roundCompletedThisCycle) {
+        const hour = now.getHours();
+        const minute = now.getMinutes();
+        // El turno está inactivo entre las 08:30 AM y las 16:29 PM
+        const isShiftOffTime = (hour > 8 || (hour === 8 && minute >= 30)) && (hour < 16 || (hour === 16 && minute < 30));
+
+        // 2. Decidir qué mostrar en el temporizador
+        if (roundCompletedThisCycle || isShiftOffTime) {
             timeToDisplay = "00:00";
         } else {
+            // Si la ronda está pendiente, calcula la cuenta regresiva hasta el próximo XX:30
             const nextDueTime = new Date(now);
             if (now.getMinutes() >= 30) {
                 nextDueTime.setHours(now.getHours() + 1, 30, 0, 0);
             } else {
                 nextDueTime.setHours(now.getHours(), 30, 0, 0);
             }
+            
             const timeRemaining = nextDueTime - now;
+
             if (timeRemaining > 0) {
                 const minutes = String(Math.floor((timeRemaining / 1000 / 60) % 60)).padStart(2, '0');
                 const seconds = String(Math.floor((timeRemaining / 1000) % 60)).padStart(2, '0');
@@ -393,48 +406,20 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         }
         
+        // 3. Actualizar TODOS los elementos del contador en la página
         countdownElementIds.forEach(id => {
             const element = document.getElementById(id);
-            if (element) { element.textContent = timeToDisplay; }
+            if (element) {
+                element.textContent = timeToDisplay;
+            }
         });
     }
 
-    // El temporizador se inicia si hay un turno activo, sin importar la hora.
+    // Lógica de inicio
     if (timerData.shiftStartTime) {
-        if (!roundCompletedThisCycle) {
-            roundModal.show();
-        }
         setInterval(mainTimerLoop, 1000);
-        mainTimerLoop();
+        mainTimerLoop(); // Ejecutar una vez al cargar para mostrar el estado correcto inmediatamente
     }
-const statusPanel = document.getElementById('service-status-panel');
-    
-    function updateServiceStatus() {
-        if (!statusPanel) return;
-
-        // Añadimos un timestamp para evitar problemas de caché
-        const url = `{% url 'ajax_get_service_status' %}?timestamp=${new Date().getTime()}`;
-        
-        fetch(url)
-            .then(response => {
-                if (!response.ok) {
-                    throw new Error(`Error en la respuesta del servidor: ${response.status}`);
-                }
-                return response.text();
-            })
-            .then(html => {
-                statusPanel.innerHTML = html;
-            })
-            .catch(error => {
-                console.error('Error al actualizar servicios:', error);
-                statusPanel.innerHTML = `<div class="p-3 text-center text-danger"><i class="fas fa-exclamation-circle"></i> Error al cargar</div>`;
-            });
-    }
-    
-    // Actualizar inmediatamente al cargar la página y luego cada 5 segundos.
-    updateServiceStatus();
-    setInterval(updateServiceStatus, 5000);
-
 });
 </script>
 {% endblock extra_js %}
