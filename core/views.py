@@ -1471,8 +1471,7 @@ def get_service_status(request):
 @login_required
 def check_pending_alarms(request):
     """
-    NUEVA LÓGICA DE ALARMAS:
-    Esta vista ahora devuelve las tareas específicas que están vencidas.
+    Lógica de alarmas corregida para ignorar tareas con tiempo de alarma en cero.
     """
     active_shift = get_active_shift(request.user)
     overdue_tasks = []
@@ -1480,28 +1479,30 @@ def check_pending_alarms(request):
     if active_shift and active_shift.actual_start_time:
         now = timezone.now()
         
-        # 1. Obtiene solo los ítems que aplican a este turno específico.
         applicable_items = get_applicable_checklist_items(active_shift)
         
-        # 2. Obtiene los IDs de las tareas ya completadas en este turno.
         completed_item_ids = ChecklistLog.objects.filter(
             operator_shift=active_shift
         ).values_list('item_id', flat=True)
         
-        # 3. Filtra para quedarse solo con las tareas pendientes que tienen alarma.
+        # --- 👇 INICIO DE LA CORRECCIÓN CLAVE 👇 ---
+        # Ahora, además de verificar que la alarma no sea nula,
+        # nos aseguramos de que su duración sea mayor a cero segundos.
         pending_items_with_alarm = applicable_items.exclude(
             id__in=completed_item_ids
         ).filter(
-            alarm_trigger_delay__isnull=False
+            alarm_trigger_delay__isnull=False,
+            alarm_trigger_delay__gt=timedelta(seconds=0) # <-- LÍNEA AÑADIDA
         )
+        # --- 👆 FIN DE LA CORRECCIÓN 👆 ---
         
-        # 4. Comprueba si alguna de las tareas pendientes está vencida.
         for item in pending_items_with_alarm:
             due_time = active_shift.actual_start_time + item.alarm_trigger_delay
             if now > due_time:
                 overdue_tasks.append({'description': item.description})
 
     return JsonResponse({'overdue_tasks': overdue_tasks})
+
 
 # --- VISTAS DE CONTACTOS DE EMERGENCIA ---
 
