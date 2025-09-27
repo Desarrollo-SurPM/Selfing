@@ -121,12 +121,25 @@
                             {% endif %}
                         </div>
                     </div>
+                    <div class="card shadow-sm mt-4">
+                        <div class="card-header bg-light text-secondary"><h5 class="mb-0"><i class="fas fa-heartbeat me-2"></i>Estado de Servicios</h5></div>
+                        <div id="service-status-panel">
+                            <div class="p-3 text-center text-muted">
+                                <i class="fas fa-spinner fa-spin"></i> Cargando...
+                            </div>
+                        </div>
+                    </div>
+                    </div>
+
                     <div class="card shadow-sm border-info">
                         <div class="card-header bg-light text-secondary"><h5 class="mb-0"><i class="fas fa-history me-2"></i>Tu Actividad Reciente</h5></div>
                         <ul class="list-group list-group-flush activity-panel">
                             {% for log in traceability_logs|slice:":5" %}<li class="list-group-item"><small>{{ log.action }} <span class="text-muted">- {{ log.timestamp|timesince }} atrás</span></small></li>{% empty %}<li class="list-group-item text-center text-muted py-3">No tienes actividad reciente.</li>{% endfor %}
                         </ul>
                     </div>
+
+                    
+            </div>
                 </div>
             </div>
         {% else %}
@@ -394,6 +407,34 @@ document.addEventListener('DOMContentLoaded', function() {
         setInterval(mainTimerLoop, 1000);
         mainTimerLoop();
     }
+const statusPanel = document.getElementById('service-status-panel');
+    
+    function updateServiceStatus() {
+        if (!statusPanel) return;
+
+        // Añadimos un timestamp para evitar problemas de caché
+        const url = `{% url 'ajax_get_service_status' %}?timestamp=${new Date().getTime()}`;
+        
+        fetch(url)
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error(`Error en la respuesta del servidor: ${response.status}`);
+                }
+                return response.text();
+            })
+            .then(html => {
+                statusPanel.innerHTML = html;
+            })
+            .catch(error => {
+                console.error('Error al actualizar servicios:', error);
+                statusPanel.innerHTML = `<div class="p-3 text-center text-danger"><i class="fas fa-exclamation-circle"></i> Error al cargar</div>`;
+            });
+    }
+    
+    // Actualizar inmediatamente al cargar la página y luego cada 5 segundos.
+    updateServiceStatus();
+    setInterval(updateServiceStatus, 5000);
+
 });
 </script>
 {% endblock extra_js %}
