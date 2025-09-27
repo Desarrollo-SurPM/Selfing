@@ -1086,8 +1086,6 @@ def checklist_view(request):
 
 
 # Flujo de Rondas Virtuales
-
-
 @login_required
 def end_turn_preview(request):
     active_shift = get_active_shift(request.user)
@@ -1095,7 +1093,7 @@ def end_turn_preview(request):
         messages.error(request, "No tienes un turno activo o iniciado.")
         return redirect('operator_dashboard')
 
-    # ... (toda tu lógica de validación se mantiene igual) ...
+    # --- Lógica de validación (sin cambios) ---
     validation_errors = []
     total_rondas_requeridas = 7
     rondas_completadas = VirtualRoundLog.objects.filter(operator_shift=active_shift).count()
@@ -1108,34 +1106,65 @@ def end_turn_preview(request):
     empresas_faltantes_bitacora = [c.name for c in empresas_con_instalaciones if c.id not in ids_empresas_con_log]
     if empresas_faltantes_bitacora:
         validation_errors.append(f"Falta registrar en bitácora para: {', '.join(empresas_faltantes_bitacora)}.")
-
-        
+    
     if validation_errors:
         full_error_message = "No puedes finalizar el turno. Tareas pendientes: " + " ".join(validation_errors)
         messages.error(request, full_error_message)
         return redirect('operator_dashboard')
 
-    # --- 👇 EL ÚNICO CAMBIO ESTÁ EN LA SIGUIENTE LÍNEA 👇 ---
-    # Le decimos a la base de datos que ordene los datos ANTES de enviarlos a la plantilla.
+    end_time = timezone.now()
+    duration_timedelta = end_time - active_shift.actual_start_time
+    total_seconds = int(duration_timedelta.total_seconds())
+    hours = total_seconds // 3600
+    minutes = (total_seconds % 3600) // 60
+    formatted_duration = f"{hours}h {minutes}m"
+
+    # --- INICIO DE LA LÓGICA DE ORDENACIÓN DEL CHECKLIST ---
+    
+    # 1. Obtenemos todos los logs del checklist para el turno.
+    completed_checklist_qs = ChecklistLog.objects.filter(
+        operator_shift=active_shift
+    ).select_related('item').order_by('completed_at')
+
+    # 2. Definimos el orden correcto de las fases.
+    phase_order = ['start', 'during', 'end']
+    phase_display_names = {
+        'start': '🚀 INICIO DE TURNO',
+        'during': '⏰ DURANTE EL TURNO',
+        'end': '🏁 FINALIZACIÓN DE TURNO'
+    }
+
+    # 3. Creamos un diccionario ordenado para mantener la secuencia.
+    checklist_by_phase = OrderedDict()
+    for phase_key in phase_order:
+        # Filtramos los logs que corresponden a la fase actual del bucle
+        logs_for_phase = completed_checklist_qs.filter(item__phase=phase_key)
+        # Si hay logs para esta fase, los añadimos al diccionario
+        if logs_for_phase.exists():
+            checklist_by_phase[phase_key] = {
+                'display_name': phase_display_names.get(phase_key),
+                'logs': logs_for_phase
+            }
+    # --- FIN DE LA LÓGICA DE ORDENACIÓN ---
+
     updates_log = UpdateLog.objects.filter(
         operator_shift=active_shift
-    ).select_related('installation__company').order_by(
-        'installation__company__name', 'installation__name', 'created_at'
-    )
-    # --- 👆 FIN DEL CAMBIO 👆 ---
-
-    completed_checklist = ChecklistLog.objects.filter(operator_shift=active_shift).select_related('item')
+    ).select_related('installation__company').order_by('installation__company__name', 'installation__name', 'created_at')
+    
     rondas_virtuales = VirtualRoundLog.objects.filter(operator_shift=active_shift)
 
     context = {
         'operator': request.user,
         'start_time': active_shift.actual_start_time,
-        'end_time': timezone.now(),
-        'completed_checklist': completed_checklist,
-        'updates_log': updates_log,  # La plantilla PDF ya usa esta variable
+        'end_time': end_time,
+        'duration': formatted_duration,
+        'current_time': timezone.now(),
+        'checklist_by_phase': checklist_by_phase, # Pasamos el nuevo diccionario ordenado
+        'updates_log': updates_log,
         'rondas_virtuales': rondas_virtuales,
     }
 
+    # El resto de la lógica para generar el PDF se mantiene igual
     template = get_template('turn_report_pdf.html')
     html = template.render(context)
     result = BytesIO()
@@ -1152,6 +1181,7 @@ def end_turn_preview(request):
 
     messages.error(request, f"Error al generar el PDF: {pdf.err}")
     return redirect('operator_dashboard')
+
 
 
 @login_required
