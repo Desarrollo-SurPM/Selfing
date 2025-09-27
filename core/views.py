@@ -1,5 +1,5 @@
 # desarrollo-surpm/selfing/Selfing-mejorasorden/core/views.py
-
+from django.db.models import Min, Max
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth.decorators import login_required, user_passes_test
 from django.contrib.auth.models import User
@@ -82,39 +82,68 @@ def admin_dashboard(request):
     }
     return render(request, 'admin_dashboard.html', context)
 
+# selfing/core/views.py
+
 @login_required
 @user_passes_test(is_supervisor)
 def review_and_send_novedades(request):
     """
-    Gestiona la revisión y envío de novedades basado en el ciclo de turnos
-    que se cierra con la finalización del último "Turno de noche".
+    Gestiona el envío de novedades basándose en la secuencia real de turnos
+    que componen un ciclo operativo (ej: Tarde + Noche o Día + Tarde + Noche).
     """
-    # --- INICIO DE LA LÓGICA DE CICLO BASADO EN TURNOS ---
-    
-    # 1. Encontrar el último turno de noche que haya finalizado.
-    last_night_shift_ended = OperatorShift.objects.filter(
-        shift_type__name__iexact='Turno de noche', 
+    start_of_cycle = None
+    end_of_cycle = None
+
+    # 1. Encontrar el último turno de "noche" que haya finalizado. Es el fin de nuestro ciclo.
+    last_night_shift = OperatorShift.objects.filter(
+        shift_type__name__icontains='noche',
         actual_end_time__isnull=False
     ).order_by('-actual_end_time').first()
 
-    # Si no se ha cerrado ningún turno de noche, no hay ciclo que reportar.
-    if not last_night_shift_ended:
-        messages.info(request, "Aún no ha finalizado un ciclo completo de turnos para generar un reporte.")
+    if not last_night_shift:
+        messages.info(request, "Aún no ha finalizado un ciclo de turnos (noche) para generar un reporte.")
         return render(request, 'review_and_send.html', {'companies': None})
 
-    # 2. Determinar el inicio del ciclo: el final del turno de noche ANTERIOR.
-    previous_night_shift_ended = OperatorShift.objects.filter(
-        shift_type__name__iexact='Turno de noche',
+    end_of_cycle = last_night_shift.actual_end_time
+
+    # 2. Determinar el inicio del ciclo retrocediendo desde el turno de noche.
+    # Primero, encontramos el turno inmediatamente anterior (debería ser el de Tarde).
+    shift_before_night = OperatorShift.objects.filter(
         actual_end_time__isnull=False,
-        actual_end_time__lt=last_night_shift_ended.actual_end_time
+        actual_end_time__lte=last_night_shift.actual_start_time
     ).order_by('-actual_end_time').first()
 
-    # Si no hay uno anterior, usamos una fecha muy antigua para incluir todo desde el principio.
-    start_of_cycle = previous_night_shift_ended.actual_end_time if previous_night_shift_ended else timezone.make_aware(datetime.min)
-    end_of_cycle = last_night_shift_ended.actual_end_time
-    
-    # --- FIN DE LA NUEVA LÓGICA DE CICLO ---
+    if not shift_before_night:
+        # Si no hay turno anterior, el ciclo es solo el turno de noche.
+        start_of_cycle = last_night_shift.actual_start_time
+    else:
+        # Determinamos si fue un día de 2 o 3 turnos basándonos en la fecha de asignación del turno de TARDE.
+        operational_date = shift_before_night.date
+        operational_weekday = operational_date.weekday()  # Lunes=0, ..., Sábado=5, Domingo=6
 
+        if operational_weekday in [5, 6]:  # Sábado o Domingo (ciclo de 3 turnos)
+            # Necesitamos encontrar el turno de DÍA que vino antes del de TARDE.
+            shift_before_tarde = OperatorShift.objects.filter(
+                actual_end_time__isnull=False,
+                actual_end_time__lte=shift_before_night.actual_start_time
+            ).order_by('-actual_end_time').first()
+            
+            # El ciclo empieza con el turno de DÍA, si existe. Si no, con el de Tarde.
+            start_of_cycle = shift_before_tarde.actual_start_time if shift_before_tarde else shift_before_night.actual_start_time
+        else:  # Día de semana (ciclo de 2 turnos)
+            # El ciclo empieza con el turno de TARDE.
+            start_of_cycle = shift_before_night.actual_start_time
+
+    # 3. PERIODO DE GRACIA: (Lógica sin cambios)
+    next_shift_after_cycle = OperatorShift.objects.filter(
+        actual_start_time__gt=end_of_cycle
+    ).order_by('actual_start_time').first()
+    
+    if next_shift_after_cycle and next_shift_after_cycle.actual_end_time is not None:
+        messages.info(request, "El periodo para enviar el reporte del ciclo anterior ha finalizado.")
+        return render(request, 'review_and_send.html', {'companies': None})
+
+    # --- El resto de la función se mantiene igual ---
     company_id = request.GET.get('company_id')
     selected_company = None
     novedades_pendientes = None
@@ -125,7 +154,6 @@ def review_and_send_novedades(request):
         company_id_form = request.POST.get('company_id')
         company = get_object_or_404(Company, id=company_id_form)
 
-        # Guardar ediciones del admin antes de enviar
         with transaction.atomic():
             for update_id in selected_ids:
                 new_message = request.POST.get(f'message_{update_id}')
@@ -137,10 +165,7 @@ def review_and_send_novedades(request):
                         log_to_update.edited_at = timezone.now()
                         log_to_update.save()
 
-        # Obtenemos las novedades (ya actualizadas) para el cuerpo del correo
         updates_to_send_in_email = UpdateLog.objects.filter(id__in=selected_ids).order_by('created_at')
-
-        # Procesar múltiples correos
         email_string = company.email or ""
         recipient_list = [email.strip() for email in email_string.split(',') if email.strip()]
 
@@ -153,59 +178,46 @@ def review_and_send_novedades(request):
                     'enviado_por': request.user,
                 }
                 html_message = render_to_string('emails/reporte_novedades.html', email_context)
-                
                 send_mail(
                     subject=f"Reporte de Novedades - {company.name} - {end_of_cycle.strftime('%d/%m/%Y')}",
-                    message="",
-                    from_email=None,
-                    recipient_list=recipient_list,
-                    fail_silently=False,
-                    html_message=html_message
+                    message="", from_email=None, recipient_list=recipient_list,
+                    fail_silently=False, html_message=html_message
                 )
-                
-                # Marcar como enviadas solo las novedades DEL CICLO CORRESPONDIENTE
-                updates_to_mark_as_sent = UpdateLog.objects.filter(
-                    installation__company=company,
-                    is_sent=False,
-                    created_at__gte=start_of_cycle,
-                    created_at__lte=end_of_cycle
-                )
-                updates_to_mark_as_sent.update(is_sent=True)
-                
+                UpdateLog.objects.filter(id__in=selected_ids).update(is_sent=True)
                 TraceabilityLog.objects.create(user=request.user, action=f"Envió correo de novedades a {company.name}.")
                 messages.success(request, f"Correo para el ciclo finalizado ha sido enviado a {company.name}.")
-
             except Exception as e:
                 messages.error(request, f"Error al enviar el correo: {e}")
         else:
             messages.warning(request, f"La empresa {company.name} no tiene un correo configurado.")
-
         return redirect('review_and_send_novedades')
 
-    # Lógica GET para mostrar la página
-    q_filter = Q(
-        installations__updatelog__is_sent=False,
-        installations__updatelog__created_at__gte=start_of_cycle,
-        installations__updatelog__created_at__lte=end_of_cycle
+    relevant_updates = UpdateLog.objects.filter(
+        is_sent=False,
+        created_at__gte=start_of_cycle,
+        created_at__lte=end_of_cycle
     )
-    companies_with_pending_updates = Company.objects.filter(q_filter).annotate(
-        pending_count=Count('installations__updatelog', filter=q_filter)
+    
+    company_ids_with_pending = relevant_updates.values_list('installation__company_id', flat=True).distinct()
+    
+    companies_with_pending_updates = Company.objects.filter(id__in=company_ids_with_pending).annotate(
+        pending_count=Count('installations__updatelog', filter=Q(installations__updatelog__in=relevant_updates))
     ).filter(pending_count__gt=0).distinct()
 
     if company_id:
         selected_company = get_object_or_404(Company, id=company_id)
-        novedades_pendientes = UpdateLog.objects.filter(
-            installation__company=selected_company,
-            is_sent=False,
-            created_at__gte=start_of_cycle,
-            created_at__lte=end_of_cycle
-        ).select_related('operator_shift__operator', 'installation').order_by('created_at')
+        novedades_pendientes = relevant_updates.filter(
+            installation__company=selected_company
+        ).select_related(
+            'operator_shift__operator', 'installation'
+        ).order_by('installation__name', 'created_at')
 
     context = {
         'companies': companies_with_pending_updates,
         'selected_company': selected_company,
         'novedades_pendientes': novedades_pendientes,
-        'cycle_end': end_of_cycle, # Para mostrar en la plantilla
+        'cycle_end': end_of_cycle,
+        'cycle_start': start_of_cycle,
     }
     return render(request, 'review_and_send.html', context)
 
