@@ -657,6 +657,33 @@ def operator_dashboard(request):
         
         context['active_round_id'] = request.session.get('active_round_id')
 
+
+    # --- 👇 INICIO DEL NUEVO BLOQUE 👇 ---
+        
+        # --- 👇 INICIO DEL BLOQUE CORREGIDO 👇 ---
+        
+        # Lógica para el nuevo temporizador de rondas con reinicio a los 30 minutos
+        round_completed_this_cycle = False
+        last_round = VirtualRoundLog.objects.filter(operator_shift=active_shift).order_by('-start_time').first()
+        
+        if last_round:
+            now = timezone.now()
+            
+            # Determinar el inicio del ciclo actual (ej: 16:30, 17:30)
+            if now.minute >= 30:
+                start_of_current_cycle = now.replace(minute=30, second=0, microsecond=0)
+            else:
+                start_of_current_cycle = (now - timedelta(hours=1)).replace(minute=30, second=0, microsecond=0)
+            
+            # Si la última ronda se inició dentro del ciclo actual, se marca como completada
+            if last_round.start_time >= start_of_current_cycle:
+                round_completed_this_cycle = True
+        
+        # Cambiamos el nombre de la variable para mayor claridad
+        context['round_completed_this_cycle'] = round_completed_this_cycle
+        context['shift_start_time_iso'] = active_shift.actual_start_time.isoformat()
+        # --- 👆 FIN DEL BLOQUE CORREGIDO 👆 ---
+    
     return render(request, 'operator_dashboard.html', context)
 
 @login_required

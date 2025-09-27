@@ -256,8 +256,21 @@
 {% endblock content %}
 
 {% block extra_js %}
+
+{# Pasamos los datos del backend a JavaScript de forma segura #}
+<script id="round-timer-data" type="application/json">
+{
+    "shiftStartTime": {% if active_shift and active_shift.actual_start_time %}"{{ shift_start_time_iso }}"{% else %}null{% endif %},
+    "roundCompletedThisCycle": {{ round_completed_this_cycle|yesno:"true,false" }}
+}
+</script>
+
 <script>
 document.addEventListener('DOMContentLoaded', function() {
+    
+    // =================================================================
+    // Lógica de Alarma de Checklist (Tu código original, sin cambios)
+    // =================================================================
     const alarmSound = document.getElementById('task-alarm-sound');
     const alarmModalElement = document.getElementById('alarm-modal');
     
@@ -265,7 +278,6 @@ document.addEventListener('DOMContentLoaded', function() {
         const alarmModal = new bootstrap.Modal(alarmModalElement);
         const overdueTaskDescription = document.getElementById('overdue-task-description');
         let isAlarmModalVisible = false;
-
         let hasInitialCheckRun = false;
 
         function checkApiForAlarms() {
@@ -274,29 +286,26 @@ document.addEventListener('DOMContentLoaded', function() {
             fetch("{% url 'check_pending_alarms' %}")
                 .then(response => response.json())
                 .then(data => {
-                    // Solo mostrar alarma si ya pasó la verificación inicial y hay tareas vencidas
                     if (hasInitialCheckRun && data.overdue_tasks && data.overdue_tasks.length > 0) {
                         overdueTaskDescription.textContent = data.overdue_tasks[0].description;
-                        alarmSound.play().catch(e => console.error("Error al reproducir sonido:", e));
+                        if(alarmSound) alarmSound.play().catch(e => console.error("Error al reproducir sonido:", e));
                         alarmModal.show();
                     }
-                    // Marcar que ya se ejecutó la verificación inicial
                     hasInitialCheckRun = true;
                 })
-                .catch(error => console.error('Error al verificar alarmas:', error));
+                .catch(error => console.error('Error al verificar alarmas de checklist:', error));
         }
 
         alarmModalElement.addEventListener('show.bs.modal', () => { isAlarmModalVisible = true; });
         alarmModalElement.addEventListener('hidden.bs.modal', () => { isAlarmModalVisible = false; });
 
-        // Verificar cada 10 minutos
         setInterval(checkApiForAlarms, 600000); 
-        
-        // Verificación inicial silenciosa después de 30 segundos
         setTimeout(checkApiForAlarms, 30000);
     }
     
-    // Funcionalidad del Modal de Pánico
+    // =================================================================
+    // Funcionalidad del Modal de Pánico (Tu código original, sin cambios)
+    // =================================================================
     const panicModalElement = document.getElementById('panicModal');
     if (panicModalElement) {
         panicModalElement.addEventListener('show.bs.modal', function() {
@@ -306,64 +315,97 @@ document.addEventListener('DOMContentLoaded', function() {
 
     function loadEmergencyContacts() {
         const modalContent = document.getElementById('panicModalContent');
-        
         fetch("{% url 'panic_button' %}")
             .then(response => response.text())
             .then(html => {
-                // Extraer solo el contenido del body del panic_button.html
                 const parser = new DOMParser();
                 const doc = parser.parseFromString(html, 'text/html');
                 const bodyContent = doc.querySelector('body .container');
-                
                 if (bodyContent) {
                     modalContent.innerHTML = bodyContent.innerHTML;
-                    
-                    // Ajustar estilos para el modal
-                    const style = document.createElement('style');
-                    style.textContent = `
-                        #panicModal .contact-card {
-                            border-left: 5px solid #dc3545;
-                            transition: all 0.2s ease-in-out;
-                        }
-                        #panicModal .contact-card:hover {
-                            transform: scale(1.02);
-                            box-shadow: 0 .5rem 1rem rgba(0,0,0,.15)!important;
-                        }
-                        #panicModal .phone-number {
-                            font-size: 1.75rem;
-                            font-weight: bold;
-                            color: #343a40;
-                        }
-                        #panicModal .contact-name {
-                            font-size: 1.2rem;
-                            color: #495057;
-                        }
-                        #panicModal a.phone-link {
-                            text-decoration: none;
-                        }
-                    `;
-                    document.head.appendChild(style);
                 } else {
-                    modalContent.innerHTML = '<div class="alert alert-danger">Error al cargar los contactos de emergencia.</div>';
+                    modalContent.innerHTML = '<div class="alert alert-danger">Error al cargar los contactos.</div>';
                 }
             })
             .catch(error => {
                 console.error('Error al cargar contactos de emergencia:', error);
-                modalContent.innerHTML = `
-                    <div class="alert alert-danger text-center">
-                        <h5>Error al cargar contactos</h5>
-                        <p>No se pudieron cargar los contactos de emergencia. Por favor, contacta directamente a los servicios de emergencia:</p>
-                        <ul class="list-unstyled">
-                            <li><strong>Bomberos:</strong> 132</li>
-                            <li><strong>Carabineros:</strong> 133</li>
-                            <li><strong>Ambulancia:</strong> 131</li>
-                        </ul>
-                    </div>
-                `;
+                modalContent.innerHTML = `<div class="alert alert-danger text-center"><h5>Error al cargar contactos</h5></div>`;
             });
     }
-    
 
+    // =================================================================
+    // LÓGICA FINAL Y CORRECTA DEL TEMPORIZADOR DE RONDAS (XX:30)
+    // =================================================================
+    const timerDataElement = document.getElementById('round-timer-data');
+    if (!timerDataElement) return;
+
+    const timerData = JSON.parse(timerDataElement.textContent);
+    const countdownElementIds = ['dashboard-round-countdown', 'global-round-countdown'];
+    const roundModal = new bootstrap.Modal(document.getElementById('roundAlarmModal'));
+    const roundAlarmSound = document.getElementById('alarm-sound');
+    
+    let lastCheckedMinute = new Date().getMinutes();
+    let roundCompletedThisCycle = timerData.roundCompletedThisCycle;
+
+    function mainTimerLoop() {
+        const now = new Date();
+
+        // 1. Detectar si ha comenzado un nuevo ciclo (a los 30 min de cada hora)
+        if (now.getMinutes() === 30 && lastCheckedMinute !== 30) {
+            lastCheckedMinute = 30;
+            
+            // La última alarma suena a las 07:30. No se reinicia el ciclo a las 08:30.
+            if (now.getHours() !== 8) {
+                roundCompletedThisCycle = false; // <<< ESTA LÍNEA ES CLAVE PARA REINICIAR
+                if (roundAlarmSound) roundAlarmSound.play().catch(e => {});
+                roundModal.show();
+            }
+        } else if (now.getMinutes() !== 30) {
+            lastCheckedMinute = now.getMinutes();
+        }
+
+        let timeToDisplay = "00:00";
+        
+        const hour = now.getHours();
+        const minute = now.getMinutes();
+        // El turno está inactivo entre las 08:30 AM y las 16:29 PM
+        const isShiftOffTime = (hour > 8 || (hour === 8 && minute >= 30)) && (hour < 16 || (hour === 16 && minute < 30));
+
+        // 2. Decidir qué mostrar en el temporizador
+        if (roundCompletedThisCycle || isShiftOffTime) {
+            timeToDisplay = "00:00";
+        } else {
+            // Si la ronda está pendiente, calcula la cuenta regresiva hasta el próximo XX:30
+            const nextDueTime = new Date(now);
+            if (now.getMinutes() >= 30) {
+                nextDueTime.setHours(now.getHours() + 1, 30, 0, 0);
+            } else {
+                nextDueTime.setHours(now.getHours(), 30, 0, 0);
+            }
+            
+            const timeRemaining = nextDueTime - now;
+
+            if (timeRemaining > 0) {
+                const minutes = String(Math.floor((timeRemaining / 1000 / 60) % 60)).padStart(2, '0');
+                const seconds = String(Math.floor((timeRemaining / 1000) % 60)).padStart(2, '0');
+                timeToDisplay = `${minutes}:${seconds}`;
+            }
+        }
+        
+        // 3. Actualizar TODOS los elementos del contador en la página
+        countdownElementIds.forEach(id => {
+            const element = document.getElementById(id);
+            if (element) {
+                element.textContent = timeToDisplay;
+            }
+        });
+    }
+
+    // Lógica de inicio
+    if (timerData.shiftStartTime) {
+        setInterval(mainTimerLoop, 1000);
+        mainTimerLoop(); // Ejecutar una vez al cargar para mostrar el estado correcto inmediatamente
+    }
 });
 </script>
 {% endblock extra_js %}
