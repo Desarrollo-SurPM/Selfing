@@ -283,7 +283,7 @@
 document.addEventListener('DOMContentLoaded', function() {
     
     // =================================================================
-    // Lógica de Alarma de Checklist (Tu código original, sin cambios)
+    // Lógica de Alarma de Checklist CON sessionStorage
     // =================================================================
     const alarmSound = document.getElementById('task-alarm-sound');
     const alarmModalElement = document.getElementById('alarm-modal');
@@ -294,6 +294,9 @@ document.addEventListener('DOMContentLoaded', function() {
         let isAlarmModalVisible = false;
         let hasInitialCheckRun = false;
 
+        // NUEVA LÓGICA: Crear clave única para la sesión actual
+        const sessionKey = `checklist_alarm_${new Date().toDateString()}_${new Date().getHours()}`;
+
         function checkApiForAlarms() {
             if (isAlarmModalVisible) return;
 
@@ -301,24 +304,37 @@ document.addEventListener('DOMContentLoaded', function() {
                 .then(response => response.json())
                 .then(data => {
                     if (hasInitialCheckRun && data.overdue_tasks && data.overdue_tasks.length > 0) {
-                        overdueTaskDescription.textContent = data.overdue_tasks[0].description;
-                        if(alarmSound) alarmSound.play().catch(e => console.error("Error al reproducir sonido:", e));
-                        alarmModal.show();
+                        // VERIFICAR si ya se mostró la alarma en esta sesión
+                        const alarmShown = sessionStorage.getItem(sessionKey);
+                        
+                        if (!alarmShown) {
+                            overdueTaskDescription.textContent = data.overdue_tasks[0].description;
+                            if(alarmSound) alarmSound.play().catch(e => console.error("Error al reproducir sonido:", e));
+                            alarmModal.show();
+                            
+                            // MARCAR que se mostró la alarma
+                            sessionStorage.setItem(sessionKey, 'shown');
+                        }
                     }
                     hasInitialCheckRun = true;
                 })
                 .catch(error => console.error('Error al verificar alarmas de checklist:', error));
         }
 
+        // LIMPIAR sessionStorage cuando se cierre el modal (tarea completada)
+        alarmModalElement.addEventListener('hidden.bs.modal', () => { 
+            isAlarmModalVisible = false;
+            sessionStorage.removeItem(sessionKey);
+        });
+
         alarmModalElement.addEventListener('show.bs.modal', () => { isAlarmModalVisible = true; });
-        alarmModalElement.addEventListener('hidden.bs.modal', () => { isAlarmModalVisible = false; });
 
         setInterval(checkApiForAlarms, 600000); 
         setTimeout(checkApiForAlarms, 30000);
     }
     
     // =================================================================
-    // Funcionalidad del Modal de Pánico (Tu código original, sin cambios)
+    // Funcionalidad del Modal de Pánico (sin cambios)
     // =================================================================
     const panicModalElement = document.getElementById('panicModal');
     if (panicModalElement) {
@@ -348,7 +364,7 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     // =================================================================
-    // LÓGICA FINAL Y CORRECTA DEL TEMPORIZADOR DE RONDAS (XX:30)
+    // LÓGICA CORREGIDA DEL TEMPORIZADOR DE RONDAS (SIN isShiftOffTime)
     // =================================================================
     const timerDataElement = document.getElementById('round-timer-data');
     if (!timerDataElement) return;
@@ -361,6 +377,11 @@ document.addEventListener('DOMContentLoaded', function() {
     let lastCheckedMinute = new Date().getMinutes();
     let roundCompletedThisCycle = timerData.roundCompletedThisCycle;
 
+    // NUEVA LÓGICA: sessionStorage para alarmas de ronda
+    function createRoundSessionKey(date) {
+        return `round_alarm_${date.toDateString()}_${date.getHours()}`;
+    }
+
     function mainTimerLoop() {
         const now = new Date();
 
@@ -368,11 +389,18 @@ document.addEventListener('DOMContentLoaded', function() {
         if (now.getMinutes() === 30 && lastCheckedMinute !== 30) {
             lastCheckedMinute = 30;
             
-            // La última alarma suena a las 07:30. No se reinicia el ciclo a las 08:30.
-            if (now.getHours() !== 8) {
-                roundCompletedThisCycle = false; // <<< ESTA LÍNEA ES CLAVE PARA REINICIAR
+            // CORRECCIÓN: Eliminamos completamente la restricción isShiftOffTime
+            // Ahora las alarmas funcionarán en cualquier horario
+            const roundSessionKey = createRoundSessionKey(now);
+            const alarmShownThisHour = sessionStorage.getItem(roundSessionKey);
+            
+            if (!alarmShownThisHour) {
+                roundCompletedThisCycle = false; // Reiniciar el ciclo
                 if (roundAlarmSound) roundAlarmSound.play().catch(e => {});
                 roundModal.show();
+                
+                // MARCAR que se mostró la alarma para esta hora
+                sessionStorage.setItem(roundSessionKey, 'shown');
             }
         } else if (now.getMinutes() !== 30) {
             lastCheckedMinute = now.getMinutes();
@@ -380,13 +408,8 @@ document.addEventListener('DOMContentLoaded', function() {
 
         let timeToDisplay = "00:00";
         
-        const hour = now.getHours();
-        const minute = now.getMinutes();
-        // El turno está inactivo entre las 08:30 AM y las 16:29 PM
-        const isShiftOffTime = (hour > 8 || (hour === 8 && minute >= 30)) && (hour < 16 || (hour === 16 && minute < 30));
-
         // 2. Decidir qué mostrar en el temporizador
-        if (roundCompletedThisCycle || isShiftOffTime) {
+        if (roundCompletedThisCycle) {
             timeToDisplay = "00:00";
         } else {
             // Si la ronda está pendiente, calcula la cuenta regresiva hasta el próximo XX:30
@@ -420,7 +443,11 @@ document.addEventListener('DOMContentLoaded', function() {
         setInterval(mainTimerLoop, 1000);
         mainTimerLoop(); // Ejecutar una vez al cargar para mostrar el estado correcto inmediatamente
     }
-const statusPanel = document.getElementById('service-status-panel');
+
+    // =================================================================
+    // Estado de Servicios (sin cambios)
+    // =================================================================
+    const statusPanel = document.getElementById('service-status-panel');
     
     function updateServiceStatus() {
         if (!statusPanel) return;

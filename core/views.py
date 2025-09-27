@@ -556,36 +556,51 @@ def get_shifts_for_calendar(request):
 
 def get_active_shift(user):
     """
-    Función robusta para obtener el turno activo más reciente de un operador.
-    Prioriza los turnos iniciados en las últimas 18 horas para evitar 'turnos pegados'.
+    Función corregida para obtener el turno activo correcto de un operador.
+    CORRIGE: El problema de mostrar turno incorrecto en el dashboard.
     """
-    # 1. Búsqueda prioritaria: turnos iniciados en las últimas 18 horas.
-    time_threshold = timezone.now() - timedelta(hours=18)
-
-    shift = OperatorShift.objects.filter(
+    today = timezone.now().date()
+    
+    # PRIORIDAD 1: Buscar turno YA INICIADO para HOY
+    shift = OperatorShift.objects.select_related('shift_type', 'operator').filter(
         operator=user,
-        actual_end_time__isnull=True,
-        actual_start_time__gte=time_threshold
+        date=today,
+        actual_start_time__isnull=False,
+        actual_end_time__isnull=True
+    ).first()
+    
+    if shift:
+        return shift
+    
+    # PRIORIDAD 2: Buscar turno ASIGNADO para HOY (no iniciado)
+    shift = OperatorShift.objects.select_related('shift_type', 'operator').filter(
+        operator=user,
+        date=today,
+        actual_start_time__isnull=True,
+        actual_end_time__isnull=True
+    ).order_by('shift_type__start_time').first()
+    
+    if shift:
+        return shift
+    
+    # PRIORIDAD 3: Turno iniciado en las últimas 18 horas (para turnos nocturnos)
+    time_threshold = timezone.now() - timedelta(hours=18)
+    shift = OperatorShift.objects.select_related('shift_type', 'operator').filter(
+        operator=user,
+        actual_start_time__gte=time_threshold,
+        actual_end_time__isnull=True
     ).order_by('-actual_start_time').first()
-
-    # 2. Búsqueda de respaldo: si no se encuentra uno reciente, busca el último sin cerrar.
-    if not shift:
-        shift = OperatorShift.objects.filter(
-            operator=user,
-            actual_end_time__isnull=True
-        ).order_by('-date', '-shift_type__start_time').first()
-
+    
     return shift
 
 @login_required
 def start_shift(request):
     """
-    Vista que maneja la ACCIÓN de iniciar un turno.
+    Vista corregida que maneja la ACCIÓN de iniciar un turno.
     """
     if request.method == 'POST':
-        # Busca el turno asignado más próximo que aún no ha comenzado.
-        # Es la lógica más segura para evitar iniciar un turno equivocado.
-        shift_to_start = OperatorShift.objects.filter(
+        # Busca el turno asignado más próximo que aún no ha comenzado
+        shift_to_start = OperatorShift.objects.select_related('shift_type').filter(
             operator=request.user,
             actual_start_time__isnull=True,
             actual_end_time__isnull=True
@@ -594,6 +609,13 @@ def start_shift(request):
         if shift_to_start:
             shift_to_start.actual_start_time = timezone.now()
             shift_to_start.save()
+            
+            # Registro de trazabilidad
+            TraceabilityLog.objects.create(
+                user=request.user, 
+                action="Inició turno."
+            )
+            
             messages.success(request, f"Turno '{shift_to_start.shift_type.name}' iniciado correctamente.")
         else:
             messages.error(request, "No se pudo encontrar un turno pendiente para iniciar.")
