@@ -57,7 +57,6 @@ def admin_dashboard(request):
     today = timezone.now().date()
     
     operadores_en_turno = OperatorShift.objects.filter(
-        date=today,
         actual_start_time__isnull=False,
         actual_end_time__isnull=True
     ).count()
