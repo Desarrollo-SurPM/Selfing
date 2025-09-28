@@ -58,6 +58,7 @@ urlpatterns = [
     path('checklist/', views.checklist_view, name='checklist'),
     path('update-log/', views.update_log_view, name='update_log'),
     path('update-log/edit/<int:log_id>/', views.edit_update_log, name='edit_update_log'),
+    path('update-log/delete/<int:log_id>/', views.delete_update_log, name='delete_update_log'),
     #path('email/new/', views.email_form_view, name='email_form'),
     path('turn/end/', views.end_turn_preview, name='end_turn_preview'),
     path('turn/sign/<int:report_id>/', views.sign_turn_report, name='sign_turn_report'),

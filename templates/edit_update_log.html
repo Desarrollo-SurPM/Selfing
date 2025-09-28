@@ -13,7 +13,6 @@
                 </div>
                 <div class="card-body">
                     <p class="text-muted">
-                        {# --- 👇 CORRECCIÓN DE FORMATO DE FECHA AQUÍ 👇 --- #}
                         Estás editando la novedad para la instalación <strong>{{ log_entry.installation.name }}</strong>
                         creada el {{ log_entry.created_at|date:"d/m/Y \a \l\a\s H:i" }}.
                     </p>
@@ -26,7 +25,18 @@
 
                     <form method="post">
                         {% csrf_token %}
-                        {{ form|crispy }}
+                        
+                        {{ form.message|as_crispy_field }}
+
+                        <div class="mb-3">
+                            <button type="button" class="btn btn-sm btn-outline-secondary" id="toggle-manual-time">
+                                <i class="fas fa-clock me-1"></i> Editar/Añadir hora específica
+                            </button>
+                        </div>
+                        <div id="manual-time-container" style="display: none;">
+                            {{ form.manual_timestamp|as_crispy_field }}
+                        </div>
+
                         <div class="d-flex justify-content-end mt-4">
                             <a href="{% url 'my_logbook' %}" class="btn btn-secondary me-2">Cancelar</a>
                             <button type="submit" class="btn btn-primary">Guardar Cambios</button>
@@ -37,4 +47,28 @@
         </div>
     </div>
 </div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const toggleButton = document.getElementById('toggle-manual-time');
+    const timeContainer = document.getElementById('manual-time-container');
+    const timeInput = document.getElementById('id_manual_timestamp');
+
+    // Si la novedad ya tiene una hora manual, muestra el campo al cargar la página.
+    if (timeInput && timeInput.value) {
+        timeContainer.style.display = 'block';
+    }
+
+    toggleButton.addEventListener('click', function() {
+        // Alterna la visibilidad del contenedor del campo de hora.
+        if (timeContainer.style.display === 'none') {
+            timeContainer.style.display = 'block';
+        } else {
+            timeContainer.style.display = 'none';
+        }
+    });
+});
+</script>
 {% endblock %}

@@ -14,6 +14,7 @@
         </a>
     </div>
 
+    <div id="logbook-container">
     {% if logbook_data %}
         <div class="card shadow-sm">
             <div class="card-header bg-light">
@@ -33,7 +34,7 @@
                                 </h6>
                                 <ul class="list-group list-group-flush">
                                     {% for log in logs %}
-                                        <li class="list-group-item border-0 py-1 d-flex justify-content-between align-items-center">
+                                        <li class="list-group-item border-0 py-1 d-flex justify-content-between align-items-center" id="log-item-{{ log.id }}">
                                             <span>
                                                 - {{ log.message }}
                                                 {% if log.is_edited %}
@@ -44,6 +45,12 @@
                                                 <a href="{% url 'edit_update_log' log.id %}" class="btn btn-sm btn-outline-secondary py-0 px-1" title="Editar">
                                                     <i class="fas fa-pencil-alt"></i>
                                                 </a>
+                                                <button type="button" class="btn btn-sm btn-outline-danger py-0 px-1 delete-log-btn" 
+                                                        data-bs-toggle="modal" data-bs-target="#deleteConfirmModal"
+                                                        data-log-id="{{ log.id }}"
+                                                        data-log-message="{{ log.message }}">
+                                                    <i class="fas fa-trash-alt"></i>
+                                                </button>
                                                 <span class="badge bg-secondary rounded-pill fw-normal">
                                                     {% if log.manual_timestamp %}
                                                         {{ log.manual_timestamp|date:"H:i" }} hrs*
@@ -70,5 +77,127 @@
             <a href="{% url 'update_log' %}" class="btn btn-primary mt-3">Registrar Novedad</a>
         </div>
     {% endif %}
+    </div>
 </div>
+
+<div class="modal fade" id="deleteConfirmModal" tabindex="-1" aria-labelledby="deleteModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header bg-danger text-white">
+        <h5 class="modal-title" id="deleteModalLabel"><i class="fas fa-exclamation-triangle me-2"></i>Confirmar Eliminación</h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <p>¿Estás seguro de que quieres eliminar permanentemente la siguiente novedad?</p>
+        <div class="alert alert-warning">
+            <strong id="log-message-to-delete"></strong>
+        </div>
+        <p class="text-danger"><small>Esta acción no se puede deshacer.</small></p>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+        <button type="button" class="btn btn-danger" id="confirm-delete-btn">Sí, Eliminar</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="position-fixed bottom-0 end-0 p-3" style="z-index: 1100">
+  <div id="notificationToast" class="toast hide" role="alert" aria-live="assertive" aria-atomic="true">
+    <div class="toast-header">
+      <strong class="me-auto" id="toast-title"></strong>
+      <button type="button" class="btn-close" data-bs-dismiss="toast" aria-label="Close"></button>
+    </div>
+    <div class="toast-body" id="toast-body">
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    const deleteModal = new bootstrap.Modal(document.getElementById('deleteConfirmModal'));
+    const confirmDeleteBtn = document.getElementById('confirm-delete-btn');
+    const logMessageElement = document.getElementById('log-message-to-delete');
+    let logIdToDelete = null;
+
+    document.querySelectorAll('.delete-log-btn').forEach(button => {
+        button.addEventListener('click', function () {
+            logIdToDelete = this.dataset.logId;
+            const logMessage = this.dataset.logMessage;
+            logMessageElement.textContent = `"${logMessage}"`;
+        });
+    });
+
+    confirmDeleteBtn.addEventListener('click', function () {
+        if (!logIdToDelete) return;
+
+        fetch(`/update-log/delete/${logIdToDelete}/`, {
+            method: 'POST',
+            headers: {
+                'X-CSRFToken': '{{ csrf_token }}',
+                'Content-Type': 'application/json',
+                'Accept': 'application/json'
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.status === 'success') {
+                const logItem = document.getElementById(`log-item-${logIdToDelete}`);
+                if (logItem) {
+                    const listGroup = logItem.closest('.list-group');
+                    logItem.remove();
+
+                    // --- INICIO DE LA LÓGICA DE LIMPIEZA ---
+                    // Si la lista de novedades de la instalación está vacía, la eliminamos.
+                    if (listGroup && listGroup.children.length === 0) {
+                        const installationGroup = listGroup.closest('.installation-group');
+                        if (installationGroup) {
+                            const companyGroup = installationGroup.closest('.company-group');
+                            installationGroup.remove();
+                            
+                            // Si el contenedor de la empresa ya no tiene instalaciones, también lo eliminamos.
+                            if (companyGroup && companyGroup.querySelectorAll('.installation-group').length === 0) {
+                                companyGroup.remove();
+                            }
+                        }
+                    }
+                    // --- FIN DE LA LÓGICA DE LIMPIEZA ---
+                }
+                showToast('Éxito', data.message, 'success');
+            } else {
+                showToast('Error', data.message, 'danger');
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            showToast('Error', 'No se pudo eliminar la novedad.', 'danger');
+        })
+        .finally(() => {
+            deleteModal.hide();
+            logIdToDelete = null;
+        });
+    });
+
+    function showToast(title, message, type) {
+        const toastEl = document.getElementById('notificationToast');
+        const toastTitle = document.getElementById('toast-title');
+        const toastBody = document.getElementById('toast-body');
+
+        toastTitle.textContent = title;
+        toastBody.textContent = message;
+
+        toastEl.classList.remove('bg-success', 'bg-danger', 'text-white');
+        if (type === 'success') {
+            toastEl.classList.add('bg-success', 'text-white');
+        } else if (type === 'danger') {
+            toastEl.classList.add('bg-danger', 'text-white');
+        }
+        
+        const toast = new bootstrap.Toast(toastEl);
+        toast.show();
+    }
+});
+</script>
 {% endblock %}

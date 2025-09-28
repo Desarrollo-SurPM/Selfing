@@ -1825,6 +1825,19 @@ def current_logbook_view(request):
     
     return render(request, 'current_logbook.html', context)
 
+@login_required
+def delete_update_log(request, log_id):
+    log_entry = get_object_or_404(UpdateLog, id=log_id, operator_shift__operator=request.user)
+    if request.method == 'POST':
+        log_entry.delete()
+        TraceabilityLog.objects.create(
+            user=request.user,
+            action=f"Eliminó una entrada de la bitácora para la instalación '{log_entry.installation.name}'."
+        )
+        messages.success(request, 'La novedad ha sido eliminada correctamente.')
+        return redirect('my_logbook')
+    return render(request, 'delete_update_log_confirm.html', {'log_entry': log_entry})
+
 # Vistas para Seguridad Vehicular
 @login_required
 @user_passes_test(is_supervisor)

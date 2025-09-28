@@ -40,15 +40,26 @@ class UpdateLogForm(forms.ModelForm):
 class UpdateLogEditForm(forms.ModelForm):
     class Meta:
         model = UpdateLog
-        fields = ['message']
+        # Añadimos 'manual_timestamp' a los campos editables
+        fields = ['message', 'manual_timestamp']
         widgets = {
             'message': forms.Textarea(attrs={'rows': 4}),
+            # Añadimos el widget de tiempo para una mejor experiencia
+            'manual_timestamp': forms.TimeInput(attrs={'type': 'time'}, format='%H:%M'),
         }
         labels = {
             'message': 'Corregir Novedad',
+            'manual_timestamp': 'Hora Manual del Evento (Opcional)',
         }
-# --- 👆 FIN DE NUEVO FORMULARIO 👆 ---
 
+    # Añadimos la misma validación que en el formulario de creación
+    def clean_manual_timestamp(self):
+        timestamp = self.cleaned_data.get('manual_timestamp')
+        if timestamp:
+            # Compara la hora ingresada con la hora actual del servidor
+            if timestamp > timezone.localtime(timezone.now()).time():
+                raise ValidationError("La hora del evento no puede ser futura. Por favor, ingrese una hora pasada.")
+        return timestamp
 
 
 class VirtualRoundCompletionForm(forms.ModelForm):
