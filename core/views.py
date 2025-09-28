@@ -50,11 +50,65 @@ def home(request):
         return redirect('operator_dashboard')
 
 # --- VISTAS DE ADMINISTRADOR ---
-
 @login_required
 @user_passes_test(is_supervisor)
 def admin_dashboard(request):
+    """
+    Dashboard del administrador con lógica de ciclo operativo corregida
+    para mostrar datos desde el último inicio de ciclo (normalmente 08:30 AM).
+    """
+    ahora = timezone.now()
+    
+    # --- INICIO DE LA LÓGICA CORREGIDA ---
+    # Se determina el inicio del "día operativo" actual. El corte es a las 08:30.
+    today_at_8_30 = ahora.replace(hour=8, minute=30, second=0, microsecond=0)
+
+    if ahora.time() < time(8, 30):
+        # Si son antes de las 08:30, el ciclo actual comenzó AYER a las 08:30.
+        start_of_operational_day = today_at_8_30 - timedelta(days=1)
+    else:
+        # Si son después de las 08:30, el ciclo actual comenzó HOY a las 08:30.
+        start_of_operational_day = today_at_8_30
+    # --- FIN DE LA LÓGICA CORREGIDA ---
+
+    # 1. Novedades registradas desde el inicio del ciclo operativo.
+    novedades_hoy = UpdateLog.objects.filter(
+        created_at__gte=start_of_operational_day
+    ).count()
+    
+    # 2. Reportes finalizados desde el inicio del ciclo operativo.
+    reportes_finalizados_count = TurnReport.objects.filter(
+        is_signed=True,
+        signed_at__gte=start_of_operational_day
+    ).count()
+    
+    # 3. Operadores actualmente en turno (esta lógica está bien).
+    operadores_en_turno = OperatorShift.objects.filter(
+        actual_start_time__isnull=False,
+        actual_end_time__isnull=True
+    ).count()
+
+    # El resto de las consultas se mantienen igual.
+    servicios_monitoreados_activos = MonitoredService.objects.filter(is_active=True).count()
+    traceability_logs = TraceabilityLog.objects.select_related('user').all().order_by('-timestamp')[:6]
+    
+    # La tabla de "Novedades del Día" también usará el nuevo rango de tiempo.
+    reports = UpdateLog.objects.filter(created_at__gte=start_of_operational_day).select_related(
+        'operator_shift__operator', 'installation__company'
+    ).order_by('-created_at')
+
+    context = {
+        'novedades_hoy': novedades_hoy,
+        'reportes_finalizados_count': reportes_finalizados_count,
+        'operadores_en_turno': operadores_en_turno,
+        'servicios_monitoreados_activos': servicios_monitoreados_activos,
+        'reports': reports,
+        'traceability_logs': traceability_logs,
+    }
+    return render(request, 'admin_dashboard.html', context)
+
     today = timezone.now().date()
+    
     
     operadores_en_turno = OperatorShift.objects.filter(
         actual_start_time__isnull=False,
