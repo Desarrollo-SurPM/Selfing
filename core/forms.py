@@ -1,4 +1,6 @@
 from django import forms
+from django.core.exceptions import ValidationError
+from django.utils import timezone
 from django.contrib.auth.forms import UserCreationForm
 from django.contrib.auth.models import User
 # Importación consolidada de todos los modelos necesarios
@@ -27,7 +29,13 @@ class UpdateLogForm(forms.ModelForm):
         labels = {
             'manual_timestamp': 'Hora y Fecha del Evento (Opcional)',
         }
-
+        def clean_manual_timestamp(self):
+            timestamp = self.cleaned_data.get('manual_timestamp')
+            if timestamp:
+            # Compara la hora ingresada con la hora actual del servidor
+                if timestamp > timezone.localtime(timezone.now()).time():
+                    raise ValidationError("La hora del evento no puede ser futura. Por favor, ingrese una hora pasada.")
+            return timestamp
 # --- 👇 NUEVO FORMULARIO PARA EDICIÓN 👇 ---
 class UpdateLogEditForm(forms.ModelForm):
     class Meta:

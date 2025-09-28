@@ -220,9 +220,17 @@ document.addEventListener('DOMContentLoaded', function() {
         toggleButton.addEventListener('click', function() {
             if (timeContainer.style.display === 'none') {
                 timeContainer.style.display = 'block';
+
+                // Al mostrar el campo, establece la hora máxima a la actual
+                const manualTimeInput = document.getElementById('id_manual_timestamp');
+                if (manualTimeInput) {
+                    const now = new Date();
+                    const hours = String(now.getHours()).padStart(2, '0');
+                    const minutes = String(now.getMinutes()).padStart(2, '0');
+                    manualTimeInput.max = `${hours}:${minutes}`;
+                }
             } else {
                 timeContainer.style.display = 'none';
-                // Limpiamos el valor si el usuario lo oculta
                 const manualTimestampInput = document.getElementById('id_manual_timestamp');
                 if(manualTimestampInput) {
                     manualTimestampInput.value = '';

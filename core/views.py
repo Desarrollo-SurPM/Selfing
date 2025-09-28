@@ -1701,35 +1701,50 @@ def update_checklist_order(request):
 @login_required
 def full_logbook_view(request):
     """
-    Muestra la bitácora completa de las últimas 24 horas (ciclo de 08:30 a 08:30)
-    y permite crear notas para el siguiente turno.
+    Muestra la bitácora del turno actual y los dos turnos anteriores.
     """
-    now = timezone.now()
-    end_time_log = now.replace(hour=8, minute=30, second=0, microsecond=0)
-    if now.time() < time(8, 30):
-        # Si es antes de las 8:30 AM, el ciclo terminó esta mañana
-        pass
+    shift_ids_to_show = []
+
+    # 1. Encontrar el(los) turno(s) activo(s)
+    active_shifts = OperatorShift.objects.filter(
+        actual_start_time__isnull=False,
+        actual_end_time__isnull=True
+    ).order_by('actual_start_time')
+
+    if active_shifts.exists():
+        shift_ids_to_show.extend(list(active_shifts.values_list('id', flat=True)))
+
+        # 2. Encontrar los 2 turnos completados antes del inicio del turno activo más antiguo
+        earliest_active_start_time = active_shifts.first().actual_start_time
+        previous_shifts = OperatorShift.objects.filter(
+            actual_end_time__isnull=False,
+            actual_end_time__lt=earliest_active_start_time
+        ).order_by('-actual_end_time')[:2]
+        shift_ids_to_show.extend(list(previous_shifts.values_list('id', flat=True)))
     else:
-        # Si es después de las 8:30 AM, el ciclo termina mañana
-        end_time_log += timedelta(days=1)
-    
-    start_time_log = end_time_log - timedelta(days=1)
+        # Plan B: Si no hay turnos activos, muestra los últimos 3 turnos completados
+        previous_shifts = OperatorShift.objects.filter(
+            actual_end_time__isnull=False
+        ).order_by('-actual_end_time')[:3]
+        shift_ids_to_show.extend(list(previous_shifts.values_list('id', flat=True)))
 
-    # Filtrar logs y ordenarlos
+    # 3. Obtener y ordenar los logs de los turnos seleccionados
     logs = UpdateLog.objects.filter(
-        created_at__range=(start_time_log, end_time_log)
-    ).select_related('operator_shift__shift_type', 'operator_shift__operator', 'installation__company').order_by('created_at')
+        operator_shift_id__in=shift_ids_to_show
+    ).select_related(
+        'operator_shift__shift_type', 'operator_shift__operator', 'installation__company'
+    ).order_by('operator_shift__actual_start_time', 'created_at')
 
-    # Agrupar por turno
-    logs_by_shift = defaultdict(list)
+    # 4. Agrupar logs por turno, manteniendo el orden cronológico
+    logs_by_shift = OrderedDict()
     for log in logs:
-        shift_name = log.operator_shift.shift_type.name
-        logs_by_shift[shift_name].append(log)
+        shift = log.operator_shift
+        if shift not in logs_by_shift:
+            logs_by_shift[shift] = []
+        logs_by_shift[shift].append(log)
 
     context = {
-        'start_time_log': start_time_log,
-        'end_time_log': end_time_log,
-        'logs_by_shift': dict(logs_by_shift),
+        'logs_by_shift': logs_by_shift,
     }
     return render(request, 'full_logbook.html', context)
 

@@ -1,13 +1,13 @@
 {% extends 'base.html' %}
 
-{% block title %}Bitácora de 24 Horas y Relevo de Turno{% endblock %}
+{% block title %}Bitácora de Turnos Recientes y Relevo{% endblock %}
 
 {% block content %}
 <div class="container py-4">
     <div class="d-flex justify-content-between align-items-center mb-4">
         <div>
-            <h2 class="h3 text-secondary"><i class="fas fa-history me-2"></i> Bitácora de 24 Horas</h2>
-            <p class="text-muted">Mostrando novedades desde el {{ start_time_log|date:"d/m/Y, H:i" }} hasta el {{ end_time_log|date:"d/m/Y, H:i" }}</p>
+            <h2 class="h3 text-secondary"><i class="fas fa-history me-2"></i> Bitácora de Turnos Recientes</h2>
+            <p class="text-muted">Mostrando novedades del turno actual y los dos anteriores.</p>
         </div>
         <a href="{% url 'operator_dashboard' %}" class="btn btn-outline-secondary">
             <i class="fas fa-arrow-left me-2"></i>Volver al Dashboard
@@ -17,26 +17,31 @@
     <h4 class="mb-3">Registro de Novedades</h4>
     {% if logs_by_shift %}
         <div class="accordion" id="logbookAccordion">
-            {% for shift_name, logs in logs_by_shift.items %}
+            {% for shift, logs in logs_by_shift.items %}
             <div class="accordion-item">
-                <h2 class="accordion-header" id="heading-{{ forloop.counter }}">
-                    <button class="accordion-button" type="button" data-bs-toggle="collapse" data-bs-target="#collapse-{{ forloop.counter }}" aria-expanded="true" aria-controls="collapse-{{ forloop.counter }}">
-                        <strong>{{ shift_name }}</strong>
+                <h2 class="accordion-header" id="heading-{{ shift.id }}">
+                    <button class="accordion-button {% if not forloop.first %}collapsed{% endif %}" type="button" data-bs-toggle="collapse" data-bs-target="#collapse-{{ shift.id }}" aria-expanded="{% if forloop.first %}true{% else %}false{% endif %}" aria-controls="collapse-{{ shift.id }}">
+                        <strong>{{ shift.shift_type.name }}</strong>
+                        <span class="ms-3 text-muted fw-normal">
+                            ({{ shift.operator.username }} - {{ shift.date|date:"d/m/Y" }})
+                        </span>
                     </button>
                 </h2>
-                <div id="collapse-{{ forloop.counter }}" class="accordion-collapse collapse show" aria-labelledby="heading-{{ forloop.counter }}">
+                <div id="collapse-{{ shift.id }}" class="accordion-collapse collapse {% if forloop.first %}show{% endif %}" aria-labelledby="heading-{{ shift.id }}">
                     <div class="accordion-body">
                         <ul class="list-group list-group-flush">
                             {% for log in logs %}
                             <li class="list-group-item">
-    <span class="badge bg-secondary fw-normal">{{ log.created_at|date:"H:i" }} hrs</span>
-    {% if log.manual_timestamp %}
-        <span class="badge bg-info text-dark fw-normal">Evento: {{ log.manual_timestamp|date:"H:i" }} hrs*</span>
-    {% endif %}
-    por <strong>{{ log.operator_shift.operator.username }}</strong> en 
-    <strong>{{ log.installation.name }} ({{ log.installation.company.name }})</strong>:
-    <p class="mb-0 ps-3"><em>"{{ log.message }}"</em></p>
-</li>
+                                <span class="badge bg-secondary fw-normal">{{ log.created_at|date:"H:i" }} hrs</span>
+                                {% if log.manual_timestamp %}
+                                    <span class="badge bg-info text-dark fw-normal">Evento: {{ log.manual_timestamp|date:"H:i" }} hrs*</span>
+                                {% endif %}
+                                por <strong>{{ log.operator_shift.operator.username }}</strong> en 
+                                <strong>{{ log.installation.name }} ({{ log.installation.company.name }})</strong>:
+                                <p class="mb-0 ps-3"><em>"{{ log.message }}"</em></p>
+                            </li>
+                            {% empty %}
+                            <li class="list-group-item text-muted">No se registraron novedades en este turno.</li>
                             {% endfor %}
                         </ul>
                     </div>
@@ -46,7 +51,7 @@
         </div>
     {% else %}
         <div class="text-center p-5 bg-light rounded shadow-sm">
-            <p class="lead text-muted">No se encontraron novedades en el último ciclo de 24 horas.</p>
+            <p class="lead text-muted">No se encontraron novedades en los últimos turnos.</p>
         </div>
     {% endif %}
 
