@@ -3,7 +3,13 @@ from django.contrib.auth.models import User
 
 class Company(models.Model):
     name = models.CharField(max_length=100, unique=True)
-    email = models.EmailField(blank=True, null=True, help_text="Correo para notificaciones generales de la empresa.")
+    # El campo 'email' ahora es un TextField para guardar múltiples correos
+    email = models.TextField(
+        blank=True,
+        null=True,
+        help_text="Correos para notificaciones, separados por comas."
+    )
+
     def __str__(self):
         return self.name
 

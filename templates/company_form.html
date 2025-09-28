@@ -4,13 +4,89 @@
 {% block title %}{{ title }}{% endblock %}
 
 {% block content %}
-<h2>{{ title }}</h2>
-<hr>
+<div class="card shadow-sm">
+    <div class="card-header">
+        <h2 class="h4 mb-0">{{ title }}</h2>
+    </div>
+    <div class="card-body">
+        <form method="post" id="company-form">
+            {% csrf_token %}
+            
+            {{ form.name|as_crispy_field }}
+            
+            <input type="hidden" name="email" id="id_email_hidden">
 
-<form method="post">
-    {% csrf_token %}
-    {{ form|crispy }}
-    <button type="submit" class="btn btn-primary mt-3">Guardar</button>
-    <a href="{% url 'manage_companies' %}" class="btn btn-secondary mt-3">Cancelar</a>
-</form>
+            <hr class="my-4">
+            
+            <h5 class="mb-3">Correos de Contacto</h5>
+            
+            <div id="email-fields-container">
+                </div>
+
+            <button type="button" id="add-email-button" class="btn btn-success mt-2">
+                <i class="fas fa-plus-circle me-2"></i>Añadir otro correo
+            </button>
+
+            <div class="d-flex justify-content-end mt-4">
+                <a href="{% url 'manage_companies' %}" class="btn btn-secondary me-2">Cancelar</a>
+                <button type="submit" class="btn btn-primary">Guardar</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const container = document.getElementById('email-fields-container');
+    const addButton = document.getElementById('add-email-button');
+    const form = document.getElementById('company-form');
+    const hiddenEmailInput = document.getElementById('id_email_hidden');
+    
+    // Obtenemos los correos iniciales del campo 'email' del formulario de Django.
+    // Django renderizará un <textarea> que no vemos, pero podemos leer su valor.
+    const initialEmails = `{{ form.email.value|default:'' }}`.split(',').map(e => e.trim()).filter(e => e);
+
+    function createEmailInput(value = '') {
+        const div = document.createElement('div');
+        div.className = 'input-group mb-2';
+        
+        const input = document.createElement('input');
+        input.type = 'email';
+        input.className = 'form-control dynamic-email';
+        input.value = value;
+        input.placeholder = 'correo@ejemplo.com';
+        
+        const removeButton = document.createElement('button');
+        removeButton.type = 'button';
+        removeButton.className = 'btn btn-danger';
+        removeButton.innerHTML = '<i class="fas fa-trash"></i>';
+        removeButton.onclick = () => div.remove();
+        
+        div.appendChild(input);
+        div.appendChild(removeButton);
+        container.appendChild(div);
+    }
+
+    // Cargar los correos existentes al editar
+    if (initialEmails.length > 0) {
+        initialEmails.forEach(email => createEmailInput(email));
+    } else {
+        // Añadir un campo vacío si es un formulario nuevo
+        createEmailInput();
+    }
+
+    // Evento para el botón de añadir
+    addButton.addEventListener('click', () => createEmailInput());
+
+    // Antes de enviar el formulario, juntamos todos los correos en el campo oculto
+    form.addEventListener('submit', function(e) {
+        const allEmailInputs = container.querySelectorAll('.dynamic-email');
+        const emails = Array.from(allEmailInputs)
+                            .map(input => input.value.trim())
+                            .filter(email => email); // Filtra los campos vacíos
+        
+        hiddenEmailInput.value = emails.join(',');
+    });
+});
+</script>
 {% endblock %}
