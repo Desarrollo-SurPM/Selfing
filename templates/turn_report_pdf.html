@@ -89,10 +89,12 @@
                                 <div class="item-list">
                                     {% for update in installation.list %}
                                         <div class="log-entry">
-                                            <strong>
-                                                {% if update.manual_timestamp %}{{ update.manual_timestamp|date:"H:i" }} hrs*{% else %}{{ update.created_at|date:"H:i" }} hrs{% endif %}
-                                            </strong> - <span>{{ update.message }}</span>
-                                        </div>
+    <strong>{{ update.created_at|date:"H:i" }} hrs</strong>
+    {% if update.manual_timestamp %}
+        <span style="font-size: 0.9em; color: #555;">(Evento: {{ update.manual_timestamp|date:"H:i" }} hrs*)</span>
+    {% endif %}
+    - <span>{{ update.message }}</span>
+</div>
                                     {% endfor %}
                                 </div>
                             </div>
@@ -100,7 +102,7 @@
                     </div>
                 {% endfor %}
             {% else %}
-                <div class="no-data">ℹ️ No se registraron eventos durante este turno</div>
+                <div class="no-data"> No se registraron eventos durante este turno</div>
             {% endif %}
         </div>
         

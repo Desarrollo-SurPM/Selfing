@@ -29,11 +29,14 @@
                         <ul class="list-group list-group-flush">
                             {% for log in logs %}
                             <li class="list-group-item">
-                                <span class="badge bg-secondary fw-normal">{{ log.created_at|date:"H:i" }} hrs</span>
-                                por <strong>{{ log.operator_shift.operator.username }}</strong> en 
-                                <strong>{{ log.installation.name }} ({{ log.installation.company.name }})</strong>:
-                                <p class="mb-0 ps-3"><em>"{{ log.message }}"</em></p>
-                            </li>
+    <span class="badge bg-secondary fw-normal">{{ log.created_at|date:"H:i" }} hrs</span>
+    {% if log.manual_timestamp %}
+        <span class="badge bg-info text-dark fw-normal">Evento: {{ log.manual_timestamp|date:"H:i" }} hrs*</span>
+    {% endif %}
+    por <strong>{{ log.operator_shift.operator.username }}</strong> en 
+    <strong>{{ log.installation.name }} ({{ log.installation.company.name }})</strong>:
+    <p class="mb-0 ps-3"><em>"{{ log.message }}"</em></p>
+</li>
                             {% endfor %}
                         </ul>
                     </div>

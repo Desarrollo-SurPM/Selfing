@@ -44,9 +44,9 @@
                                             <div class="form-check mb-3">
                                                 <input class="form-check-input" type="checkbox" name="updates_to_send" value="{{ update.id }}" id="update_{{ update.id }}">
                                                 <label class="form-check-label" for="update_{{ update.id }}">
-                                                    <strong>{{ update.created_at|date:"d/m H:i" }}</strong> (por {{ update.operator_shift.operator.username }}):
-                                                    <span class="d-block text-muted ps-3">{{ update.message }}</span>
-                                                </label>
+    <strong>{{ update.created_at|date:"d/m H:i" }}</strong> (por {{ update.operator_shift.operator.username }}):
+</label>
+<input type="text" name="message_{{ update.id }}" value="{{ update.message }}" class="form-control form-control-sm mt-1">
                                             </div>
                                         {% endfor %}
                                     </fieldset>
