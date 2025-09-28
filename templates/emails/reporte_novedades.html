@@ -10,14 +10,11 @@
         <tr>
             <td style="padding: 20px; font-family: Arial, sans-serif;">
                 <div style="text-align: center; margin-bottom: 20px; border-bottom: 2px solid #1e3c72; padding-bottom: 10px;">
-                    {# Mantenemos tu logo si está disponible en la carpeta static #}
-                    {# <img src="{% static 'images/Logo.png' %}" alt="SELFING Logo" style="height: 50px; margin-bottom: 10px;"> #}
                     <h1 style="color: #1e3c72; margin: 0;">Reporte de Novedades</h1>
                 </div>
                 <p>Estimado cliente <strong>{{ company.name }}</strong>,</p>
                 <p>A continuación, se detallan las novedades del ciclo de turnos (del {{ cycle_start|date:"d/m/Y H:i" }} hrs al {{ cycle_end|date:"d/m/Y H:i" }} hrs):</p>
 
-                {# --- INICIO DE LA LÓGICA DE AGRUPACIÓN Y NUEVO FORMATO --- #}
                 {% regroup updates by installation.name as installation_list %}
                 {% for installation in installation_list %}
                     <div style="margin-top: 25px;">
@@ -27,13 +24,18 @@
                         <div style="font-family: Arial, sans-serif; font-size: 1em; line-height: 1.6; padding-left: 10px;">
                             {% for update in installation.list %}
                                 <p style="margin: 0;">
-                                    <strong>{% if update.manual_timestamp %}{{ update.manual_timestamp|date:"H:i d/m" }}{% else %}{{ update.created_at|date:"H:i d/m" }}{% endif %}</strong> {{ update.message }}
+                                    <strong>
+                                        {% if update.manual_timestamp %}
+                                            {{ update.manual_timestamp|time:"H:i" }} {{ update.created_at|date:"d/m" }}
+                                        {% else %}
+                                            {{ update.created_at|date:"H:i d/m" }}
+                                        {% endif %}
+                                    </strong> {{ update.message }}
                                 </p>
                             {% endfor %}
                         </div>
                     </div>
                 {% endfor %}
-                {# --- FIN DE LA LÓGICA --- #}
 
                 {% if observations %}
                     <div style="margin-top: 30px;">

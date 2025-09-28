@@ -220,7 +220,7 @@ def review_and_send_novedades(request):
                         log_to_update.edited_at = timezone.now()
                         log_to_update.save()
 
-        updates_to_send_in_email = UpdateLog.objects.filter(id__in=selected_ids).order_by('created_at')
+        updates_to_send_in_email = UpdateLog.objects.filter(id__in=selected_ids).order_by('installation__name', 'created_at')
         email_string = company.email or ""
         recipient_list = [email.strip() for email in email_string.split(',') if email.strip()]
 
@@ -231,6 +231,8 @@ def review_and_send_novedades(request):
                     'updates': updates_to_send_in_email,
                     'observations': observations,
                     'enviado_por': request.user,
+                    'cycle_start': start_of_cycle,  # <-- LÍNEA CORREGIDA
+                    'cycle_end': end_of_cycle,
                 }
                 html_message = render_to_string('emails/reporte_novedades.html', email_context)
                 send_mail(
@@ -621,44 +623,45 @@ def get_shifts_for_calendar(request):
         })
     return JsonResponse(events, safe=False)
 
+# Reemplaza tu función get_active_shift existente con esta versión corregida
+
 def get_active_shift(user):
     """
-    Función corregida para obtener el turno activo correcto de un operador.
-    CORRIGE: El problema de mostrar turno incorrecto en el dashboard.
+    Función robusta para obtener el turno activo de un operador,
+    manejando correctamente los turnos nocturnos que cruzan la medianoche.
     """
-    today = timezone.now().date()
-    
-    # PRIORIDAD 1: Buscar turno YA INICIADO para HOY
-    shift = OperatorShift.objects.select_related('shift_type', 'operator').filter(
-        operator=user,
-        date=today,
-        actual_start_time__isnull=False,
-        actual_end_time__isnull=True
-    ).first()
-    
-    if shift:
-        return shift
-    
-    # PRIORIDAD 2: Buscar turno ASIGNADO para HOY (no iniciado)
-    shift = OperatorShift.objects.select_related('shift_type', 'operator').filter(
-        operator=user,
-        date=today,
-        actual_start_time__isnull=True,
-        actual_end_time__isnull=True
-    ).order_by('shift_type__start_time').first()
-    
-    if shift:
-        return shift
-    
-    # PRIORIDAD 3: Turno iniciado en las últimas 18 horas (para turnos nocturnos)
-    time_threshold = timezone.now() - timedelta(hours=18)
-    shift = OperatorShift.objects.select_related('shift_type', 'operator').filter(
+    now = timezone.now()
+    today = now.date()
+    yesterday = today - timedelta(days=1)
+
+    # --- CAMBIO: Se reordena y mejora la lógica de prioridades ---
+
+    # PRIORIDAD 1: Buscar un turno YA INICIADO en las últimas 18 horas.
+    # EXPLICACIÓN: Esto captura de forma fiable cualquier turno en curso, incluyendo
+    # los nocturnos que empezaron el día anterior.
+    time_threshold = now - timedelta(hours=18)
+    active_shift = OperatorShift.objects.select_related('shift_type', 'operator').filter(
         operator=user,
         actual_start_time__gte=time_threshold,
         actual_end_time__isnull=True
     ).order_by('-actual_start_time').first()
-    
-    return shift
+
+    if active_shift:
+        return active_shift
+
+    # PRIORIDAD 2: Si no hay un turno en curso, buscar un turno PENDIENTE
+    # asignado para HOY O AYER.
+    # EXPLICACIÓN: Esta es la corrección clave. Permite encontrar turnos
+    # de noche (ej. 00:30) que fueron asignados al día anterior pero que
+    # deben empezar en la madrugada de hoy.
+    pending_shift = OperatorShift.objects.select_related('shift_type', 'operator').filter(
+        operator=user,
+        date__in=[today, yesterday],  # <-- CAMBIO: Busca en ambos días
+        actual_start_time__isnull=True,
+        actual_end_time__isnull=True
+    ).order_by('-date', 'shift_type__start_time').first() # Ordena para priorizar el más reciente
+
+    return pending_shift
 
 @login_required
 def start_shift(request):
