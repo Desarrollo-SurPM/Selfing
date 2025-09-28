@@ -7,6 +7,7 @@ from django.utils import timezone
 from django.http import JsonResponse, HttpResponse
 from django.template.loader import get_template
 from xhtml2pdf import pisa
+from .utils import link_callback
 from django.core.mail import send_mail
 from django.template.loader import render_to_string
 from django.db.models import Q, Count
@@ -1287,7 +1288,13 @@ def end_turn_preview(request):
     template = get_template('turn_report_pdf.html')
     html = template.render(context)
     result = BytesIO()
-    pdf = pisa.pisaDocument(BytesIO(html.encode("UTF-8")), result)
+     # --- 👇 MODIFICA ESTA SECCIÓN 👇 ---
+    pdf = pisa.pisaDocument(
+        BytesIO(html.encode("UTF-8")),
+        result,
+        link_callback=link_callback  # <-- AÑADE ESTE ARGUMENTO
+    )
+    # --- 👆 FIN DE LA MODIFICACIÓN 👆 ---
 
     if not pdf.err:
         report, created = TurnReport.objects.get_or_create(
