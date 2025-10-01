@@ -1825,17 +1825,35 @@ def current_logbook_view(request):
     
     return render(request, 'current_logbook.html', context)
 
-@login_required
 def delete_update_log(request, log_id):
+    # Asegura que el log pertenezca al usuario actual antes de intentar obtenerlo
     log_entry = get_object_or_404(UpdateLog, id=log_id, operator_shift__operator=request.user)
+    
     if request.method == 'POST':
-        log_entry.delete()
-        TraceabilityLog.objects.create(
-            user=request.user,
-            action=f"Eliminó una entrada de la bitácora para la instalación '{log_entry.installation.name}'."
-        )
-        messages.success(request, 'La novedad ha sido eliminada correctamente.')
-        return redirect('my_logbook')
+        try:
+            # 1. Elimina la entrada
+            log_entry.delete()
+            
+            # 2. Registra la acción en el historial
+            TraceabilityLog.objects.create(
+                user=request.user,
+                action=f"Eliminó una entrada de la bitácora para la instalación '{log_entry.installation.name}'."
+            )
+            
+            # 3. Devuelve una respuesta JSON para la petición AJAX (CORRECCIÓN)
+            return JsonResponse({
+                'status': 'success', 
+                'message': 'La novedad ha sido eliminada correctamente.'
+            })
+            
+        except Exception as e:
+            # Manejo de errores en caso de fallo en el proceso
+            return JsonResponse({
+                'status': 'error', 
+                'message': f'Error al eliminar la novedad: {e}'
+            }, status=400) # Devolver un código de estado de error HTTP
+            
+    # Si la petición no es POST, muestra la página de confirmación (comportamiento original)
     return render(request, 'delete_update_log_confirm.html', {'log_entry': log_entry})
 
 # Vistas para Seguridad Vehicular
