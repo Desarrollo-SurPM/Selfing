@@ -143,8 +143,7 @@ def admin_dashboard(request):
 @user_passes_test(is_supervisor)
 def review_and_send_novedades(request):
     """
-    Gestiona el envío de novedades basándose en la secuencia real de turnos
-    que componen un ciclo operativo (ej: Tarde + Noche o Día + Tarde + Noche).
+    Gestiona el envío de novedades con una vista previa.
     """
     start_of_cycle = None
     end_of_cycle = None
@@ -162,34 +161,28 @@ def review_and_send_novedades(request):
     end_of_cycle = last_night_shift.actual_end_time
 
     # 2. Determinar el inicio del ciclo retrocediendo desde el turno de noche.
-    # Primero, encontramos el turno inmediatamente anterior (debería ser el de Tarde).
     shift_before_night = OperatorShift.objects.filter(
         actual_end_time__isnull=False,
         actual_end_time__lte=last_night_shift.actual_start_time
     ).order_by('-actual_end_time').first()
 
     if not shift_before_night:
-        # Si no hay turno anterior, el ciclo es solo el turno de noche.
         start_of_cycle = last_night_shift.actual_start_time
     else:
-        # Determinamos si fue un día de 2 o 3 turnos basándonos en la fecha de asignación del turno de TARDE.
         operational_date = shift_before_night.date
         operational_weekday = operational_date.weekday()  # Lunes=0, ..., Sábado=5, Domingo=6
 
         if operational_weekday in [5, 6]:  # Sábado o Domingo (ciclo de 3 turnos)
-            # Necesitamos encontrar el turno de DÍA que vino antes del de TARDE.
             shift_before_tarde = OperatorShift.objects.filter(
                 actual_end_time__isnull=False,
                 actual_end_time__lte=shift_before_night.actual_start_time
             ).order_by('-actual_end_time').first()
             
-            # El ciclo empieza con el turno de DÍA, si existe. Si no, con el de Tarde.
             start_of_cycle = shift_before_tarde.actual_start_time if shift_before_tarde else shift_before_night.actual_start_time
         else:  # Día de semana (ciclo de 2 turnos)
-            # El ciclo empieza con el turno de TARDE.
             start_of_cycle = shift_before_night.actual_start_time
 
-    # 3. PERIODO DE GRACIA: (Lógica sin cambios)
+    # 3. PERIODO DE GRACIA:
     next_shift_after_cycle = OperatorShift.objects.filter(
         actual_start_time__gt=end_of_cycle
     ).order_by('actual_start_time').first()
@@ -198,56 +191,81 @@ def review_and_send_novedades(request):
         messages.info(request, "El periodo para enviar el reporte del ciclo anterior ha finalizado.")
         return render(request, 'review_and_send.html', {'companies': None})
 
-    # --- El resto de la función se mantiene igual ---
+    # --- LÓGICA DE POST MODIFICADA ---
+    if request.method == 'POST':
+        company_id_form = request.POST.get('company_id')
+        company = get_object_or_404(Company, id=company_id_form)
+        selected_ids = request.POST.getlist('updates_to_send')
+        observations = request.POST.get('observations', '')
+
+        # ---------------------------------------------------------
+        #  PASO 2: Confirmar envío (después de la vista previa)
+        # ---------------------------------------------------------
+        if 'confirm_send' in request.POST:
+            updates_to_send_in_email = UpdateLog.objects.filter(id__in=selected_ids).order_by('installation__name', 'created_at')
+            email_string = company.email or ""
+            recipient_list = [email.strip() for email in email_string.split(',') if email.strip()]
+
+            if recipient_list:
+                try:
+                    email_context = {
+                        'company': company,
+                        'updates': updates_to_send_in_email,
+                        'observations': observations,
+                        'enviado_por': request.user,
+                        'cycle_start': start_of_cycle,
+                        'cycle_end': end_of_cycle,
+                    }
+                    html_message = render_to_string('emails/reporte_novedades.html', email_context)
+                    send_mail(
+                        subject=f"Reporte de Novedades - {company.name} - {end_of_cycle.strftime('%d/%m/%Y')}",
+                        message="", from_email=None, recipient_list=recipient_list,
+                        fail_silently=False, html_message=html_message
+                    )
+                    UpdateLog.objects.filter(id__in=selected_ids).update(is_sent=True)
+                    TraceabilityLog.objects.create(user=request.user, action=f"Envió correo de novedades a {company.name}.")
+                    messages.success(request, f"Correo para el ciclo finalizado ha sido enviado a {company.name}.")
+                except Exception as e:
+                    messages.error(request, f"Error al enviar el correo: {e}")
+            else:
+                messages.warning(request, f"La empresa {company.name} no tiene un correo configurado.")
+            
+            return redirect('review_and_send_novedades')
+
+        # ---------------------------------------------------------
+        #  PASO 1: Generar vista previa (Viene del formulario principal)
+        # ---------------------------------------------------------
+        else:
+            # Guardar ediciones de mensajes ANTES de mostrar la vista previa
+            with transaction.atomic():
+                for update_id in selected_ids:
+                    new_message = request.POST.get(f'message_{update_id}')
+                    if new_message:
+                        log_to_update = UpdateLog.objects.get(id=update_id)
+                        if log_to_update.message != new_message:
+                            log_to_update.message = new_message
+                            log_to_update.is_edited = True
+                            log_to_update.edited_at = timezone.now()
+                            log_to_update.save()
+            
+            updates_for_preview = UpdateLog.objects.filter(id__in=selected_ids).order_by('installation__name', 'created_at')
+
+            # Renderizar la plantilla de vista previa
+            context = {
+                'company': company,
+                'updates': updates_for_preview,
+                'observations': observations,
+                'selected_ids': selected_ids, # Pasamos los IDs para el formulario de confirmación
+                'cycle_start': start_of_cycle,
+                'cycle_end': end_of_cycle,
+            }
+            # (Asegúrate de haber creado esta plantilla 'email_preview.html')
+            return render(request, 'email_preview.html', context)
+
+    # --- LÓGICA DE GET (Sin cambios) ---
     company_id = request.GET.get('company_id')
     selected_company = None
     novedades_pendientes = None
-
-    if request.method == 'POST':
-        selected_ids = request.POST.getlist('updates_to_send')
-        observations = request.POST.get('observations', '')
-        company_id_form = request.POST.get('company_id')
-        company = get_object_or_404(Company, id=company_id_form)
-
-        with transaction.atomic():
-            for update_id in selected_ids:
-                new_message = request.POST.get(f'message_{update_id}')
-                if new_message:
-                    log_to_update = UpdateLog.objects.get(id=update_id)
-                    if log_to_update.message != new_message:
-                        log_to_update.message = new_message
-                        log_to_update.is_edited = True
-                        log_to_update.edited_at = timezone.now()
-                        log_to_update.save()
-
-        updates_to_send_in_email = UpdateLog.objects.filter(id__in=selected_ids).order_by('installation__name', 'created_at')
-        email_string = company.email or ""
-        recipient_list = [email.strip() for email in email_string.split(',') if email.strip()]
-
-        if recipient_list:
-            try:
-                email_context = {
-                    'company': company,
-                    'updates': updates_to_send_in_email,
-                    'observations': observations,
-                    'enviado_por': request.user,
-                    'cycle_start': start_of_cycle,  # <-- LÍNEA CORREGIDA
-                    'cycle_end': end_of_cycle,
-                }
-                html_message = render_to_string('emails/reporte_novedades.html', email_context)
-                send_mail(
-                    subject=f"Reporte de Novedades - {company.name} - {end_of_cycle.strftime('%d/%m/%Y')}",
-                    message="", from_email=None, recipient_list=recipient_list,
-                    fail_silently=False, html_message=html_message
-                )
-                UpdateLog.objects.filter(id__in=selected_ids).update(is_sent=True)
-                TraceabilityLog.objects.create(user=request.user, action=f"Envió correo de novedades a {company.name}.")
-                messages.success(request, f"Correo para el ciclo finalizado ha sido enviado a {company.name}.")
-            except Exception as e:
-                messages.error(request, f"Error al enviar el correo: {e}")
-        else:
-            messages.warning(request, f"La empresa {company.name} no tiene un correo configurado.")
-        return redirect('review_and_send_novedades')
 
     relevant_updates = UpdateLog.objects.filter(
         is_sent=False,
@@ -277,6 +295,7 @@ def review_and_send_novedades(request):
         'cycle_start': start_of_cycle,
     }
     return render(request, 'review_and_send.html', context)
+
 
 @login_required
 @user_passes_test(is_supervisor)
@@ -1050,7 +1069,7 @@ def update_log_view(request):
             new_log.operator_shift = active_shift
             new_log.save()
             messages.success(request, 'Novedad registrada con éxito en la bitácora.')
-            return redirect('operator_dashboard')
+            return redirect('update_log')
         else:
             # Si el formulario no es válido, mostramos los errores.
             messages.error(request, 'Hubo un error al guardar la novedad. Por favor, revisa los datos.')
