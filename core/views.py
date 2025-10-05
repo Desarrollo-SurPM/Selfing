@@ -34,7 +34,7 @@ from .models import (
 from .forms import (
     UpdateLogForm, OperatorCreationForm, ShiftNoteForm,
     OperatorChangeForm, CompanyForm, InstallationForm, ChecklistItemForm, EmergencyContactForm,
-    MonitoredServiceForm, ShiftTypeForm, OperatorShiftForm, VirtualRoundCompletionForm, UpdateLogEditForm
+    MonitoredServiceForm, ShiftTypeForm, OperatorShiftForm, VirtualRoundCompletionForm, UpdateLogEditForm, AdminUpdateLogForm
 )
 
 def is_supervisor(user):
@@ -143,12 +143,11 @@ def admin_dashboard(request):
 @user_passes_test(is_supervisor)
 def review_and_send_novedades(request):
     """
-    Gestiona el envío de novedades con una vista previa.
+    Gestiona el envío de novedades con una vista previa en modal.
     """
     start_of_cycle = None
     end_of_cycle = None
 
-    # 1. Encontrar el último turno de "noche" que haya finalizado. Es el fin de nuestro ciclo.
     last_night_shift = OperatorShift.objects.filter(
         shift_type__name__icontains='noche',
         actual_end_time__isnull=False
@@ -156,11 +155,10 @@ def review_and_send_novedades(request):
 
     if not last_night_shift:
         messages.info(request, "Aún no ha finalizado un ciclo de turnos (noche) para generar un reporte.")
-        return render(request, 'review_and_send.html', {'companies': None})
+        return render(request, 'review_and_send.html', {'companies': None, 'add_novedad_form': AdminUpdateLogForm()})
 
     end_of_cycle = last_night_shift.actual_end_time
 
-    # 2. Determinar el inicio del ciclo retrocediendo desde el turno de noche.
     shift_before_night = OperatorShift.objects.filter(
         actual_end_time__isnull=False,
         actual_end_time__lte=last_night_shift.actual_start_time
@@ -170,38 +168,70 @@ def review_and_send_novedades(request):
         start_of_cycle = last_night_shift.actual_start_time
     else:
         operational_date = shift_before_night.date
-        operational_weekday = operational_date.weekday()  # Lunes=0, ..., Sábado=5, Domingo=6
+        operational_weekday = operational_date.weekday()
 
-        if operational_weekday in [5, 6]:  # Sábado o Domingo (ciclo de 3 turnos)
+        if operational_weekday in [5, 6]:
             shift_before_tarde = OperatorShift.objects.filter(
                 actual_end_time__isnull=False,
                 actual_end_time__lte=shift_before_night.actual_start_time
             ).order_by('-actual_end_time').first()
-            
             start_of_cycle = shift_before_tarde.actual_start_time if shift_before_tarde else shift_before_night.actual_start_time
-        else:  # Día de semana (ciclo de 2 turnos)
+        else:
             start_of_cycle = shift_before_night.actual_start_time
 
-    # 3. PERIODO DE GRACIA:
     next_shift_after_cycle = OperatorShift.objects.filter(
         actual_start_time__gt=end_of_cycle
     ).order_by('actual_start_time').first()
     
     if next_shift_after_cycle and next_shift_after_cycle.actual_end_time is not None:
         messages.info(request, "El periodo para enviar el reporte del ciclo anterior ha finalizado.")
-        return render(request, 'review_and_send.html', {'companies': None})
+        return render(request, 'review_and_send.html', {'companies': None, 'add_novedad_form': AdminUpdateLogForm()})
 
-    # --- LÓGICA DE POST MODIFICADA ---
+    # ---> # FIX 1: Inicializa el formulario aquí.
+    add_novedad_form = AdminUpdateLogForm()
+
     if request.method == 'POST':
-        company_id_form = request.POST.get('company_id')
-        company = get_object_or_404(Company, id=company_id_form)
-        selected_ids = request.POST.getlist('updates_to_send')
-        observations = request.POST.get('observations', '')
-
-        # ---------------------------------------------------------
-        #  PASO 2: Confirmar envío (después de la vista previa)
-        # ---------------------------------------------------------
-        if 'confirm_send' in request.POST:
+        if 'action' in request.POST and request.POST['action'] == 'add_novedad':
+            # Usa una variable local 'form' para la validación
+            form = AdminUpdateLogForm(request.POST)
+            if form.is_valid():
+                if last_night_shift:
+                    new_log = form.save(commit=False)
+                    new_log.operator_shift = last_night_shift
+                    new_log.save()
+                    new_log.created_at = end_of_cycle
+                    new_log.save(update_fields=['created_at']) 
+                    messages.success(request, 'Novedad agregada correctamente al ciclo del reporte.')
+                else:
+                    messages.error(request, 'No se pudo determinar el turno al cual asociar la novedad.')
+                
+                company_id_redirect = request.POST.get('company_id_for_redirect', '')
+                if company_id_redirect:
+                    return redirect(f"{request.path}?company_id={company_id_redirect}")
+                return redirect('review_and_send_novedades')
+            else:
+                messages.error(request, 'Hubo un error al agregar la novedad. Por favor, revisa los datos.')
+                # ---> # FIX 2: Si el formulario es inválido, asigna esa instancia con errores
+                # a la variable que se pasará a la plantilla.
+                add_novedad_form = form
+        
+        elif 'confirm_send' in request.POST:
+            company_id_form = request.POST.get('company_id')
+            company = get_object_or_404(Company, id=company_id_form)
+            selected_ids = request.POST.getlist('updates_to_send')
+            observations = request.POST.get('observations', '')
+            
+            with transaction.atomic():
+                for update_id in selected_ids:
+                    new_message = request.POST.get(f'message_{update_id}')
+                    if new_message:
+                        log_to_update = UpdateLog.objects.get(id=update_id)
+                        if log_to_update.message != new_message:
+                            log_to_update.message = new_message
+                            log_to_update.is_edited = True
+                            log_to_update.edited_at = timezone.now()
+                            log_to_update.save()
+            
             updates_to_send_in_email = UpdateLog.objects.filter(id__in=selected_ids).order_by('installation__name', 'created_at')
             email_string = company.email or ""
             recipient_list = [email.strip() for email in email_string.split(',') if email.strip()]
@@ -232,37 +262,7 @@ def review_and_send_novedades(request):
             
             return redirect('review_and_send_novedades')
 
-        # ---------------------------------------------------------
-        #  PASO 1: Generar vista previa (Viene del formulario principal)
-        # ---------------------------------------------------------
-        else:
-            # Guardar ediciones de mensajes ANTES de mostrar la vista previa
-            with transaction.atomic():
-                for update_id in selected_ids:
-                    new_message = request.POST.get(f'message_{update_id}')
-                    if new_message:
-                        log_to_update = UpdateLog.objects.get(id=update_id)
-                        if log_to_update.message != new_message:
-                            log_to_update.message = new_message
-                            log_to_update.is_edited = True
-                            log_to_update.edited_at = timezone.now()
-                            log_to_update.save()
-            
-            updates_for_preview = UpdateLog.objects.filter(id__in=selected_ids).order_by('installation__name', 'created_at')
-
-            # Renderizar la plantilla de vista previa
-            context = {
-                'company': company,
-                'updates': updates_for_preview,
-                'observations': observations,
-                'selected_ids': selected_ids, # Pasamos los IDs para el formulario de confirmación
-                'cycle_start': start_of_cycle,
-                'cycle_end': end_of_cycle,
-            }
-            # (Asegúrate de haber creado esta plantilla 'email_preview.html')
-            return render(request, 'email_preview.html', context)
-
-    # --- LÓGICA DE GET (Sin cambios) ---
+    # --- LÓGICA DE GET ---
     company_id = request.GET.get('company_id')
     selected_company = None
     novedades_pendientes = None
@@ -287,15 +287,28 @@ def review_and_send_novedades(request):
             'operator_shift__operator', 'installation'
         ).order_by('installation__name', 'created_at')
 
+    # ---> # FIX 3: La variable 'add_novedad_form' ya tiene la instancia correcta,
+    # ya sea una nueva o una con errores del POST.
+
     context = {
         'companies': companies_with_pending_updates,
         'selected_company': selected_company,
         'novedades_pendientes': novedades_pendientes,
         'cycle_end': end_of_cycle,
         'cycle_start': start_of_cycle,
+        'add_novedad_form': add_novedad_form, # Se pasa la instancia correcta.
     }
     return render(request, 'review_and_send.html', context)
 
+@login_required
+def ajax_get_installations_for_company(request, company_id):
+    """
+    Devuelve una lista de instalaciones para una empresa específica en formato JSON.
+    Se usa para los dropdowns dinámicos.
+    """
+    installations = Installation.objects.filter(company_id=company_id).order_by('name')
+    data = [{'id': inst.id, 'name': inst.name} for inst in installations]
+    return JsonResponse({'installations': data})
 
 @login_required
 @user_passes_test(is_supervisor)

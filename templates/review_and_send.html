@@ -1,4 +1,5 @@
 {% extends 'base.html' %}
+{% load crispy_forms_tags %}
 
 {% block title %}Revisión y Envío de Novedades{% endblock %}
 
@@ -10,6 +11,7 @@
             <i class="fas fa-arrow-left me-2"></i>Volver al Dashboard
         </a>
     </div>
+
     <div class="row">
         <div class="col-lg-4">
             <div class="card shadow-sm mb-4">
@@ -25,16 +27,45 @@
                     {% endfor %}
                 </div>
             </div>
+
+            <div class="card shadow-sm mt-4">
+                <div class="card-header">
+                     <h5><i class="fas fa-plus-circle me-2 text-primary"></i>Añadir Novedad Manualmente</h5>
+                </div>
+                <div class="card-body">
+                    <p class="text-muted small">Use este formulario para agregar una novedad que falte en el reporte del ciclo actual.</p>
+                    <form method="post">
+                        {% csrf_token %}
+                        <input type="hidden" name="action" value="add_novedad">
+                        
+                        {% if selected_company %}
+                        <input type="hidden" name="company_id_for_redirect" value="{{ selected_company.id }}">
+                        {% endif %}
+                        
+                        {{ add_novedad_form.company|as_crispy_field }}
+                        {{ add_novedad_form.installation|as_crispy_field }}
+                        {{ add_novedad_form.message|as_crispy_field }}
+                        {{ add_novedad_form.manual_timestamp|as_crispy_field }}
+                        
+                        <div class="d-grid mt-3">
+                            <button type="submit" class="btn btn-primary">
+                                <i class="fas fa-plus me-2"></i>Agregar Novedad al Ciclo
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
         </div>
+
         <div class="col-lg-8">
             {% if selected_company %}
                 <div class="card shadow-sm">
                     <div class="card-header"><h5>Novedades para: <strong>{{ selected_company.name }}</strong></h5></div>
                     <div class="card-body">
-                        <form method="post">
+                        <form id="novedades-form" method="post">
                             {% csrf_token %}
                             <input type="hidden" name="company_id" value="{{ selected_company.id }}">
-                            <p class="text-muted">Seleccione las novedades a incluir en el correo.</p>
+                            <p class="text-muted">Seleccione y/o edite las novedades a incluir en el correo.</p>
                             <div class="novedades-list mb-4" style="max-height: 450px; overflow-y: auto; border: 1px solid #ddd; padding: 1rem; border-radius: .25rem;">
                                 {% regroup novedades_pendientes by installation.name as installation_list %}
                                 {% for installation in installation_list %}
@@ -44,9 +75,16 @@
                                             <div class="form-check mb-3">
                                                 <input class="form-check-input" type="checkbox" name="updates_to_send" value="{{ update.id }}" id="update_{{ update.id }}">
                                                 <label class="form-check-label" for="update_{{ update.id }}">
-    <strong>{{ update.created_at|date:"d/m H:i" }}</strong> (por {{ update.operator_shift.operator.username }}):
-</label>
-<input type="text" name="message_{{ update.id }}" value="{{ update.message }}" class="form-control form-control-sm mt-1">
+                                                    <strong>
+                                                        {% if update.manual_timestamp %}
+                                                            {{ update.created_at|date:"d/m" }} {{ update.manual_timestamp|time:"H:i" }}*
+                                                        {% else %}
+                                                            {{ update.created_at|date:"d/m H:i" }}
+                                                        {% endif %}
+                                                    </strong> 
+                                                    (por {{ update.operator_shift.operator.username }}):
+                                                </label>
+                                                <input type="text" name="message_{{ update.id }}" value="{{ update.message }}" class="form-control form-control-sm mt-1">
                                             </div>
                                         {% endfor %}
                                     </fieldset>
@@ -59,7 +97,7 @@
                                 <textarea name="observations" id="observations" class="form-control" rows="4" placeholder="Añada aquí cualquier comentario general..."></textarea>
                             </div>
                             <div class="d-grid">
-                                <button type="submit" class="btn btn-primary btn-lg"><i class="fas fa-paper-plane me-2"></i>Enviar Correo a {{ selected_company.name }}</button>
+                                <button type="button" id="preview-button" class="btn btn-primary btn-lg"><i class="fas fa-eye me-2"></i>Previsualizar y Enviar Correo a {{ selected_company.name }}</button>
                             </div>
                         </form>
                     </div>
@@ -74,4 +112,138 @@
         </div>
     </div>
 </div>
+
+<div class="modal fade" id="previewModal" tabindex="-1" aria-labelledby="previewModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-xl modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="previewModalLabel">Vista Previa del Correo de Novedades</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <div id="modal-content-body">
+            </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+            <i class="fas fa-edit me-2"></i>Editar
+        </button>
+        <button type="button" id="confirm-send-button" class="btn btn-primary">
+            <i class="fas fa-paper-plane me-2"></i>Confirmar y Enviar
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // --- Lógica para el Modal ---
+    const previewButton = document.getElementById('preview-button');
+    if (previewButton) {
+        const confirmSendButton = document.getElementById('confirm-send-button');
+        const mainForm = document.getElementById('novedades-form');
+        const modalBody = document.getElementById('modal-content-body');
+        const previewModal = new bootstrap.Modal(document.getElementById('previewModal'));
+
+        previewButton.addEventListener('click', function() {
+            const formData = new FormData(mainForm);
+            const updates = [];
+            document.querySelectorAll('input[name="updates_to_send"]:checked').forEach(checkbox => {
+                const updateId = checkbox.value;
+                const labelElement = document.querySelector(`label[for="update_${updateId}"]`);
+                const labelText = labelElement ? labelElement.innerText : '';
+                const message = formData.get(`message_${updateId}`);
+                const installationElement = checkbox.closest('fieldset').querySelector('legend');
+                const installation = installationElement ? installationElement.innerText.replace('Instalación: ', '') : 'Desconocida';
+                updates.push({ id: updateId, label: labelText, message, installation });
+            });
+            const observations = formData.get('observations');
+
+            const updatesByInstallation = updates.reduce((acc, update) => {
+                (acc[update.installation] = acc[update.installation] || []).push(update);
+                return acc;
+            }, {});
+
+            let modalHtml = `<div class="email-content-preview border p-3 rounded bg-light"><p>A continuación, se detallan las novedades:</p>`;
+            for (const installation in updatesByInstallation) {
+                modalHtml += `<div style="margin-top: 15px;"><h6 style="color: #2a5298; border-bottom: 1px solid #eee; padding-bottom: 5px;"><strong>${installation}:</strong></h6><div style="font-size: 0.9em; line-height: 1.6; padding-left: 10px;">`;
+                updatesByInstallation[installation].forEach(update => {
+                    modalHtml += `<p style="margin: 0;"><strong>${update.label.trim()}</strong> - ${update.message}</p>`;
+                });
+                modalHtml += `</div></div>`;
+            }
+
+            if (observations) {
+                modalHtml += `<div style="margin-top: 20px;"><h6 style="color: #1e3c72;"><strong>Observaciones Generales:</strong></h6><div style="background-color: #eaf2f8; padding: 10px; border-left: 4px solid #2a5298; border-radius: 4px;"><p style="margin: 0;">${observations.replace(/\n/g, '<br>')}</p></div></div>`;
+            }
+            modalHtml += `</div>`;
+
+            modalBody.innerHTML = modalHtml;
+            previewModal.show();
+        });
+
+        if (confirmSendButton) {
+            confirmSendButton.addEventListener('click', function() {
+                const confirmInput = document.createElement('input');
+                confirmInput.type = 'hidden';
+                confirmInput.name = 'confirm_send';
+                confirmInput.value = 'true';
+                mainForm.appendChild(confirmInput);
+                mainForm.submit();
+            });
+        }
+    }
+
+    // --- LÓGICA PARA DROPDOWNS DEPENDIENTES ---
+    const addNovedadForm = document.querySelector('form [name="action"][value="add_novedad"]')?.closest('form');
+    if (addNovedadForm) {
+        const companySelect = addNovedadForm.querySelector('#id_company');
+        const installationSelect = addNovedadForm.querySelector('#id_installation');
+
+        if (companySelect && installationSelect) {
+            function updateInstallations() {
+                const companyId = companySelect.value;
+                installationSelect.innerHTML = '<option value="">Cargando...</option>';
+                installationSelect.disabled = true;
+
+                if (companyId) {
+                    fetch(`/ajax/get-installations/${companyId}/`)
+                        .then(response => {
+                            if (!response.ok) { throw new Error(`Error HTTP: ${response.status}`); }
+                            return response.json();
+                        })
+                        .then(data => {
+                            installationSelect.innerHTML = '<option value="">---------</option>';
+                            data.installations.forEach(inst => {
+                                const option = new Option(inst.name, inst.id);
+                                installationSelect.add(option);
+                            });
+                            installationSelect.disabled = false;
+                        })
+                        .catch(error => {
+                            console.error('Error al cargar instalaciones:', error);
+                            installationSelect.innerHTML = '<option value="">Error al cargar</option>';
+                        });
+                } else {
+                    installationSelect.innerHTML = '<option value="">Seleccione una empresa primero</option>';
+                }
+            }
+
+            companySelect.addEventListener('change', updateInstallations);
+            
+            if (companySelect.value && installationSelect.options.length <= 1) {
+                // Si hay una empresa seleccionada (por ej, tras un error de validación),
+                // y las instalaciones no están cargadas, las cargamos.
+                updateInstallations();
+            } else if (!companySelect.value) {
+                installationSelect.disabled = true;
+                installationSelect.innerHTML = '<option value="">Seleccione una empresa primero</option>';
+            }
+        }
+    }
+});
+</script>
 {% endblock %}

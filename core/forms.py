@@ -61,7 +61,49 @@ class UpdateLogEditForm(forms.ModelForm):
                 raise ValidationError("La hora del evento no puede ser futura. Por favor, ingrese una hora pasada.")
         return timestamp
 
+class AdminUpdateLogForm(forms.ModelForm):
+    """
+    Formulario para que el administrador añada una novedad desde la vista de revisión.
+    Ahora con dropdowns dependientes.
+    """
+    # 1. Añadimos un campo para seleccionar la Empresa primero.
+    company = forms.ModelChoiceField(
+        queryset=Company.objects.order_by('name'),
+        label="Empresa",
+        required=True
+    )
 
+    class Meta:
+        model = UpdateLog
+        # 2. 'company' se usa para el filtrado, 'installation' es lo que se guarda.
+        fields = ['company', 'installation', 'message', 'manual_timestamp']
+        labels = {
+            'installation': 'Instalación',
+            'message': 'Mensaje de la Novedad',
+            'manual_timestamp': 'Hora del Evento (Opcional)',
+        }
+        widgets = {
+            'message': forms.Textarea(attrs={'rows': 3, 'placeholder': 'Ej: Apertura de sucursal OK.'}),
+            'manual_timestamp': forms.TimeInput(attrs={'type': 'time'}),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # 3. El campo 'installation' empieza vacío. Se llenará con JavaScript.
+        self.fields['installation'].queryset = Installation.objects.none()
+
+        # Si el formulario se está enviando (tiene datos) o tiene una instancia precargada...
+        if 'company' in self.data:
+            try:
+                company_id = int(self.data.get('company'))
+                # ...poblamos el queryset de instalaciones para que la validación funcione.
+                self.fields['installation'].queryset = Installation.objects.filter(company_id=company_id).order_by('name')
+            except (ValueError, TypeError):
+                pass  # Si hay un error, se mantiene el queryset vacío.
+        elif self.instance.pk and self.instance.installation:
+            # Si estamos editando, pre-seleccionamos la empresa y llenamos las instalaciones.
+            self.fields['company'].initial = self.instance.installation.company
+            self.fields['installation'].queryset = self.instance.installation.company.installations.order_by('name')
 class VirtualRoundCompletionForm(forms.ModelForm):
     checked_installations = forms.ModelMultipleChoiceField(
         queryset=Installation.objects.all(),

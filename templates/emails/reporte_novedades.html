@@ -13,7 +13,7 @@
                     <h1 style="color: #1e3c72; margin: 0;">Reporte de Novedades</h1>
                 </div>
                 <p>Estimado cliente <strong>{{ company.name }}</strong>,</p>
-                <p>A continuación, se detallan las novedades del ciclo de turnos (del {{ cycle_start|date:"d/m/Y H:i" }} hrs al {{ cycle_end|date:"d/m/Y H:i" }} hrs):</p>
+                <p>A continuación, se detallan las novedades del ciclo de turnos (del {{ cycle_start|date:"d/m/Y" }} hrs al {{ cycle_end|date:"d/m/Y" }} hrs):</p>
 
                 {% regroup updates by installation.name as installation_list %}
                 {% for installation in installation_list %}

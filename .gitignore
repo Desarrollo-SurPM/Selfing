@@ -10,7 +10,9 @@ db.sqlite3
 
 # Archivos de Configuración Sensibles
 .env
-
+staticfiles/
+media/
+media/
 # Archivos estáticos y de medios recolectados por Django
 
 
