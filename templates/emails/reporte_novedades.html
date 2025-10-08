@@ -10,7 +10,10 @@
         <tr>
             <td style="padding: 20px; font-family: Arial, sans-serif;">
                 <div style="text-align: center; margin-bottom: 20px; border-bottom: 2px solid #1e3c72; padding-bottom: 10px;">
-                    <h1 style="color: #1e3c72; margin: 0;">Reporte de Novedades</h1>
+                    <div style="display: flex; align-items: center; justify-content: center; margin-bottom: 10px;">
+                        <img src="https://selfing-production.up.railway.app{% static 'images/Logo.png' %}" alt="SELFING Logo" style="height: 40px; margin-right: 15px;">
+                        <h1 style="color: #1e3c72; margin: 0;">Reporte de Novedades</h1>
+                    </div>
                 </div>
                 <p>Estimado cliente <strong>{{ company.name }}</strong>,</p>
                 <p>A continuación, se detallan las novedades del ciclo de turnos (del {{ cycle_start|date:"d/m/Y" }}  al {{ cycle_end|date:"d/m/Y" }}):</p>
@@ -48,7 +51,7 @@
 
                 <div style="font-size: 0.8em; color: #888; text-align: center; margin-top: 30px; padding-top: 15px; border-top: 1px solid #eee;">
                     <p style="margin: 0;">Este correo fue generado automáticamente por la plataforma SELFING.</p>
-                    <p style="margin: 5px 0 0 0;">Reporte enviado por: Operador Selfing.</p>
+                    <p style="margin: 5px 0 0 0;">Reporte enviado por: Operador de turno Selfing.</p>
                 </div>
             </td>
         </tr>
