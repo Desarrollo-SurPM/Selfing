@@ -4,7 +4,6 @@
 {% block title %}Gestión de Empresas Cliente{% endblock %}
 
 {% block extra_css %}
-    {# Esta línea es crucial para cargar los estilos correctos para esta página #}
     <link rel="stylesheet" href="{% static 'css/manage_pages.css' %}?v=1.5">
     <link rel="stylesheet" href="{% static 'css/color_theme.css' %}">
 {% endblock %}
@@ -34,7 +33,6 @@
         </div>
         <div class="stat-card active">
             <i class="fas fa-map-marked-alt"></i>
-            {# Nota: necesitarías pasar este dato desde la vista para que sea dinámico #}
             <div class="stat-value">{{ total_installations }}</div>
             <div class="stat-label">Total Instalaciones</div>
         </div>
@@ -77,15 +75,50 @@
                             </div>
                         </div>
                     </td>
-                    <td>
-                        {% if company.email %}
-                            <a href="mailto:{{ company.email }}" class="text-decoration-none text-dark">
-                                <i class="fas fa-envelope me-2 text-muted"></i>{{ company.email }}
-                            </a>
-                        {% else %}
-                            <span class="text-muted">Sin email registrado</span>
-                        {% endif %}
+                    
+                    {# ===== BLOQUE CORREGIDO CON JAVASCRIPT ===== #}
+                    <td id="email-cell-{{ company.id }}">
+                        <script>
+                            (function() {
+                                const emailString = "{{ company.email|default:'' }}";
+                                const cell = document.getElementById('email-cell-{{ company.id }}');
+
+                                if (emailString) {
+                                    const emails = emailString.split(',').map(e => e.trim()).filter(e => e);
+                                    let html = '';
+
+                                    if (emails.length > 0) {
+                                        html += `
+                                            <div class="d-flex align-items-center">
+                                                <i class="fas fa-envelope me-2 text-muted"></i>
+                                                <a href="mailto:${emails[0]}" class="text-decoration-none text-dark">${emails[0]}</a>
+                                        `;
+
+                                        if (emails.length > 1) {
+                                            html += `
+                                                <div class="dropdown ms-2">
+                                                    <button class="btn btn-sm btn-outline-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false">
+                                                        +${emails.length - 1}
+                                                    </button>
+                                                    <ul class="dropdown-menu">`;
+                                            
+                                            for (let i = 1; i < emails.length; i++) {
+                                                html += `<li><a class="dropdown-item" href="mailto:${emails[i]}">${emails[i]}</a></li>`;
+                                            }
+                                            
+                                            html += `</ul></div>`;
+                                        }
+                                        html += `</div>`;
+                                    }
+                                    cell.innerHTML = html;
+                                } else {
+                                    cell.innerHTML = '<span class="text-muted">Sin email registrado</span>';
+                                }
+                            })();
+                        </script>
                     </td>
+                    {# ===== FIN DEL BLOQUE CORREGIDO ===== #}
+
                     <td class="text-center">
                         <div class="action-buttons justify-content-center">
                             <a href="{% url 'manage_installations' company.id %}" class="btn-action" style="background-color: rgba(78, 115, 223, 0.1); color: #4e73df;" title="Ver Instalaciones">
@@ -136,7 +169,6 @@ document.addEventListener('DOMContentLoaded', function() {
         const searchTerm = this.value.toLowerCase();
         
         tableRows.forEach(row => {
-            // Asegurarse de no ocultar la fila de "empty state"
             if (row.querySelector('.empty-state')) return;
 
             const rowText = row.textContent.toLowerCase();
