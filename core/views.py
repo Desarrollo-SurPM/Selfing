@@ -24,6 +24,8 @@ from collections import OrderedDict
 import json
 from django.views.decorators.csrf import csrf_exempt 
 import re # Importar el módulo de expresiones regulares
+from django.db.models.functions import Coalesce
+from django.db.models import TimeField
 
 from .models import (
     Company, Installation, OperatorProfile, ShiftType, OperatorShift,
@@ -138,12 +140,11 @@ def admin_dashboard(request):
     return render(request, 'admin_dashboard.html', context)
 
 # selfing/core/views.py
-
 @login_required
 @user_passes_test(is_supervisor)
 def review_and_send_novedades(request):
     """
-    Gestiona el envío de novedades con una vista previa en modal.
+    Gestiona el envío de novedades con una vista previa en modal y ordenamiento cronológico corregido.
     """
     start_of_cycle = None
     end_of_cycle = None
@@ -187,18 +188,17 @@ def review_and_send_novedades(request):
         messages.info(request, "El periodo para enviar el reporte del ciclo anterior ha finalizado.")
         return render(request, 'review_and_send.html', {'companies': None, 'add_novedad_form': AdminUpdateLogForm()})
 
-    # ---> # FIX 1: Inicializa el formulario aquí.
     add_novedad_form = AdminUpdateLogForm()
 
     if request.method == 'POST':
         if 'action' in request.POST and request.POST['action'] == 'add_novedad':
-            # Usa una variable local 'form' para la validación
             form = AdminUpdateLogForm(request.POST)
             if form.is_valid():
                 if last_night_shift:
                     new_log = form.save(commit=False)
                     new_log.operator_shift = last_night_shift
                     new_log.save()
+                    # Se mantiene tu lógica original para asegurar que la novedad caiga en el ciclo correcto
                     new_log.created_at = end_of_cycle
                     new_log.save(update_fields=['created_at']) 
                     messages.success(request, 'Novedad agregada correctamente al ciclo del reporte.')
@@ -211,8 +211,6 @@ def review_and_send_novedades(request):
                 return redirect('review_and_send_novedades')
             else:
                 messages.error(request, 'Hubo un error al agregar la novedad. Por favor, revisa los datos.')
-                # ---> # FIX 2: Si el formulario es inválido, asigna esa instancia con errores
-                # a la variable que se pasará a la plantilla.
                 add_novedad_form = form
         
         elif 'confirm_send' in request.POST:
@@ -232,7 +230,11 @@ def review_and_send_novedades(request):
                             log_to_update.edited_at = timezone.now()
                             log_to_update.save()
             
-            updates_to_send_in_email = UpdateLog.objects.filter(id__in=selected_ids).order_by('installation__name', 'created_at')
+            # --- CORRECCIÓN DE ORDENAMIENTO (PARA EL CORREO) ---
+            updates_to_send_in_email = UpdateLog.objects.filter(id__in=selected_ids).annotate(
+                effective_time=Coalesce('manual_timestamp', 'created_at__time', output_field=TimeField())
+            ).order_by('installation__name', 'created_at__date', 'effective_time')
+            
             email_string = company.email or ""
             recipient_list = [email.strip() for email in email_string.split(',') if email.strip()]
 
@@ -270,7 +272,8 @@ def review_and_send_novedades(request):
     relevant_updates = UpdateLog.objects.filter(
         is_sent=False,
         created_at__gte=start_of_cycle,
-        created_at__lte=end_of_cycle
+        # Usamos lte (menor o igual) para incluir las novedades guardadas justo al final
+        created_at__lte=end_of_cycle 
     )
     
     company_ids_with_pending = relevant_updates.values_list('installation__company_id', flat=True).distinct()
@@ -281,14 +284,15 @@ def review_and_send_novedades(request):
 
     if company_id:
         selected_company = get_object_or_404(Company, id=company_id)
+        
+        # --- CORRECCIÓN DE ORDENAMIENTO (PARA LA VISTA) ---
         novedades_pendientes = relevant_updates.filter(
             installation__company=selected_company
         ).select_related(
             'operator_shift__operator', 'installation'
-        ).order_by('installation__name', 'created_at')
-
-    # ---> # FIX 3: La variable 'add_novedad_form' ya tiene la instancia correcta,
-    # ya sea una nueva o una con errores del POST.
+        ).annotate(
+            effective_time=Coalesce('manual_timestamp', 'created_at__time', output_field=TimeField())
+        ).order_by('installation__name', 'created_at__date', 'effective_time')
 
     context = {
         'companies': companies_with_pending_updates,
@@ -296,7 +300,7 @@ def review_and_send_novedades(request):
         'novedades_pendientes': novedades_pendientes,
         'cycle_end': end_of_cycle,
         'cycle_start': start_of_cycle,
-        'add_novedad_form': add_novedad_form, # Se pasa la instancia correcta.
+        'add_novedad_form': add_novedad_form,
     }
     return render(request, 'review_and_send.html', context)
 
