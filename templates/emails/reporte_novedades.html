@@ -16,26 +16,34 @@
                 <p>A continuación, se detallan las novedades del ciclo de turnos (del {{ cycle_start|date:"d/m/Y" }}  al {{ cycle_end|date:"d/m/Y" }}):</p>
 
                 {% regroup updates by installation.name as installation_list %}
-                {% for installation in installation_list %}
-                    <div style="margin-top: 25px;">
-                        <h3 style="color: #2a5298; border-bottom: 1px solid #eee; padding-bottom: 5px; font-size: 1.2em; font-weight: bold;">
-                            {{ installation.grouper }}:
-                        </h3>
-                        <div style="font-family: Arial, sans-serif; font-size: 1em; line-height: 1.6; padding-left: 10px;">
-                            {% for update in installation.list %}
-                                <p style="margin: 0;">
-                                    <strong>
-                                        {% if update.manual_timestamp %}
-                                            {{ update.manual_timestamp|time:"H:i" }} {{ update.created_at|date:"d/m" }}
-                                        {% else %}
-                                            {{ update.created_at|date:"H:i d/m" }}
-                                        {% endif %}
-                                    </strong> {{ update.message }}
-                                </p>
-                            {% endfor %}
-                        </div>
-                    </div>
-                {% endfor %}
+{% for installation in installation_list %}
+    <div style="margin-top: 25px;">
+        <h3 style="color: #2a5298; border-bottom: 1px solid #eee; padding-bottom: 5px; font-size: 1.2em; font-weight: bold;">
+            {{ installation.grouper }}:
+        </h3>
+        <div style="font-family: Arial, sans-serif; font-size: 1em; line-height: 1.6; padding-left: 10px;">
+            {% for update in installation.list %}
+                {% load custom_filters %} {# <-- Asegúrate de cargar tus filtros personalizados #}
+<p style="margin: 0;">
+    <strong>
+        {% if update.manual_timestamp %}
+            {% with shift_type=update.operator_shift.shift_type shift_date=update.operator_shift.date manual_time=update.manual_timestamp %}
+                {% if shift_type.end_time < shift_type.start_time and manual_time < shift_type.start_time %}
+                    {{ shift_date|add_days:1|date:"d/m" }} {{ manual_time|time:"H:i" }}*
+                {% else %}
+                    {{ shift_date|date:"d/m" }} {{ manual_time|time:"H:i" }}*
+                {% endif %}
+            {% endwith %}
+        {% else %}
+            {{ update.created_at|date:"d/m H:i" }}
+        {% endif %}
+    </strong> {{ update.message }}
+    {% if update.is_edited %}<em style="font-size: 0.8em; color: #555;">(editado)</em>{% endif %}
+</p>
+            {% endfor %}
+        </div>
+    </div>
+{% endfor %}
 
                 {% if observations %}
                     <div style="margin-top: 30px;">

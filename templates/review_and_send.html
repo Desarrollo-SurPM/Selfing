@@ -44,6 +44,7 @@
                         
                         {{ add_novedad_form.company|as_crispy_field }}
                         {{ add_novedad_form.installation|as_crispy_field }}
+                        {{ add_novedad_form.target_shift|as_crispy_field }}
                         {{ add_novedad_form.message|as_crispy_field }}
                         {{ add_novedad_form.manual_timestamp|as_crispy_field }}
                         
@@ -72,21 +73,33 @@
                                     <fieldset class="mb-4">
                                         <legend class="h6 border-bottom pb-2 mb-3"><i class="fas fa-map-marker-alt text-secondary me-2"></i>Instalación: {{ installation.grouper }}</legend>
                                         {% for update in installation.list %}
-                                            <div class="form-check mb-3">
-                                                <input class="form-check-input" type="checkbox" name="updates_to_send" value="{{ update.id }}" id="update_{{ update.id }}">
-                                                <label class="form-check-label" for="update_{{ update.id }}">
-                                                    <strong>
-                                                        {% if update.manual_timestamp %}
-                                                            {{ update.created_at|date:"d/m" }} {{ update.manual_timestamp|time:"H:i" }}*
-                                                        {% else %}
-                                                            {{ update.created_at|date:"d/m H:i" }}
-                                                        {% endif %}
-                                                    </strong> 
-                                                    (por {{ update.operator_shift.operator.username }}):
-                                                </label>
-                                                <input type="text" name="message_{{ update.id }}" value="{{ update.message }}" class="form-control form-control-sm mt-1">
-                                            </div>
-                                        {% endfor %}
+                                        {% load custom_filters %}
+    <div class="form-check mb-3">
+        <input class="form-check-input" type="checkbox" name="updates_to_send" value="{{ update.id }}" id="update_{{ update.id }}">
+        <label class="form-check-label" for="update_{{ update.id }}">
+    <strong>
+        {% if update.manual_timestamp %}
+            {% with shift_type=update.operator_shift.shift_type shift_date=update.operator_shift.date manual_time=update.manual_timestamp %}
+                {% comment %} Verifica si el turno cruza medianoche Y si la hora manual es del día siguiente {% endcomment %}
+                {% if shift_type.end_time < shift_type.start_time and manual_time < shift_type.start_time %}
+                    {% comment %} Suma 1 día a la fecha del turno {% endcomment %}
+                    {{ shift_date|add_days:1|date:"d/m" }} {{ manual_time|time:"H:i" }}*
+                {% else %}
+                    {% comment %} Usa la fecha del turno directamente {% endcomment %}
+                    {{ shift_date|date:"d/m" }} {{ manual_time|time:"H:i" }}*
+                {% endif %}
+            {% endwith %}
+        {% else %}
+            {% comment %} Si no hay hora manual, usa created_at como antes {% endcomment %}
+            {{ update.created_at|date:"d/m H:i" }}
+        {% endif %}
+    </strong>
+    (por {{ update.operator_shift.operator.username }}):
+    {% if update.is_edited %}<em class="text-muted" style="font-size: 0.8em;">(editado)</em>{% endif %}
+</label>
+        <input type="text" name="message_{{ update.id }}" value="{{ update.message }}" class="form-control form-control-sm mt-1">
+    </div>
+{% endfor %}
                                     </fieldset>
                                 {% empty %}
                                     <p>No hay novedades pendientes para esta empresa.</p>
