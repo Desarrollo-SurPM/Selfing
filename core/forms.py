@@ -76,7 +76,8 @@ class UpdateLogEditForm(forms.ModelForm):
         timestamp_time = self.cleaned_data.get('manual_timestamp')
         if timestamp_time:
             now_dt = timezone.localtime(timezone.now())
-            event_dt_today = timezone.make_aware(datetime.combine(now_dt.date(), timestamp_time))
+            
+            event_dt_today = timezone.make_aware(datetime.datetime.combine(now_dt.date(), timestamp_time))
 
             if timestamp_time > now_dt.time():
                 event_dt = event_dt_today - timedelta(days=1)
@@ -90,7 +91,6 @@ class UpdateLogEditForm(forms.ModelForm):
                  raise ValidationError("No puedes registrar eventos de más de 24 horas de antigüedad.")
                  
         return timestamp_time
-
 class AdminUpdateLogForm(forms.ModelForm):
     """
     Formulario para que el administrador añada una novedad desde la vista de revisión.
