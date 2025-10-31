@@ -215,6 +215,23 @@ document.addEventListener('DOMContentLoaded', function() {
     // --- SCRIPT PARA MOSTRAR/OCULTAR LA HORA MANUAL ---
     const toggleButton = document.getElementById('toggle-manual-time');
     const timeContainer = document.getElementById('manual-time-container');
+    const manualTimeInput = document.getElementById('id_manual_timestamp');
+
+    if (manualTimeInput) {
+        // Añadir el listener para auto-formatear la hora
+        manualTimeInput.addEventListener('input', function (e) {
+            // 1. Quitar todo lo que no sea un número
+            let value = e.target.value.replace(/[^0-9]/g, ''); 
+            
+            if (value.length > 2) {
+                // 2. Añadir los dos puntos después de los dos primeros dígitos
+                value = value.substring(0, 2) + ':' + value.substring(2, 4);
+            }
+            
+            // 3. Limitar la longitud total a 5 caracteres (HH:MM)
+            e.target.value = value.substring(0, 5);
+        });
+    }
 
     if (toggleButton) {
         toggleButton.addEventListener('click', function() {
