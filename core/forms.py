@@ -20,23 +20,33 @@ class UpdateLogForm(forms.ModelForm):
         widgets = {
             'installation': forms.HiddenInput(),
             'message': forms.Textarea(attrs={
-                'rows': 4, 
+                'rows': 4,
                 'placeholder': 'Describa la novedad...',
                 'spellcheck': 'true',
                 'lang': 'es-LA'
             }),
-            # Añadimos un widget para que el input sea de tipo datetime-local
-            'manual_timestamp': forms.TimeInput(attrs={'type': 'time'}, format='%H:%M'),
+            # --- MODIFICACIÓN AQUÍ ---
+            # Cambiamos type='time' por type='text' y añadimos un patrón
+            'manual_timestamp': forms.TimeInput(attrs={
+                                    'type': 'text', # Evita validación de hora del navegador
+                                    'pattern': '[0-9]{2}:[0-9]{2}', # Sugiere el formato HH:MM
+                                    'placeholder': 'HH:MM'
+                                 }, format='%H:%M'),
+            # --- FIN DE MODIFICACIÓN ---
         }
         labels = {
-            'manual_timestamp': 'Hora y Fecha del Evento (Opcional)',
+            'manual_timestamp': 'Hora del Evento (Opcional - Formato HH:MM)', # Etiqueta actualizada
         }
+        # La función clean_manual_timestamp no necesita cambios por ahora
         def clean_manual_timestamp(self):
             timestamp_time = self.cleaned_data.get('manual_timestamp')
             if timestamp_time:
                 now_dt = timezone.localtime(timezone.now())
             # Combina la hora ingresada con la fecha actual
-                event_dt_today = timezone.make_aware(datetime.combine(now_dt.date(), timestamp_time))
+                try: # Añadido try-except por si la conversión falla
+                    event_dt_today = timezone.make_aware(datetime.datetime.combine(now_dt.date(), timestamp_time))
+                except ValueError:
+                     raise ValidationError("Formato de hora inválido. Use HH:MM.")
 
             # Si la hora ingresada es mayor que la hora actual (ej: 20:30 > 00:11)
             # asumimos que ocurrió el día anterior
@@ -46,13 +56,13 @@ class UpdateLogForm(forms.ModelForm):
                     event_dt = event_dt_today
 
             # Ahora comparamos el datetime completo
-            if event_dt > now_dt:
-                raise ValidationError("La fecha y hora del evento no pueden ser futuras.")
+                if event_dt > now_dt:
+                    raise ValidationError("La fecha y hora del evento no pueden ser futuras.")
 
             # Opcional: Limitar qué tan atrás puede ir la fecha/hora manual
             # Por ejemplo, no permitir eventos de más de 24 horas atrás
-            if now_dt - event_dt > timedelta(hours=24):
-                 raise ValidationError("No puedes registrar eventos de más de 24 horas de antigüedad.")
+                if now_dt - event_dt > timedelta(hours=24):
+                     raise ValidationError("No puedes registrar eventos de más de 24 horas de antigüedad.")
 
             return timestamp_time # Devolvemos solo la hora, como espera el TimeField
 # --- 👇 NUEVO FORMULARIO PARA EDICIÓN 👇 ---

@@ -38,7 +38,6 @@
             {{ update.created_at|date:"d/m H:i" }}
         {% endif %}
     </strong> {{ update.message }}
-    {% if update.is_edited %}<em style="font-size: 0.8em; color: #555;">(editado)</em>{% endif %}
 </p>
             {% endfor %}
         </div>
