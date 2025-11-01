@@ -26,7 +26,7 @@ from collections import OrderedDict
 import json
 from django.views.decorators.csrf import csrf_exempt 
 import re # Importar el módulo de expresiones regulares
-from django.db.models.functions import Coalesce
+from django.db.models.functions import Coalesce, Cast
 from django.db.models import TimeField
 
 from .models import (
@@ -142,86 +142,60 @@ def admin_dashboard(request):
     return render(request, 'admin_dashboard.html', context)
 
 # selfing/core/views.py
+# VISTA ACTUALIZADA
 @login_required
 @user_passes_test(is_supervisor)
 def review_and_send_novedades(request):
     """
-    Gestiona el envío de novedades, identificando correctamente los turnos
-    del ciclo, permitiendo seleccionar el turno específico para novedades manuales,
-    y ordenando correctamente todas las novedades usando anotaciones de BD.
+    Gestiona el envío de novedades con una lógica de ciclo de 24 horas
+    robusta y un ordenamiento cronológico corregido.
     """
-    start_of_cycle = None
-    end_of_cycle = None
-    cycle_shifts_qs = OperatorShift.objects.none() # Queryset vacío por defecto
-    shifts_in_cycle_pks = [] # Lista para almacenar los PKs de los turnos del ciclo
+    
+    # --- 1. LÓGICA DE CICLO MEJORADA ---
+    # Definimos el corte del "día operativo" (ej: 08:30 AM).
+    CUTOFF_TIME = time(8, 30)
 
-    # 1. Encontrar el último turno de noche finalizado (Define el FIN del ciclo)
-    last_night_shift = OperatorShift.objects.filter(
-        shift_type__name__icontains='noche',
-        actual_end_time__isnull=False
-    ).select_related('operator', 'shift_type').order_by('-actual_end_time').first()
+    ahora = timezone.now()
+    today_at_cutoff = ahora.replace(hour=CUTOFF_TIME.hour, minute=CUTOFF_TIME.minute, second=0, microsecond=0)
 
-    if not last_night_shift:
-        messages.info(request, "Aún no ha finalizado un ciclo de turnos (noche) para generar un reporte.")
+    # Determinamos el último ciclo de 24 horas completado.
+    if ahora.time() < CUTOFF_TIME:
+        # Si son antes de las 08:30 (ej: 7 AM), el ciclo terminó AYER a las 08:30.
+        end_of_cycle = today_at_cutoff - timedelta(days=1)
+    else:
+        # Si son después de las 08:30 (ej: 10 AM), el ciclo terminó HOY a las 08:30.
+        end_of_cycle = today_at_cutoff
+    
+    start_of_cycle = end_of_cycle - timedelta(days=1) # El ciclo dura 24 horas.
+
+    # Obtenemos TODOS los turnos que INICIARON dentro de ese ciclo de 24 horas.
+    # Esto puede ser 1, 2, 3, o los turnos que sean, sin errores si falta uno.
+    cycle_shifts_qs = OperatorShift.objects.filter(
+        actual_start_time__gte=start_of_cycle,
+        actual_start_time__lt=end_of_cycle
+    ).select_related('operator', 'shift_type').order_by('actual_start_time')
+
+    shifts_in_cycle_pks = list(cycle_shifts_qs.values_list('pk', flat=True))
+
+    if not cycle_shifts_qs.exists():
+        messages.info(request, "Aún no ha finalizado un ciclo de turnos para generar un reporte.")
         add_novedad_form = AdminUpdateLogForm(cycle_shifts=cycle_shifts_qs)
         return render(request, 'review_and_send.html', {'companies': None, 'add_novedad_form': add_novedad_form})
 
-    end_of_cycle = last_night_shift.actual_end_time
-    shifts_in_cycle_pks.append(last_night_shift.pk)
-
-    # 2. Encontrar turnos anteriores para definir el ciclo
-    shift_before_night = OperatorShift.objects.filter(
-        actual_end_time__isnull=False,
-        actual_end_time__lte=last_night_shift.actual_start_time
-    ).select_related('operator', 'shift_type').order_by('-actual_end_time').first()
-
-    if shift_before_night:
-        shifts_in_cycle_pks.append(shift_before_night.pk)
-        provisional_start_of_cycle = shift_before_night.actual_start_time
-        operational_date = shift_before_night.date
-        operational_weekday = operational_date.weekday()
-
-        if operational_weekday in [5, 6]: # Sábado o Domingo
-            shift_before_tarde = OperatorShift.objects.filter(
-                actual_end_time__isnull=False,
-                actual_end_time__lte=shift_before_night.actual_start_time
-            ).select_related('operator', 'shift_type').order_by('-actual_end_time').first()
-            if shift_before_tarde and shift_before_tarde.pk != shift_before_night.pk:
-                shifts_in_cycle_pks.append(shift_before_tarde.pk)
-                start_of_cycle = shift_before_tarde.actual_start_time
-            else:
-                start_of_cycle = provisional_start_of_cycle
-        else: # Día de semana
-            start_of_cycle = provisional_start_of_cycle
-    else: # Solo turno de noche
-        start_of_cycle = last_night_shift.actual_start_time
-
-    # 3. Construir QuerySet final y reconfirmar inicio de ciclo
-    cycle_shifts_qs = OperatorShift.objects.filter(
-        pk__in=list(set(shifts_in_cycle_pks))
-    ).select_related('operator', 'shift_type').order_by('actual_start_time')
-
-    if cycle_shifts_qs.exists():
-         first_shift_in_cycle = cycle_shifts_qs.first()
-         if start_of_cycle is None or first_shift_in_cycle.actual_start_time < start_of_cycle:
-              start_of_cycle = first_shift_in_cycle.actual_start_time
-    if start_of_cycle is None: # Fallback final
-         start_of_cycle = last_night_shift.actual_start_time if last_night_shift else timezone.now() - timedelta(hours=8)
-
-    # 4. Verificar si el ciclo ya está cerrado (sin cambios)
+    # Verificar si el ciclo ya está cerrado (sin cambios)
     next_shift_after_cycle = OperatorShift.objects.filter(
-        actual_start_time__gt=end_of_cycle
+        actual_start_time__gte=end_of_cycle
     ).order_by('actual_start_time').first()
 
     if next_shift_after_cycle and next_shift_after_cycle.actual_end_time is not None:
         messages.info(request, "El periodo para enviar el reporte del ciclo anterior ha finalizado.")
         add_novedad_form = AdminUpdateLogForm(cycle_shifts=OperatorShift.objects.none())
         return render(request, 'review_and_send.html', {'companies': None, 'add_novedad_form': add_novedad_form})
-
+    
     # Variable para el formulario que se pasará al template
     form_to_render = None
 
-    # --- LÓGICA POST ---
+    # --- 2. LÓGICA POST (Con la misma validación de turno) ---
     if request.method == 'POST':
         if 'action' in request.POST and request.POST['action'] == 'add_novedad':
             # Pasar cycle_shifts_qs para validación
@@ -231,26 +205,26 @@ def review_and_send_novedades(request):
                 if selected_shift and cycle_shifts_qs.filter(pk=selected_shift.pk).exists():
                     new_log = form.save(commit=False)
                     new_log.operator_shift = selected_shift
-                    new_log.save() # Guardar con created_at actual
-                    # Ya NO modificamos created_at
+                    new_log.save()
                     messages.success(request, f'Novedad agregada correctamente al turno de {selected_shift.operator.username} ({selected_shift.shift_type.name} - {selected_shift.date.strftime("%d/%m")}).')
                 else:
                     messages.error(request, 'Error: El turno seleccionado no pertenece al ciclo de reporte actual o no es válido.')
 
-                # Redirección
                 company_id_redirect = request.POST.get('company_id_for_redirect', '')
                 if company_id_redirect:
                     return redirect(f"{request.path}?company_id={company_id_redirect}")
                 return redirect('review_and_send_novedades')
             else:
                 messages.error(request, 'Hubo un error al agregar la novedad. Por favor, revisa los datos.')
-                form_to_render = form # Pasa el formulario con errores
+                form_to_render = form
+        
         elif 'confirm_send' in request.POST:
             company_id_form = request.POST.get('company_id')
             company = get_object_or_404(Company, id=company_id_form)
             selected_ids = request.POST.getlist('updates_to_send')
             observations = request.POST.get('observations', '')
 
+            # (Lógica de edición de mensajes sin cambios)
             with transaction.atomic():
                  for update_id in selected_ids:
                     new_message = request.POST.get(f'message_{update_id}')
@@ -268,29 +242,33 @@ def review_and_send_novedades(request):
                             messages.warning(request, f"Se intentó editar una novedad (ID: {update_id}) que ya no existe.")
                             continue
 
-            # --- ANOTACIÓN Y ORDENAMIENTO PARA CORREO ---
+            # --- 3. LÓGICA DE ORDENAMIENTO CORREGIDA (Para el Email) ---
             updates_to_send_in_email = UpdateLog.objects.filter(id__in=selected_ids).select_related(
-                'operator_shift__shift_type', 'installation' # Asegura tener shift_type e installation
+                'operator_shift__shift_type', 'installation'
             ).annotate(
-                # Hora efectiva (manual o de creación)
+                # 1. Primero, determina la HORA efectiva (manual o automática)
                 effective_time=Coalesce('manual_timestamp', 'created_at__time', output_field=TimeField()),
-                # Fecha efectiva (fecha del turno, ajustada si cruza medianoche y aplica)
+            ).annotate(
+                # 2. Luego, usa esa HORA para determinar la FECHA efectiva
                 effective_date=Case(
+                    # Si el turno cruza medianoche (ej: 23:00-07:00)
                     When(
-                        manual_timestamp__isnull=False,
                         operator_shift__shift_type__end_time__lt=F('operator_shift__shift_type__start_time'),
-                        manual_timestamp__lt=F('operator_shift__shift_type__start_time'),
+                        # Y la hora efectiva es del día siguiente (ej: 01:00 AM < 23:00 PM)
+                        effective_time__lt=F('operator_shift__shift_type__start_time'),
+                        # Entonces, la fecha efectiva es la fecha del turno + 1 día
                         then=ExpressionWrapper(F('operator_shift__date') + timedelta(days=1), output_field=DateField()),
                     ),
+                    # Si no, la fecha efectiva es simplemente la fecha del turno
                     default=F('operator_shift__date'),
                     output_field=DateField()
                 )
             ).order_by(
-                'installation__name',
-                'effective_date',
-                'effective_time'
+                'installation__name', # Agrupa por instalación
+                'effective_date',     # Ordena por la fecha CALCULADA
+                'effective_time'      # Ordena por la hora efectiva DENTRO de esa fecha
             )
-            # --- FIN ANOTACIÓN Y ORDENAMIENTO ---
+            # --- FIN DE LA LÓGICA DE ORDENAMIENTO ---
 
             email_string = company.email or ""
             recipient_list = [email.strip() for email in email_string.split(',') if email.strip()]
@@ -320,6 +298,7 @@ def review_and_send_novedades(request):
                 messages.warning(request, f"{company.name} no tiene correo configurado.")
 
             return redirect('review_and_send_novedades')
+    
     # --- FIN LÓGICA POST ---
 
     # Inicializa el formulario para GET si no viene de un POST con error
@@ -332,7 +311,7 @@ def review_and_send_novedades(request):
     novedades_pendientes = None
     companies_with_pending_updates = Company.objects.none()
 
-    if start_of_cycle and end_of_cycle and cycle_shifts_qs.exists():
+    if cycle_shifts_qs.exists():
         # Query base (sin ordenar aún)
         relevant_updates_base = UpdateLog.objects.filter(
             is_sent=False,
@@ -340,26 +319,26 @@ def review_and_send_novedades(request):
         ).select_related(
             'installation__company',
             'operator_shift__operator',
-            'operator_shift__shift_type' # Necesario para la anotación
+            'operator_shift__shift_type'
         )
 
-        # --- INICIO ANOTACIÓN PARA ORDENAMIENTO ---
+        # --- 3. LÓGICA DE ORDENAMIENTO CORREGIDA (Para la Vista de Revisión) ---
         relevant_updates_annotated = relevant_updates_base.annotate(
-            # 1. Hora efectiva (manual o de creación)
+            # 1. Primero, determina la HORA efectiva (manual o automática)
             effective_time=Coalesce('manual_timestamp', 'created_at__time', output_field=TimeField()),
-            # 2. Fecha efectiva (fecha del turno, ajustada si cruza medianoche y aplica)
+        ).annotate(
+            # 2. Luego, usa esa HORA para determinar la FECHA efectiva
             effective_date=Case(
                 When(
-                    manual_timestamp__isnull=False,
                     operator_shift__shift_type__end_time__lt=F('operator_shift__shift_type__start_time'),
-                    manual_timestamp__lt=F('operator_shift__shift_type__start_time'),
+                    effective_time__lt=F('operator_shift__shift_type__start_time'),
                     then=ExpressionWrapper(F('operator_shift__date') + timedelta(days=1), output_field=DateField()),
                 ),
                 default=F('operator_shift__date'),
                 output_field=DateField()
             )
         )
-        # --- FIN ANOTACIÓN ---
+        # --- FIN DE LA LÓGICA DE ORDENAMIENTO ---
 
         # Calcula compañías con pendientes
         company_ids_with_pending = relevant_updates_base.values_list('installation__company_id', flat=True).distinct()
@@ -378,7 +357,7 @@ def review_and_send_novedades(request):
                     # Filtra el queryset ANOTADO y ordena usando los campos anotados
                     novedades_pendientes = relevant_updates_annotated.filter(
                         installation__company=selected_company
-                    ).order_by( # <-- ORDENAMIENTO USANDO CAMPOS ANOTADOS
+                    ).order_by(
                         'installation__name', # Agrupa por instalación
                         'effective_date',     # Ordena por la fecha CALCULADA
                         'effective_time'      # Ordena por la hora efectiva DENTRO de esa fecha
@@ -394,7 +373,7 @@ def review_and_send_novedades(request):
         'novedades_pendientes': novedades_pendientes,
         'cycle_end': end_of_cycle,
         'start_of_cycle': start_of_cycle,
-        'add_novedad_form': form_to_render, # Pasar la instancia correcta
+        'add_novedad_form': form_to_render,
     }
     return render(request, 'review_and_send.html', context)
 
