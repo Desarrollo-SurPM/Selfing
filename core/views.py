@@ -251,15 +251,18 @@ def review_and_send_novedades(request):
             ).annotate(
                 # 2. Luego, usa esa HORA para determinar la FECHA efectiva
                 effective_date=Case(
-                    # Si el turno cruza medianoche (ej: 23:00-07:00)
-                    When(
-                        operator_shift__shift_type__end_time__lt=F('operator_shift__shift_type__start_time'),
-                        # Y la hora efectiva es del día siguiente (ej: 01:00 AM < 23:00 PM)
-                        effective_time__lt=F('operator_shift__shift_type__start_time'),
-                        # Entonces, la fecha efectiva es la fecha del turno + 1 día
+                   When(
+                        # Condición 1: Es un turno nocturno (fin < inicio)
+                        Q(operator_shift__shift_type__end_time__lt=F('operator_shift__shift_type__start_time')) &
+                        # Condición 2: La hora del evento es "menor" que la hora de inicio
+                        Q(effective_time__lt=F('operator_shift__shift_type__start_time')) &
+                        # Condición 3 (NUEVA): Y la hora del evento es también menor/igual a la hora de FIN
+                        # (Esto distingue 01:00 AM de 16:00 PM)
+                        Q(effective_time__lte=F('operator_shift__shift_type__end_time')),
+                        # Entonces:
                         then=ExpressionWrapper(F('operator_shift__date') + timedelta(days=1), output_field=DateField()),
                     ),
-                    # Si no, la fecha efectiva es simplemente la fecha del turno
+                    
                     default=F('operator_shift__date'),
                     output_field=DateField()
                 )
@@ -330,8 +333,13 @@ def review_and_send_novedades(request):
             # 2. Luego, usa esa HORA para determinar la FECHA efectiva
             effective_date=Case(
                 When(
-                    operator_shift__shift_type__end_time__lt=F('operator_shift__shift_type__start_time'),
-                    effective_time__lt=F('operator_shift__shift_type__start_time'),
+                    # Condición 1: Es un turno nocturno (fin < inicio)
+                    Q(operator_shift__shift_type__end_time__lt=F('operator_shift__shift_type__start_time')) &
+                    # Condición 2: La hora del evento es "menor" que la hora de inicio
+                    Q(effective_time__lt=F('operator_shift__shift_type__start_time')) &
+                    # Condición 3 (NUEVA): Y la hora del evento es también menor/igual a la hora de FIN
+                    Q(effective_time__lte=F('operator_shift__shift_type__end_time')),
+                    # Entonces:
                     then=ExpressionWrapper(F('operator_shift__date') + timedelta(days=1), output_field=DateField()),
                 ),
                 default=F('operator_shift__date'),

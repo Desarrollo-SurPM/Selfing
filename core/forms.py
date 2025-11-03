@@ -175,32 +175,38 @@ class AdminUpdateLogForm(forms.ModelForm):
                  self.fields['target_shift'].initial = self.instance.operator_shift_id
 
     # No olvides incluir la validación de clean_manual_timestamp de respuestas anteriores
-    def clean_manual_timestamp(self):
-        timestamp_time = self.cleaned_data.get('manual_timestamp')
-        if timestamp_time:
-            now_dt = timezone.localtime(timezone.now())
+    def clean(self):
+        cleaned_data = super().clean()
+        timestamp_time = cleaned_data.get('manual_timestamp')
+        shift = cleaned_data.get('target_shift')
+
+        if timestamp_time and shift:
+            # Si tenemos la hora y el turno, validamos con la fecha del turno
+            shift_date = shift.date
+            
             try:
-                naive_event_dt_today = datetime.datetime.combine(now_dt.date(), timestamp_time)
-                # *** Usa make_aware en lugar de localize ***
-                event_dt_today = timezone.make_aware(naive_event_dt_today)
+                # Combinamos la fecha del TURNO con la hora manual
+                event_dt_base = timezone.make_aware(datetime.datetime.combine(shift_date, timestamp_time))
             except ValueError:
-                 raise ValidationError("Hora inválida.")
+                 raise ValidationError("Formato de hora inválido. Use HH:MM.")
 
-            # Asume día anterior si la hora es mayor que la actual (pasó medianoche)
-            if timestamp_time > now_dt.time():
-                event_dt = event_dt_today - timedelta(days=1)
-            else:
-                event_dt = event_dt_today
+            event_dt = event_dt_base # Asumimos que es el mismo día
+            now_dt = timezone.localtime(timezone.now())
 
-            # Compara datetime completo
+            # Lógica de cruce de medianoche (basada en el turno)
+            if shift.shift_type.end_time < shift.shift_type.start_time and \
+               timestamp_time < shift.shift_type.start_time and \
+               timestamp_time <= shift.shift_type.end_time:
+                # El evento ocurrió en la madrugada del día siguiente al de la fecha del turno
+                event_dt = event_dt_base + timedelta(days=1)
+            
+            # Validación final: no puede ser en el futuro
             if event_dt > now_dt:
-                raise ValidationError("La fecha y hora del evento no pueden ser futuras.")
+                raise ValidationError(
+                    "La fecha y hora del evento no pueden ser futuras."
+                )
 
-            # Límite opcional (ej. 24 horas)
-            if now_dt - event_dt > timedelta(hours=24):
-                 raise ValidationError("No puedes registrar eventos de más de 24 horas de antigüedad.")
-
-        return timestamp_time # Devuelve solo la hora para el TimeField
+        return cleaned_data
 class VirtualRoundCompletionForm(forms.ModelForm):
     checked_installations = forms.ModelMultipleChoiceField(
         queryset=Installation.objects.all(),
