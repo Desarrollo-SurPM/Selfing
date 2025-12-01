@@ -41,10 +41,22 @@ class OperatorShift(models.Model):
     date = models.DateField()
     actual_start_time = models.DateTimeField(null=True, blank=True)
     actual_end_time = models.DateTimeField(null=True, blank=True)
+    
+    # --- NUEVO CAMPO ---
+    monitored_companies = models.ManyToManyField(
+        Company, 
+        blank=True, 
+        related_name='assigned_shifts',
+        verbose_name="Empresas Específicas",
+        help_text="Seleccione solo si el turno es restringido (ej: Mañana fin de semana). Deje vacío para monitorear TODAS."
+    )
+    # -------------------
+
     class Meta:
         unique_together = ('operator', 'date')
+    
     def __str__(self):
-        return f"Turno de {self.operator.username} el {self.date.strftime('%Y-%m-%d')} ({self.shift_type.name})"
+        return f"Turno de {self.operator.username} ({self.date})"
 
 class ChecklistItem(models.Model):
     """

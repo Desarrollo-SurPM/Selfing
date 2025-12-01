@@ -11,10 +11,12 @@ from .utils import link_callback
 from django.core.mail import send_mail
 from django.template.loader import render_to_string
 from django.db.models import (
-    Q, Min, Max, Count, TimeField, Case, When, DateTimeField, F, Value, ExpressionWrapper, DateField
+    Q, Min, Max, Count, TimeField, Case, When, DateTimeField, F, Value, ExpressionWrapper, DateField, Avg
 )
 from collections import defaultdict
 from django.contrib import messages
+from django.db.models.functions import ExtractHour, ExtractWeekDay, ExtractMonth
+import calendar
 from io import BytesIO
 from django.db import transaction
 from django.core.files.base import ContentFile
@@ -58,90 +60,103 @@ def home(request):
 @login_required
 @user_passes_test(is_supervisor)
 def admin_dashboard(request):
-    """
-    Dashboard del administrador con lógica de ciclo operativo corregida
-    para mostrar datos desde el último inicio de ciclo (normalmente 08:30 AM).
-    """
     ahora = timezone.now()
     
-    # --- INICIO DE LA LÓGICA CORREGIDA ---
-    # Se determina el inicio del "día operativo" actual. El corte es a las 08:30.
+    # --- LÓGICA DE CICLO OPERATIVO (Mantener igual) ---
     today_at_8_30 = ahora.replace(hour=8, minute=30, second=0, microsecond=0)
-
     if ahora.time() < time(8, 30):
-        # Si son antes de las 08:30, el ciclo actual comenzó AYER a las 08:30.
         start_of_operational_day = today_at_8_30 - timedelta(days=1)
     else:
-        # Si son después de las 08:30, el ciclo actual comenzó HOY a las 08:30.
         start_of_operational_day = today_at_8_30
-    # --- FIN DE LA LÓGICA CORREGIDA ---
-
-    # 1. Novedades registradas desde el inicio del ciclo operativo.
-    novedades_hoy = UpdateLog.objects.filter(
-        created_at__gte=start_of_operational_day
-    ).count()
     
-    # 2. Reportes finalizados desde el inicio del ciclo operativo.
-    reportes_finalizados_count = TurnReport.objects.filter(
-        is_signed=True,
-        signed_at__gte=start_of_operational_day
-    ).count()
-    
-    # 3. Operadores actualmente en turno (esta lógica está bien).
-    operadores_en_turno = OperatorShift.objects.filter(
-        actual_start_time__isnull=False,
-        actual_end_time__isnull=True
-    ).count()
+    # Rangos de tiempo para el gráfico de Ritmo
+    start_of_today = ahora.replace(hour=0, minute=0, second=0, microsecond=0)
+    start_of_week = ahora - timedelta(days=7)   # Últimos 7 días
+    start_of_month = ahora - timedelta(days=30) # Últimos 30 días
 
-    # El resto de las consultas se mantienen igual.
+    # --- CONTADORES PRINCIPALES (Mantener igual) ---
+    novedades_hoy = UpdateLog.objects.filter(created_at__gte=start_of_operational_day).count()
+    reportes_finalizados_count = TurnReport.objects.filter(is_signed=True, signed_at__gte=start_of_operational_day).count()
+    operadores_en_turno = OperatorShift.objects.filter(actual_start_time__isnull=False, actual_end_time__isnull=True).count()
     servicios_monitoreados_activos = MonitoredService.objects.filter(is_active=True).count()
-    traceability_logs = TraceabilityLog.objects.select_related('user').all().order_by('-timestamp')[:6]
     
-    # La tabla de "Novedades del Día" también usará el nuevo rango de tiempo.
+    # --- LISTAS Y TABLAS ---
+    traceability_logs = TraceabilityLog.objects.select_related('user').all().order_by('-timestamp')[:6]
     reports = UpdateLog.objects.filter(created_at__gte=start_of_operational_day).select_related(
         'operator_shift__operator', 'installation__company'
     ).order_by('-created_at')
+    
+    # Correos pendientes (necesario para el panel lateral)
+    pending_emails = Email.objects.filter(status='pending').select_related('company', 'operator').order_by('-created_at')[:5]
+
+    # ================= DATOS PARA GRÁFICOS =================
+
+    # 1. TIEMPO MEDIO DE RONDAS (En Minutos)
+    round_stats = VirtualRoundLog.objects.filter(
+        start_time__gte=start_of_month,
+        duration_seconds__lt=3600  # Ignorar anomalías > 1 hora
+    ).values('operator_shift__operator__username').annotate(
+        avg_duration=Avg('duration_seconds')
+    ).order_by('avg_duration')
+
+    # Convertir a minutos (dividido por 60) y redondear a 1 decimal
+    r_labels = [x['operator_shift__operator__username'] for x in round_stats]
+    r_data = [round((x['avg_duration'] or 0) / 60, 1) for x in round_stats]
+
+    # 2. RITMO DE NOVEDADES (Patrón de 24 Horas)
+    
+    def get_hourly_pattern(start_date):
+        """Helper para obtener distribución por hora desde una fecha dada."""
+        # Agrupar por hora (0-23)
+        qs = UpdateLog.objects.filter(created_at__gte=start_date).annotate(
+            hour=ExtractHour('created_at')
+        ).values('hour').annotate(count=Count('id')).order_by('hour')
+        
+        # Convertir a diccionario para búsqueda rápida {hora: cantidad}
+        data_dict = {x['hour']: x['count'] for x in qs}
+        
+        # Generar lista ordenada de 0 a 23, rellenando con 0 si no hay datos
+        return [data_dict.get(h, 0) for h in range(24)]
+
+    # Obtener los 3 sets de datos
+    pattern_today = get_hourly_pattern(start_of_today)
+    pattern_week = get_hourly_pattern(start_of_week)
+    pattern_month = get_hourly_pattern(start_of_month)
+    
+    # Etiquetas del eje X (00:00 a 23:00)
+    hours_labels = [f"{h:02d}:00" for h in range(24)]
+
+    # 3. GRÁFICO EXTRA: CARGA POR EMPRESA (Top 5)
+    company_stats = UpdateLog.objects.filter(created_at__gte=start_of_month).values(
+        'installation__company__name'
+    ).annotate(total=Count('id')).order_by('-total')[:5]
 
     context = {
+        # Contadores
         'novedades_hoy': novedades_hoy,
         'reportes_finalizados_count': reportes_finalizados_count,
         'operadores_en_turno': operadores_en_turno,
         'servicios_monitoreados_activos': servicios_monitoreados_activos,
         'reports': reports,
         'traceability_logs': traceability_logs,
+        'pending_emails': pending_emails, 
+
+        # Datos Gráfico Rondas (Minutos)
+        'chart_rounds_labels': json.dumps(r_labels),
+        'chart_rounds_data': json.dumps(r_data),
+
+        # Datos Gráfico Ritmo (Eje X Fijo: Horas)
+        'chart_rhythm_labels': json.dumps(hours_labels),
+        'chart_rhythm_today': json.dumps(pattern_today),
+        'chart_rhythm_week': json.dumps(pattern_week),
+        'chart_rhythm_month': json.dumps(pattern_month),
+
+        # Datos Gráfico Empresas
+        'chart_comp_labels': json.dumps([x['installation__company__name'] for x in company_stats]),
+        'chart_comp_data': json.dumps([x['total'] for x in company_stats]),
     }
     return render(request, 'admin_dashboard.html', context)
 
-    today = timezone.now().date()
-    
-    
-    operadores_en_turno = OperatorShift.objects.filter(
-        actual_start_time__isnull=False,
-        actual_end_time__isnull=True
-    ).count()
-
-    novedades_hoy = UpdateLog.objects.filter(created_at__date=today).count()
-    
-    # --- CAMBIO: Se reemplaza correos pendientes por reportes finalizados ---
-    reportes_finalizados_count = TurnReport.objects.filter(is_signed=True, signed_at__date=today).count()
-    
-    servicios_monitoreados_activos = MonitoredService.objects.filter(is_active=True).count()
-    traceability_logs = TraceabilityLog.objects.select_related('user').all().order_by('-timestamp')[:6]
-    reports = UpdateLog.objects.filter(created_at__date=today).select_related(
-        'operator_shift__operator', 'installation__company'
-    ).order_by('-created_at')
-
-    context = {
-        'novedades_hoy': novedades_hoy,
-        'reportes_finalizados_count': reportes_finalizados_count, # Nuevo dato para la plantilla
-        'operadores_en_turno': operadores_en_turno,
-        'servicios_monitoreados_activos': servicios_monitoreados_activos,
-        'reports': reports,
-        'traceability_logs': traceability_logs,
-    }
-    return render(request, 'admin_dashboard.html', context)
-
-# selfing/core/views.py
 # VISTA ACTUALIZADA
 @login_required
 @user_passes_test(is_supervisor)
@@ -659,6 +674,21 @@ def delete_assigned_shift(request, shift_id):
     if request.method == 'POST': shift.delete(); return redirect('manage_shifts')
     return render(request, 'delete_assigned_shift_confirm.html', {'assigned_shift': shift})
 
+def get_operator_companies(operator_user):
+    """
+    Devuelve el QuerySet de empresas que el operador debe ver en su turno actual.
+    """
+    active_shift = get_active_shift(operator_user) # Tu función actual en views.py
+    
+    if not active_shift:
+        return Company.objects.none()
+    
+    # Si tiene empresas específicas asignadas, devolvemos solo esas
+    if active_shift.monitored_companies.exists():
+        return active_shift.monitored_companies.all()
+    
+    # Si no, devolvemos todas
+    return Company.objects.all()
 # --- VISTAS PARA GESTIONAR LOS TIPOS DE TURNO ---
 
 @login_required
@@ -786,14 +816,13 @@ def start_shift(request):
     Vista corregida que maneja la ACCIÓN de iniciar un turno.
     """
     if request.method == 'POST':
-        # Busca el turno asignado más próximo que aún no ha comenzado
-        shift_to_start = OperatorShift.objects.select_related('shift_type').filter(
-            operator=request.user,
-            actual_start_time__isnull=True,
-            actual_end_time__isnull=True
-        ).order_by('date', 'shift_type__start_time').first()
+        # 1. Usar la lógica centralizada para encontrar el turno correcto.
+        #    get_active_shift() ya busca turnos pendientes de hoy/ayer.
+        shift_to_start = get_active_shift(request.user)
 
-        if shift_to_start:
+        # 2. Validar el turno encontrado
+        if shift_to_start and shift_to_start.actual_start_time is None:
+            # 3. Es el turno pendiente correcto, ¡iniciarlo!
             shift_to_start.actual_start_time = timezone.now()
             shift_to_start.save()
             
@@ -804,28 +833,16 @@ def start_shift(request):
             )
             
             messages.success(request, f"Turno '{shift_to_start.shift_type.name}' iniciado correctamente.")
+        
+        elif shift_to_start and shift_to_start.actual_start_time is not None:
+            # 4. El turno ya estaba iniciado (prevención de doble-clic o error)
+            messages.warning(request, "El turno ya se encuentra iniciado.")
+        
         else:
+            # 5. get_active_shift no encontró nada
             messages.error(request, "No se pudo encontrar un turno pendiente para iniciar.")
 
     return redirect('operator_dashboard')
-
-
-    if request.method == 'POST':
-        today = timezone.now().date()
-        # Busca un turno asignado para hoy que aún no haya comenzado
-        active_shift = OperatorShift.objects.filter(
-            operator=request.user,
-            date=today,
-            actual_start_time__isnull=True
-        ).first()
-
-        if active_shift:
-            active_shift.actual_start_time = timezone.now()
-            active_shift.save()
-            TraceabilityLog.objects.create(user=request.user, action="Inició turno.")
-
-    return redirect('operator_dashboard')
-
 
 @login_required
 def operator_dashboard(request):
@@ -840,8 +857,7 @@ def operator_dashboard(request):
         'active_shift': active_shift,
         'active_notes': active_notes,
         'shift_note_form': shift_note_form,
-        }
-    
+    }
 
     # Si el turno ya ha sido iniciado, calculamos todo el progreso y las tareas.
     if active_shift and active_shift.actual_start_time:
@@ -849,21 +865,39 @@ def operator_dashboard(request):
         completed_tasks_count = 0
         total_tasks = 2 
         
-        # 1. Lógica de Progreso
+        # 1. Lógica de Progreso - RONDAS
         total_rondas_requeridas = 7
         rondas_completadas = VirtualRoundLog.objects.filter(operator_shift=active_shift).count()
         progress_tasks['rondas'] = {'completed': (rondas_completadas >= total_rondas_requeridas), 'text': f"Rondas ({rondas_completadas}/{total_rondas_requeridas})"}
         if progress_tasks['rondas']['completed']: completed_tasks_count += 1
 
-        empresas_con_instalaciones = Company.objects.filter(installations__isnull=False).distinct()
-        ids_empresas_con_log = UpdateLog.objects.filter(operator_shift=active_shift).values_list('installation__company_id', flat=True).distinct()
-        progress_tasks['bitacora'] = {'completed': (len(ids_empresas_con_log) >= empresas_con_instalaciones.count()), 'text': f"Bitácora ({len(ids_empresas_con_log)}/{empresas_con_instalaciones.count()})"}
-        if progress_tasks['bitacora']['completed']: completed_tasks_count += 1
+        # --- MODIFICACIÓN: BITÁCORA DINÁMICA ---
+        # Determinamos qué empresas debe monitorear este turno específico
+        if active_shift.monitored_companies.exists():
+            # Si hay empresas específicas seleccionadas en el turno
+            empresas_objetivo = active_shift.monitored_companies.filter(installations__isnull=False).distinct()
+        else:
+            # Si está vacío, son TODAS las empresas
+            empresas_objetivo = Company.objects.filter(installations__isnull=False).distinct()
+            
+        # Contamos en cuántas de esas empresas objetivo ha escrito novedades
+        ids_empresas_con_log = UpdateLog.objects.filter(
+            operator_shift=active_shift,
+            installation__company__in=empresas_objetivo # Filtramos solo logs de las empresas objetivo
+        ).values_list('installation__company_id', flat=True).distinct()
         
+        # Calculamos el progreso basado en las empresas objetivo
+        progress_tasks['bitacora'] = {
+            'completed': (len(ids_empresas_con_log) >= empresas_objetivo.count()), 
+            'text': f"Bitácora ({len(ids_empresas_con_log)}/{empresas_objetivo.count()})"
+        }
+        if progress_tasks['bitacora']['completed']: completed_tasks_count += 1
+        # --- FIN MODIFICACIÓN ---
         
         context['progress_percentage'] = int((completed_tasks_count / total_tasks) * 100) if total_tasks > 0 else 0
         context['progress_tasks'] = progress_tasks
         
+        # ... (El resto de la vista, Lógica de Alarma, Logs, Timer, se mantiene igual) ...
         # 2. Lógica de Alarma
         applicable_items = get_applicable_checklist_items(active_shift)
         completed_in_shift_ids = ChecklistLog.objects.filter(operator_shift=active_shift).values_list('item_id', flat=True)
@@ -897,18 +931,12 @@ def operator_dashboard(request):
         
         context['active_round_id'] = request.session.get('active_round_id')
 
-
-    # --- 👇 INICIO DEL NUEVO BLOQUE 👇 ---
-        
-        # --- 👇 INICIO DEL BLOQUE CORREGIDO 👇 ---
-        
         # Lógica para el nuevo temporizador de rondas con reinicio a los 30 minutos
         round_completed_this_cycle = False
         last_round = VirtualRoundLog.objects.filter(operator_shift=active_shift).order_by('-start_time').first()
         
         if last_round:
             now = timezone.now()
-            
             # Determinar el inicio del ciclo actual (ej: 16:30, 17:30)
             if now.minute >= 30:
                 start_of_current_cycle = now.replace(minute=30, second=0, microsecond=0)
@@ -919,10 +947,8 @@ def operator_dashboard(request):
             if last_round.start_time >= start_of_current_cycle:
                 round_completed_this_cycle = True
         
-        # Cambiamos el nombre de la variable para mayor claridad
         context['round_completed_this_cycle'] = round_completed_this_cycle
         context['shift_start_time_iso'] = active_shift.actual_start_time.isoformat()
-        # --- 👆 FIN DEL BLOQUE CORREGIDO 👆 ---
     
     return render(request, 'operator_dashboard.html', context)
 
@@ -1165,62 +1191,43 @@ def update_log_view(request):
         if form.is_valid():
             new_log = form.save(commit=False)
             new_log.operator_shift = active_shift
+            
+            # --- VALIDACIÓN DE SEGURIDAD EXTRA ---
+            # Asegurarse que no estén intentando guardar en una empresa no permitida (hackeando el HTML)
+            if active_shift.monitored_companies.exists():
+                company = new_log.installation.company
+                if not active_shift.monitored_companies.filter(id=company.id).exists():
+                    messages.error(request, "No tienes permiso para registrar novedades en esta empresa durante este turno.")
+                    return redirect('update_log')
+            # -------------------------------------
+
             new_log.save()
             messages.success(request, 'Novedad registrada con éxito en la bitácora.')
             return redirect('update_log')
         else:
-            # Si el formulario no es válido, mostramos los errores.
             messages.error(request, 'Hubo un error al guardar la novedad. Por favor, revisa los datos.')
 
     # 3. Preparamos los datos para mostrar la página por primera vez (GET).
     form = UpdateLogForm()
     
-    # Esta es la línea clave que faltaba:
-    # Obtenemos todas las empresas y le decimos a Django que también cargue
-    # todas sus instalaciones relacionadas en una sola consulta eficiente.
-    companies_with_installations = Company.objects.prefetch_related('installations')
+    # --- MODIFICACIÓN: FILTRAR EMPRESAS ---
+    if active_shift.monitored_companies.exists():
+        # Si el turno tiene restricciones, solo traemos esas empresas
+        companies_qs = active_shift.monitored_companies.all()
+    else:
+        # Si no, traemos todas
+        companies_qs = Company.objects.all()
+        
+    # Usamos prefetch_related sobre el queryset filtrado
+    companies_with_installations = companies_qs.prefetch_related('installations')
+    # --- FIN MODIFICACIÓN ---
 
     context = {
         'form': form,
-        'companies': companies_with_installations # Le pasamos las empresas a tu plantilla
+        'companies': companies_with_installations 
     }
     
     return render(request, 'update_log.html', context)
-    """
-    Vista completa y funcional para registrar una novedad en la bitácora.
-    """
-    # 1. Usamos la función robusta para obtener el turno activo.
-    active_shift = get_active_shift(request.user)
-
-    # 2. Validamos que el turno exista y que ya haya comenzado.
-    #    Si no, redirigimos con un mensaje de error.
-    if not active_shift or not active_shift.actual_start_time:
-        messages.error(request, "Debes iniciar un turno activo para poder registrar novedades.")
-        return redirect('operator_dashboard')
-
-    # 3. Manejamos el envío del formulario (petición POST).
-    if request.method == 'POST':
-        form = UpdateLogForm(request.POST)
-        if form.is_valid():
-            # Creamos la entrada pero no la guardamos aún...
-            new_log = form.save(commit=False)
-            # ...porque necesitamos añadirle el turno activo del operador.
-            new_log.operator_shift = active_shift
-            new_log.save() # Ahora sí la guardamos.
-            
-            messages.success(request, 'Novedad registrada con éxito.')
-            return redirect('operator_dashboard') # Redirigimos al panel.
-    else:
-        # 4. Si es la primera vez que se carga la página (petición GET),
-        #    creamos un formulario vacío.
-        form = UpdateLogForm()
-
-    # 5. Preparamos el contexto con el formulario y renderizamos la plantilla.
-    context = {
-        'form': form
-    }
-    return render(request, 'update_log.html', context)
-
 
 @login_required
 def checklist_view(request):
@@ -1324,7 +1331,6 @@ def checklist_view(request):
     return render(request, 'checklist.html', context)
 
 
-
 # Flujo de Rondas Virtuales
 @login_required
 def end_turn_preview(request):
@@ -1333,7 +1339,7 @@ def end_turn_preview(request):
         messages.error(request, "No tienes un turno activo o iniciado.")
         return redirect('operator_dashboard')
 
-    # --- Lógica de validación (sin cambios) ---
+    # --- Lógica de validación ---
     validation_errors = []
     total_rondas_requeridas = 7
     rondas_completadas = VirtualRoundLog.objects.filter(operator_shift=active_shift).count()
@@ -1341,11 +1347,22 @@ def end_turn_preview(request):
         faltantes = total_rondas_requeridas - rondas_completadas
         validation_errors.append(f"Faltan {faltantes} rondas virtuales por completar.")
 
-    empresas_con_instalaciones = Company.objects.filter(installations__isnull=False).distinct()
+    # --- MODIFICACIÓN: VALIDACIÓN DINÁMICA DE EMPRESAS ---
+    # 1. Definir qué empresas se requieren
+    if active_shift.monitored_companies.exists():
+        empresas_requeridas = active_shift.monitored_companies.filter(installations__isnull=False).distinct()
+    else:
+        empresas_requeridas = Company.objects.filter(installations__isnull=False).distinct()
+
+    # 2. Obtener empresas donde SÍ se escribió
     ids_empresas_con_log = UpdateLog.objects.filter(operator_shift=active_shift).values_list('installation__company_id', flat=True).distinct()
-    empresas_faltantes_bitacora = [c.name for c in empresas_con_instalaciones if c.id not in ids_empresas_con_log]
+    
+    # 3. Comparar requeridas vs escritas
+    empresas_faltantes_bitacora = [c.name for c in empresas_requeridas if c.id not in ids_empresas_con_log]
+    
     if empresas_faltantes_bitacora:
         validation_errors.append(f"Falta registrar en bitácora para: {', '.join(empresas_faltantes_bitacora)}.")
+    # --- FIN MODIFICACIÓN ---
     
     if validation_errors:
         full_error_message = "No puedes finalizar el turno. Tareas pendientes: " + " ".join(validation_errors)
@@ -1353,14 +1370,13 @@ def end_turn_preview(request):
         return redirect('operator_dashboard')
 
     end_time = timezone.now()
+    # ... (El resto de la vista se mantiene igual: calculo de duración, generación de PDF, etc.) ...
     duration_timedelta = end_time - active_shift.actual_start_time
     total_seconds = int(duration_timedelta.total_seconds())
     hours = total_seconds // 3600
     minutes = (total_seconds % 3600) // 60
     formatted_duration = f"{hours}h {minutes}m"
 
-    # --- INICIO DE LA LÓGICA DE ORDENACIÓN DEL CHECKLIST ---
-    
     # 1. Obtenemos todos los logs del checklist para el turno.
     completed_checklist_qs = ChecklistLog.objects.filter(
         operator_shift=active_shift
@@ -1377,15 +1393,12 @@ def end_turn_preview(request):
     # 3. Creamos un diccionario ordenado para mantener la secuencia.
     checklist_by_phase = OrderedDict()
     for phase_key in phase_order:
-        # Filtramos los logs que corresponden a la fase actual del bucle
         logs_for_phase = completed_checklist_qs.filter(item__phase=phase_key)
-        # Si hay logs para esta fase, los añadimos al diccionario
         if logs_for_phase.exists():
             checklist_by_phase[phase_key] = {
                 'display_name': phase_display_names.get(phase_key),
                 'logs': logs_for_phase
             }
-    # --- FIN DE LA LÓGICA DE ORDENACIÓN ---
 
     updates_log = UpdateLog.objects.filter(
         operator_shift=active_shift
@@ -1399,22 +1412,19 @@ def end_turn_preview(request):
         'end_time': end_time,
         'duration': formatted_duration,
         'current_time': timezone.now(),
-        'checklist_by_phase': checklist_by_phase, # Pasamos el nuevo diccionario ordenado
+        'checklist_by_phase': checklist_by_phase,
         'updates_log': updates_log,
         'rondas_virtuales': rondas_virtuales,
     }
 
-    # El resto de la lógica para generar el PDF se mantiene igual
     template = get_template('turn_report_pdf.html')
     html = template.render(context)
     result = BytesIO()
-     # --- 👇 MODIFICA ESTA SECCIÓN 👇 ---
     pdf = pisa.pisaDocument(
         BytesIO(html.encode("UTF-8")),
         result,
-        link_callback=link_callback  # <-- AÑADE ESTE ARGUMENTO
+        link_callback=link_callback 
     )
-    # --- 👆 FIN DE LA MODIFICACIÓN 👆 ---
 
     if not pdf.err:
         report, created = TurnReport.objects.get_or_create(
@@ -1427,8 +1437,6 @@ def end_turn_preview(request):
 
     messages.error(request, f"Error al generar el PDF: {pdf.err}")
     return redirect('operator_dashboard')
-
-
 
 @login_required
 def start_virtual_round(request):
@@ -1473,85 +1481,67 @@ def start_virtual_round(request):
 
 @login_required
 def finish_virtual_round(request, round_id):
-    # Se busca la ronda por su ID y asegurando que pertenezca al turno del operador
+    # Obtener la ronda asegurando que pertenece al usuario
     active_round = get_object_or_404(VirtualRoundLog, id=round_id, operator_shift__operator=request.user)
+    active_shift = active_round.operator_shift
+    
+    # --- Lógica de Filtrado de Instalaciones ---
+    # Si el turno tiene empresas específicas, solo mostramos esas.
+    # Si no tiene (es turno completo), mostramos todas.
+    if active_shift.monitored_companies.exists():
+        allowed_installations = Installation.objects.filter(
+            company__in=active_shift.monitored_companies.all()
+        ).order_by('company__name', 'name')
+    else:
+        allowed_installations = Installation.objects.all().order_by('company__name', 'name')
+    # -------------------------------------------
+
+    # Detectar si es una petición AJAX (para el modal)
+    is_ajax = request.headers.get('x-requested-with') == 'XMLHttpRequest'
+
     if request.method == 'POST':
-        form = VirtualRoundCompletionForm(request.POST, instance=active_round) # Se pasa la instancia para la validación
+        form = VirtualRoundCompletionForm(request.POST, instance=active_round, installations_queryset=allowed_installations)
         if form.is_valid():
+            # Procesar las instalaciones seleccionadas
             installations = form.cleaned_data['checked_installations']
             active_round.checked_installations = ", ".join([inst.name for inst in installations])
+            
+            # Calcular tiempos y cerrar la ronda
             end_time = timezone.now()
             duration = end_time - active_round.start_time
             active_round.end_time = end_time
             active_round.duration_seconds = duration.total_seconds()
             active_round.save()
             
-            # --- 👇 INICIO DE LA CORRECCIÓN 👇 ---
-            # 1. Obtenemos el total de segundos como un número entero.
+            # Formato de duración para el log
             total_seconds = int(duration.total_seconds())
-            
-            # 2. Usamos divmod para obtener los minutos y segundos restantes.
             minutes, seconds = divmod(total_seconds, 60)
-            
-            # 3. Creamos el texto formateado.
             formatted_duration = f"{minutes} min {seconds} seg"
             
-            # 4. Guardamos el registro de actividad con el nuevo formato.
+            # Registrar en trazabilidad
             TraceabilityLog.objects.create(
                 user=request.user, 
                 action=f"Finalizó ronda virtual. Duración: {formatted_duration}."
             )
+            
+            # Limpiar la sesión
             if 'active_round_id' in request.session: del request.session['active_round_id']
+            
+            if is_ajax:
+                return JsonResponse({'status': 'success', 'message': 'Ronda finalizada correctamente.'})
             return redirect('operator_dashboard')
+        else:
+            if is_ajax:
+                html = render_to_string('finish_virtual_round_modal_content.html', {'form': form, 'round': active_round}, request=request)
+                return JsonResponse({'status': 'error', 'html': html})
     else:
-        form = VirtualRoundCompletionForm() # No se necesita la instancia aquí, solo para el POST
+        form = VirtualRoundCompletionForm(instance=active_round, installations_queryset=allowed_installations)
+
+    if is_ajax:
+        html = render_to_string('finish_virtual_round_modal_content.html', {'form': form, 'round': active_round}, request=request)
+        return HttpResponse(html)
+
     return render(request, 'finish_virtual_round.html', {'form': form, 'round': active_round})
-
-
-# Flujo de Reporte de Turno
-
-    active_shift = OperatorShift.objects.filter(
-        operator=request.user,
-        date=timezone.now().date()
-    ).first()
-
-    if not active_shift:
-        return redirect('operator_dashboard') # No puede finalizar un turno que no existe
-
-    # Recolectamos datos filtrando por el turno activo
-    completed_checklist = ChecklistLog.objects.filter(operator_shift=active_shift)
-    updates_log = UpdateLog.objects.filter(operator_shift=active_shift)
-    rondas_virtuales = VirtualRoundLog.objects.filter(operator_shift=active_shift)
-
-    # Excluimos las rondas del checklist general para no duplicar
-    ronda_item = ChecklistItem.objects.filter(description__icontains="ronda virtual").first()
-    if ronda_item:
-        completed_checklist = completed_checklist.exclude(item=ronda_item)
-
-    context = {
-        'operator': request.user,
-        'start_time': active_shift.actual_start_time,
-        'end_time': timezone.now(),
-        'completed_checklist': completed_checklist,
-        'updates_log': updates_log,
-        'rondas_virtuales': rondas_virtuales,
-    }
-
-    # ... (El resto de la lógica para generar el PDF sigue igual que antes) ...
-    template = get_template('turn_report_pdf.html')
-    html = template.render(context)
-    result = BytesIO()
-    pdf = pisa.pisaDocument(BytesIO(html.encode("UTF-8")), result)
-
-    if not pdf.err:
-        report = TurnReport(operator=request.user, start_time=active_shift.actual_start_time)
-        report.pdf_report.save(f'reporte_turno_{request.user.username}_{timezone.now().strftime("%Y%m%d%H%M%S")}.pdf', ContentFile(result.getvalue()))
-        active_shift.actual_end_time = timezone.now()
-        active_shift.save()
-        report.save()
-        return redirect('sign_turn_report', report_id=report.id)
-
-    return HttpResponse("Error al generar el PDF", status=500)
 
 @login_required
 def sign_turn_report(request, report_id):

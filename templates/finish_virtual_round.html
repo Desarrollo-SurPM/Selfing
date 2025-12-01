@@ -8,16 +8,38 @@
     <div class="row justify-content-center">
         <div class="col-lg-8">
             <div class="card shadow-sm">
-                <div class="card-header">
-                    <h2 class="h4 mb-0">Finalizar Ronda Virtual</h2>
+                <div class="card-header bg-danger text-white">
+                    <h2 class="h4 mb-0"><i class="fas fa-video me-2"></i>Finalizar Ronda Virtual</h2>
                 </div>
                 <div class="card-body">
-                    <p class="text-muted">La ronda se inició a las {{ round.start_time|date:"H:i:s" }}. Por favor, confirme las instalaciones que ha revisado para finalizar.</p>
+                    <p class="text-muted text-center mb-4">
+                        La ronda se inició a las <strong>{{ round.start_time|date:"H:i:s" }}</strong>.<br>
+                        Por favor, confirme las instalaciones que ha revisado para finalizar.
+                    </p>
+                    
                     <form method="post">
                         {% csrf_token %}
-                        {{ form|crispy }}
-                        <div class="d-grid mt-4">
-                            <button type="submit" class="btn btn-primary btn-lg">Finalizar y Registrar Ronda</button>
+                        
+                        {# --- VALIDACIÓN: Si no hay instalaciones, mostrar aviso --- #}
+                        {% if form.checked_installations.field.queryset.exists %}
+                            {{ form|crispy }}
+                        {% else %}
+                            <div class="alert alert-warning text-center">
+                                <i class="fas fa-exclamation-triangle me-2"></i>
+                                <strong>No se encontraron instalaciones.</strong><br>
+                                Las empresas asignadas a este turno (<em>{{ round.operator_shift.monitored_companies.all|join:", " }}</em>) no tienen instalaciones registradas en el sistema.
+                            </div>
+                            {# Input oculto para permitir enviar el formulario vacío sin error de validación #}
+                            <input type="hidden" name="checked_installations" value="">
+                        {% endif %}
+                        
+                        <div class="d-grid mt-4 gap-2">
+                            <button type="submit" class="btn btn-danger btn-lg">
+                                <i class="fas fa-check-circle me-2"></i>Finalizar y Registrar Ronda
+                            </button>
+                            <a href="{% url 'operator_dashboard' %}" class="btn btn-secondary">
+                                Cancelar
+                            </a>
                         </div>
                     </form>
                 </div>

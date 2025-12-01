@@ -7,51 +7,93 @@
     <link rel="stylesheet" href="{% static 'css/dashboard.css' %}">
     <link rel="stylesheet" href="{% static 'css/color_theme.css' %}">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        .chart-container { position: relative; height: 260px; width: 100%; }
+        .nav-tabs .nav-link { cursor: pointer; color: #6c757d; border: none; font-size: 0.9rem; }
+        .nav-tabs .nav-link.active { font-weight: bold; color: #4e73df; border-bottom: 2px solid #4e73df; background: transparent; }
+        .nav-tabs { border-bottom: 1px solid #eaecf4; }
+    </style>
 {% endblock %}
 
 {% block content %}
-    <div class="dashboard-header">
-        <h2><i class="fas fa-tachometer-alt me-3"></i>Panel de Administración</h2>
-        <p>Bienvenido al centro de control de SELFING</p>
+    <div class="dashboard-header mb-4">
+        <div class="d-flex justify-content-between align-items-center">
+            <div>
+                <h2><i class="fas fa-tachometer-alt me-3"></i>Panel de Administración</h2>
+                <p class="mb-0">Bienvenido al centro de control de SELFING</p>
+            </div>
+            <div class="text-end text-white-50"><small>Actualizado: {% now "H:i" %}</small></div>
+        </div>
     </div>
 
     <div class="row g-4 mb-4">
         <div class="col-xl-3 col-md-6">
-            <div class="stat-card primary">
+            <div class="stat-card primary h-100">
                 <div class="stat-icon"><i class="fas fa-book"></i></div>
                 <div class="stat-value">{{ novedades_hoy|default:"0" }}</div>
                 <div class="stat-label">Novedades Hoy</div>
             </div>
         </div>
-        
         <div class="col-xl-3 col-md-6">
-            <div class="stat-card warning">
+            <div class="stat-card warning h-100">
                 <div class="stat-icon"><i class="fas fa-check-double"></i></div>
                 <div class="stat-value">{{ reportes_finalizados_count|default:"0" }}</div>
-                <div class="stat-label">Reportes Finalizados Hoy</div>
+                <div class="stat-label">Reportes Finalizados</div>
             </div>
         </div>
-        
         <div class="col-xl-3 col-md-6">
-            <div class="stat-card info">
+            <div class="stat-card info h-100">
                 <div class="stat-icon"><i class="fas fa-user-clock"></i></div>
                 <div class="stat-value">{{ operadores_en_turno|default:"0" }}</div>
                 <div class="stat-label">Operadores en Turno</div>
             </div>
         </div>
-        
         <div class="col-xl-3 col-md-6">
-            <div class="stat-card success">
+            <div class="stat-card success h-100">
                 <div class="stat-icon"><i class="fas fa-network-wired"></i></div>
                 <div class="stat-value">{{ servicios_monitoreados_activos|default:"0" }}</div>
-                <div class="stat-label">Servicios Monitoreados</div>
+                <div class="stat-label">Servicios Activos</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row g-4 mb-4">
+        <div class="col-lg-8">
+            <div class="card shadow-sm h-100 border-0">
+                <div class="card-header bg-white py-2 d-flex justify-content-between align-items-center">
+                    <h6 class="m-0 font-weight-bold text-primary"><i class="fas fa-clock me-2"></i>Patrón Horario de Novedades</h6>
+                    <ul class="nav nav-tabs card-header-tabs" id="rhythmTabs" role="tablist">
+                        <li class="nav-item"><a class="nav-link active" onclick="updateChart('today')">Hoy</a></li>
+                        <li class="nav-item"><a class="nav-link" onclick="updateChart('week')">Semana (Acum.)</a></li>
+                        <li class="nav-item"><a class="nav-link" onclick="updateChart('month')">Mes (Acum.)</a></li>
+                    </ul>
+                </div>
+                <div class="card-body">
+                    <div class="chart-container">
+                        <canvas id="rhythmChart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-4">
+            <div class="card shadow-sm h-100 border-0">
+                <div class="card-header bg-white py-3">
+                    <h6 class="m-0 font-weight-bold text-success"><i class="fas fa-stopwatch me-2"></i>Promedio Rondas (Minutos)</h6>
+                </div>
+                <div class="card-body">
+                    <div class="chart-container">
+                        <canvas id="roundsChart"></canvas>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
 
     <div class="row g-4">
         <div class="col-lg-8">
-            <div class="action-card">
+            
+            <div class="action-card mb-4">
                 <div class="action-card-header"><h5><i class="fas fa-cogs"></i>Gestión del Sistema</h5></div>
                 <div class="action-grid">
                     <a href="{% url 'review_and_send_novedades' %}" class="action-btn" style="background-color: #28a745; color: white;">
@@ -63,6 +105,7 @@
                     <a href="{% url 'manage_operators' %}" class="action-btn" style="background-color: #007bff; color: white;">
                         <i class="fas fa-users"></i><span>Operadores</span>
                     </a>
+                    
                     <a href="{% url 'manage_companies' %}" class="action-btn" style="background-color: #6f42c1; color: white;">
                         <i class="fas fa-building"></i><span>Empresas</span>
                     </a>
@@ -72,6 +115,7 @@
                     <a href="{% url 'manage_monitored_services' %}" class="action-btn" style="background-color: #343a40; color: white;">
                         <i class="fas fa-server"></i><span>Monitoreo de Servicios</span>
                     </a>
+
                     <a href="{% url 'manage_shift_types' %}" class="action-btn" style="background-color: #ffc107; color: #212529;">
                         <i class="fas fa-clock"></i><span>Tipos de Turno</span>
                     </a>
@@ -81,6 +125,7 @@
                     <a href="{% url 'shift_calendar' %}" class="action-btn" style="background-color: #e83e8c; color: white;">
                         <i class="fas fa-calendar-alt"></i><span>Calendario de Turnos</span>
                     </a>
+
                     <a href="{% url 'view_turn_reports' %}" class="action-btn" style="background-color: #6c757d; color: white;">
                         <i class="fas fa-file-alt"></i><span>Reportes de turnos</span>
                     </a>
@@ -93,21 +138,21 @@
                 </div>
             </div>
 
-            <div class="data-table">
-                <div class="action-card-header"><h5><i class="fas fa-bullhorn"></i>Reporte de Novedades del Día</h5></div>
+            <div class="data-table card border-0 shadow-sm">
+                <div class="action-card-header"><h5><i class="fas fa-bullhorn"></i>Novedades Recientes</h5></div>
                 <div class="table-responsive">
-                    <table class="table">
-                        <thead><tr><th>Hora</th><th>Operador</th><th>Empresa / Instalación</th><th>Novedad</th></tr></thead>
+                    <table class="table table-hover align-middle mb-0">
+                        <thead class="table-light"><tr><th>Hora</th><th>Operador</th><th>Instalación</th><th>Detalle</th></tr></thead>
                         <tbody>
                         {% for report in reports %}
                             <tr>
-                                <td><span class="time-label">{{ report.created_at|date:"H:i" }}</span></td>
-                                <td><div class="d-flex align-items-center"><div class="avatar-sm me-2"><i class="fas fa-user-circle text-secondary"></i></div><span>{{ report.operator_shift.operator.username }}</span></div></td>
-                                <td><strong>{{ report.installation.company.name }}</strong><br><small class="text-muted">{{ report.installation.name }}</small></td>
-                                <td>{{ report.message }}</td>
+                                <td><span class="badge bg-light text-dark border">{{ report.created_at|date:"H:i" }}</span></td>
+                                <td><strong>{{ report.operator_shift.operator.username }}</strong></td>
+                                <td><small class="text-primary">{{ report.installation.company.name }}</small><br><span class="small text-muted">{{ report.installation.name }}</span></td>
+                                <td class="text-muted small">{{ report.message|truncatechars:50 }}</td>
                             </tr>
                         {% empty %}
-                            <tr><td colspan="4" class="text-center py-5 text-muted"><i class="fas fa-inbox fa-3x mb-3 d-block"></i>No hay novedades registradas hoy.</td></tr>
+                            <tr><td colspan="4" class="text-center py-4 text-muted">Sin novedades recientes.</td></tr>
                         {% endfor %}
                         </tbody>
                     </table>
@@ -116,29 +161,33 @@
         </div>
 
         <div class="col-lg-4">
-            <div class="status-card" id="service-status-panel">
-                <div class="action-card-header"><h5><i class="fas fa-heartbeat"></i>Estado de Servicios</h5></div>
-                <div class="p-3 text-center text-muted"><i class="fas fa-spinner fa-spin fa-2x mb-2"></i><p class="mb-0">Cargando servicios...</p></div>
-            </div>
             
-            <div class="status-card">
-                <div class="action-card-header"><h5><i class="fas fa-envelope"></i>Correos por Aprobar</h5></div>
-                <div class="list-group list-group-flush">
-                {% for email in pending_emails %}
-                    <a href="{% url 'review_email' email.id %}" class="list-group-item list-group-item-action"><div class="d-flex justify-content-between align-items-start"><div class="flex-grow-1"><h6 class="mb-1 fw-bold">{{ email.company.name }}</h6><small class="text-muted">Por: {{ email.operator.username }}</small></div><div><span class="status-badge pending"><i class="fas fa-clock"></i> {{ email.created_at|timesince }}</span></div></div></a>
-                {% empty %}
-                    <div class="list-group-item text-center py-4 text-muted"><i class="fas fa-check-circle fa-2x mb-2 text-success"></i><p class="mb-0">No hay correos pendientes</p></div>
-                {% endfor %}
+            <div class="card shadow-sm mb-4 border-0">
+                <div class="card-header bg-white py-3">
+                    <h6 class="m-0 font-weight-bold text-info"><i class="fas fa-building me-2"></i>Novedades por Empresa (Mes)</h6>
+                </div>
+                <div class="card-body">
+                    <div class="chart-container" style="height: 200px;">
+                        <canvas id="companiesChart"></canvas>
+                    </div>
                 </div>
             </div>
-            
+
+            <div class="status-card mb-4" id="service-status-panel">
+                <div class="action-card-header"><h5><i class="fas fa-heartbeat"></i>Estado de Servicios</h5></div>
+                <div class="p-3 text-center text-muted"><i class="fas fa-spinner fa-spin"></i> Cargando...</div>
+            </div>
+
             <div class="status-card" id="activity-card">
                 <div class="action-card-header"><h5><i class="fas fa-history"></i>Actividad Reciente</h5></div>
                 <div class="p-3">
                 {% for log in traceability_logs %}
-                    <div class="activity-item"><small class="time-label">{{ log.timestamp|timesince }} atrás</small><p class="mb-0 mt-1"><strong>{{ log.user.username }}</strong> {{ log.action }}</p></div>
+                    <div class="activity-item pb-2 border-start border-2 ps-3 ms-2 mb-2">
+                        <small class="text-muted d-block">{{ log.timestamp|timesince }} atrás</small>
+                        <p class="mb-0 small"><strong>{{ log.user.username }}</strong> {{ log.action }}</p>
+                    </div>
                 {% empty %}
-                    <div class="text-center py-3 text-muted"><i class="fas fa-history fa-2x mb-2"></i><p class="mb-0">No hay actividad reciente</p></div>
+                    <div class="text-center py-3 text-muted">Sin actividad</div>
                 {% endfor %}
                 </div>
             </div>
@@ -149,70 +198,109 @@
 {% block extra_js %}
     {{ block.super }}
     <script>
+    // --- DATOS INYECTADOS DESDE DJANGO ---
+    // El eje X siempre es el mismo (00:00 - 23:00)
+    const rhythmData = {
+        today: { label: 'Hoy', data: {{ chart_rhythm_today|safe }} },
+        week: { label: 'Últimos 7 Días (Acumulado)', data: {{ chart_rhythm_week|safe }} },
+        month: { label: 'Últimos 30 Días (Acumulado)', data: {{ chart_rhythm_month|safe }} }
+    };
+
+    let rhythmChartInstance = null;
+
+    function initRhythmChart() {
+        const ctx = document.getElementById('rhythmChart').getContext('2d');
+        rhythmChartInstance = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: {{ chart_rhythm_labels|safe }}, // Etiquetas estáticas 00-23
+                datasets: [{
+                    label: rhythmData.today.label,
+                    data: rhythmData.today.data,
+                    borderColor: '#4e73df',
+                    backgroundColor: 'rgba(78, 115, 223, 0.05)',
+                    tension: 0.3,
+                    fill: true,
+                    pointRadius: 3
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: { legend: { display: true } },
+                scales: { 
+                    y: { beginAtZero: true, title: {display: true, text: 'Novedades'} },
+                    x: { title: {display: true, text: 'Hora del Día'} }
+                }
+            }
+        });
+    }
+
+    // Función para cambiar la vista del gráfico (Hoy/Semana/Mes)
+    window.updateChart = function(period) {
+        // Actualizar datos
+        rhythmChartInstance.data.datasets[0].data = rhythmData[period].data;
+        rhythmChartInstance.data.datasets[0].label = rhythmData[period].label;
+        rhythmChartInstance.update();
+
+        // Actualizar clases activas en tabs
+        document.querySelectorAll('#rhythmTabs .nav-link').forEach(l => l.classList.remove('active'));
+        event.target.classList.add('active');
+    };
+
     document.addEventListener('DOMContentLoaded', function() {
+        initRhythmChart();
+
+        // --- Gráfico de Rondas (MINUTOS) ---
+        new Chart(document.getElementById('roundsChart'), {
+            type: 'bar',
+            data: {
+                labels: {{ chart_rounds_labels|safe }},
+                datasets: [{
+                    label: 'Minutos Promedio',
+                    data: {{ chart_rounds_data|safe }},
+                    backgroundColor: '#1cc88a',
+                    borderRadius: 4
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: { legend: { display: false } },
+                scales: { y: { beginAtZero: true, title: {display: true, text: 'Minutos'} } }
+            }
+        });
+
+        // --- Gráfico de Empresas (Doughnut) ---
+        new Chart(document.getElementById('companiesChart'), {
+            type: 'doughnut',
+            data: {
+                labels: {{ chart_comp_labels|safe }},
+                datasets: [{
+                    data: {{ chart_comp_data|safe }},
+                    backgroundColor: ['#4e73df', '#1cc88a', '#36b9cc', '#f6c23e', '#e74a3b'],
+                    borderWidth: 0
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: { legend: { position: 'right', labels: { boxWidth: 10, font: { size: 10 } } } }
+            }
+        });
+
+        // --- Actualización de Servicios (Existente) ---
         const statusPanel = document.getElementById('service-status-panel');
-        
         function updateServiceStatus() {
             const url = `{% url 'ajax_get_service_status' %}?timestamp=${new Date().getTime()}`;
-            fetch(url)
-                .then(response => {
-                    if (!response.ok) {
-                        throw new Error(`HTTP error! status: ${response.status}`);
-                    }
-                    return response.text();
-                })
-                .then(html => {
-                    // Buscar el contenedor de contenido dentro del panel
-                    let contentArea = statusPanel.querySelector('.list-group');
-                    if (!contentArea) {
-                        contentArea = statusPanel.querySelector('.p-3');
-                    }
-                    
-                    if (contentArea) {
-                        contentArea.outerHTML = html;
-                    } else {
-                        // Si no encuentra el contenedor, insertar después del header
-                        const header = statusPanel.querySelector('.action-card-header');
-                        if (header) {
-                            header.insertAdjacentHTML('afterend', html);
-                        }
-                    }
-                })
-                .catch(error => {
-                    console.error('Error al actualizar servicios:', error);
-                    let contentArea = statusPanel.querySelector('.list-group');
-                    if (!contentArea) {
-                        contentArea = statusPanel.querySelector('.p-3');
-                    }
-                    
-                    if (contentArea) {
-                        contentArea.innerHTML = `<div class="text-center text-danger py-3"><i class="fas fa-exclamation-circle fa-2x mb-2"></i><p class="mb-0">Error al cargar servicios</p></div>`;
-                    } else {
-                        const header = statusPanel.querySelector('.action-card-header');
-                        if (header) {
-                            header.insertAdjacentHTML('afterend', '<div class="p-3 text-center text-danger"><i class="fas fa-exclamation-circle fa-2x mb-2"></i><p class="mb-0">Error al cargar servicios</p></div>');
-                        }
-                    }
-                });
+            fetch(url).then(r => r.text()).then(html => {
+                let content = statusPanel.querySelector('.list-group') || statusPanel.querySelector('.p-3');
+                if(content) content.outerHTML = html;
+                else statusPanel.querySelector('.action-card-header').insertAdjacentHTML('afterend', html);
+            }).catch(e => console.error(e));
         }
-        
         updateServiceStatus();
-        setInterval(updateServiceStatus, 5000);
-        
-        const statValues = document.querySelectorAll('.stat-value');
-        statValues.forEach(stat => {
-            const finalValue = parseInt(stat.textContent) || 0;
-            let currentValue = 0;
-            const increment = finalValue / 20;
-            const timer = setInterval(() => {
-                currentValue += increment;
-                if (currentValue >= finalValue) {
-                    currentValue = finalValue;
-                    clearInterval(timer);
-                }
-                stat.textContent = Math.floor(currentValue);
-            }, 50);
-        });
+        setInterval(updateServiceStatus, 10000);
     });
     </script>
 {% endblock %}

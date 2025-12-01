@@ -1,0 +1,29 @@
+{% load crispy_forms_tags %}
+
+<div class="text-center mb-4">
+    <h6 class="text-muted">Ronda iniciada a las <span class="badge bg-secondary">{{ round.start_time|date:"H:i:s" }}</span></h6>
+    <p class="mt-2">Marque las instalaciones revisadas:</p>
+</div>
+
+<form id="finishRoundForm" method="post" action="{% url 'finish_virtual_round' round.id %}">
+    {% csrf_token %}
+    
+    <div style="max-height: 400px; overflow-y: auto; text-align: left; border: 1px solid #dee2e6; padding: 15px; border-radius: 5px; background: #f8f9fa;">
+        {% if form.checked_installations.field.queryset.exists %}
+            {{ form.checked_installations|as_crispy_field }}
+        {% else %}
+            <div class="alert alert-warning text-center mb-0">
+                <i class="fas fa-exclamation-circle me-2"></i>
+                <strong>Lista vacía.</strong><br>
+                <small>Las empresas asignadas no tienen instalaciones registradas.</small>
+            </div>
+            <input type="hidden" name="checked_installations" value="">
+        {% endif %}
+    </div>
+
+    <div class="d-grid mt-4">
+        <button type="submit" class="btn btn-danger btn-lg">
+            <i class="fas fa-stop-circle me-2"></i>Confirmar y Finalizar
+        </button>
+    </div>
+</form>

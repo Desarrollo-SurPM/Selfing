@@ -207,20 +207,31 @@ class AdminUpdateLogForm(forms.ModelForm):
                 )
 
         return cleaned_data
+
 class VirtualRoundCompletionForm(forms.ModelForm):
+    # 1. SOBREESCRIBIMOS el campo explícitamente para que sea de Selección Múltiple
+    # (Django no lo adivina porque en el modelo es un TextField)
     checked_installations = forms.ModelMultipleChoiceField(
-        queryset=Installation.objects.all(),
+        queryset=Installation.objects.none(), # Se llena dinámicamente después
         widget=forms.CheckboxSelectMultiple,
-        label="Marque las instalaciones que fueron revisadas durante la ronda:"
+        required=False,
+        label="Marque las instalaciones revisadas:"
     )
+
     class Meta:
         model = VirtualRoundLog
         fields = ['checked_installations']
 
-
-# --- Formularios de Gestión del Administrador ---
-
-
+    def __init__(self, *args, **kwargs):
+        # Extraemos el argumento personalizado
+        installations_queryset = kwargs.pop('installations_queryset', None)
+        super(VirtualRoundCompletionForm, self).__init__(*args, **kwargs)
+        
+        # 2. Asignamos las instalaciones filtradas al campo que ya creamos arriba
+        if installations_queryset is not None:
+            self.fields['checked_installations'].queryset = installations_queryset
+        else:
+            self.fields['checked_installations'].queryset = Installation.objects.all()
 class OperatorCreationForm(UserCreationForm):
     class Meta(UserCreationForm.Meta):
         model = User
@@ -345,14 +356,17 @@ class ShiftTypeForm(forms.ModelForm):
 class OperatorShiftForm(forms.ModelForm):
     def __init__(self, *args, **kwargs):
         super(OperatorShiftForm, self).__init__(*args, **kwargs)
-        # --- LÓGICA AÑADIDA ---
-        # Filtramos el campo 'operator' para que solo muestre usuarios
-        # que NO son superusuarios (es decir, solo operadores).
         self.fields['operator'].queryset = User.objects.filter(is_superuser=False)
-
+    monitored_companies = forms.ModelMultipleChoiceField(
+        queryset=Company.objects.all(),
+        widget=forms.CheckboxSelectMultiple, # O SelectMultiple con UI mejorada
+        required=False,
+        label="Seleccionar Empresas a Monitorear (Opcional)",
+        help_text="Marque las empresas SOLO si es un turno parcial. Si deja todo desmarcado, el operador monitoreará TODAS las empresas."
+    )
     class Meta:
         model = OperatorShift
-        fields = ['operator', 'shift_type', 'date']
+        fields = ['operator', 'shift_type', 'date', 'monitored_companies']
         labels = {
             'operator': 'Operador',
             'shift_type': 'Turno',
@@ -360,6 +374,7 @@ class OperatorShiftForm(forms.ModelForm):
         }
         widgets = {
             'date': forms.DateInput(attrs={'type': 'date'}),
+            'monitored_companies': forms.CheckboxSelectMultiple(),
         }
 
 class ShiftNoteForm(forms.ModelForm):
