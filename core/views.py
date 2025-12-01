@@ -21,7 +21,7 @@ from io import BytesIO
 from django.db import transaction
 from django.core.files.base import ContentFile
 from django import forms
-from datetime import timedelta, datetime, time
+from datetime import date, timedelta, datetime, time
 from collections import defaultdict
 from django.contrib.auth import logout
 from collections import OrderedDict
@@ -634,15 +634,130 @@ def view_turn_reports(request):
     return render(request, 'view_turn_reports.html', context)
 
 
-# --- VISTAS PARA GESTIONAR TURNOS ---
-
 @login_required
 @user_passes_test(is_supervisor)
 def manage_shifts(request):
-    start_date = timezone.now().date()
-    end_date = start_date + timedelta(days=7)
-    assigned_shifts = OperatorShift.objects.filter(date__range=[start_date, end_date]).order_by('date', 'shift_type__start_time')
-    return render(request, 'manage_shifts.html', {'assigned_shifts': assigned_shifts})
+    # 1. Lógica de Fechas (Rango Personalizado o Mes Actual)
+    today = timezone.now().date()
+    
+    # Obtenemos parámetros GET
+    start_date_str = request.GET.get('start_date')
+    end_date_str = request.GET.get('end_date')
+    search_query = request.GET.get('q', '')
+
+    if start_date_str and end_date_str:
+        try:
+            start_date = datetime.strptime(start_date_str, '%Y-%m-%d').date()
+            end_date = datetime.strptime(end_date_str, '%Y-%m-%d').date()
+        except ValueError:
+            # Fallback si las fechas son inválidas
+            start_date = today.replace(day=1)
+            end_date = (start_date + timedelta(days=32)).replace(day=1) - timedelta(days=1)
+    else:
+        # Por defecto: Mes actual completo
+        start_date = today.replace(day=1)
+        # Último día del mes actual
+        _, last_day = calendar.monthrange(today.year, today.month)
+        end_date = today.replace(day=last_day)
+
+    # Generamos la lista de días para las columnas
+    delta = end_date - start_date
+    days_range = [start_date + timedelta(days=i) for i in range(delta.days + 1)]
+
+    # 2. Filtrado de Operadores
+    operators = User.objects.filter(is_superuser=False).order_by('first_name', 'last_name')
+    
+    if search_query:
+        # Busca por nombre, apellido o usuario
+        operators = operators.filter(
+            Q(first_name__icontains=search_query) | 
+            Q(last_name__icontains=search_query) | 
+            Q(username__icontains=search_query)
+        )
+
+    shift_types = ShiftType.objects.all()
+    all_companies = Company.objects.all().order_by('name')
+
+    # 3. Obtener asignaciones (Optimizado)
+    existing_shifts = OperatorShift.objects.filter(
+        date__range=[start_date, end_date],
+        operator__in=operators # Solo traemos turnos de los operadores filtrados
+    ).select_related('shift_type').prefetch_related('monitored_companies')
+
+    assignments = {}
+    for shift in existing_shifts:
+        assignments[(shift.operator_id, shift.date.strftime('%Y-%m-%d'))] = shift
+
+    matrix_rows = []
+    for operator in operators:
+        row_data = {'operator': operator, 'days': []}
+        for day in days_range:
+            day_str = day.strftime('%Y-%m-%d')
+            shift = assignments.get((operator.id, day_str))
+            
+            assigned_company_ids = []
+            if shift:
+                assigned_company_ids = list(shift.monitored_companies.values_list('id', flat=True))
+
+            row_data['days'].append({
+                'date': day_str,
+                'shift': shift,
+                'company_ids': assigned_company_ids
+            })
+        matrix_rows.append(row_data)
+
+    context = {
+        'current_start_date': start_date.strftime('%Y-%m-%d'),
+        'current_end_date': end_date.strftime('%Y-%m-%d'),
+        'search_query': search_query,
+        'days_range': days_range, # Usamos la nueva variable de rango
+        'matrix_rows': matrix_rows,
+        'shift_types': shift_types,
+        'all_companies': all_companies,
+    }
+    return render(request, 'manage_shifts.html', context)
+# --- API ACTUALIZADA ---
+@login_required
+@user_passes_test(is_supervisor)
+@csrf_exempt
+def api_update_shift(request):
+    if request.method == 'POST':
+        try:
+            data = json.loads(request.body)
+            operator_id = data.get('operator_id')
+            date_str = data.get('date')
+            shift_type_id = data.get('shift_type_id')
+            
+            # Recibimos la lista de empresas (opcional)
+            company_ids = data.get('company_ids') 
+
+            if not operator_id or not date_str:
+                return JsonResponse({'status': 'error', 'message': 'Datos incompletos'}, status=400)
+
+            if shift_type_id:
+                # Crear o actualizar turno
+                shift, created = OperatorShift.objects.update_or_create(
+                    operator_id=operator_id,
+                    date=date_str,
+                    defaults={'shift_type_id': shift_type_id}
+                )
+                
+                # --- Lógica de Empresas ---
+                # Si company_ids no es None, significa que estamos actualizando las empresas.
+                # Si es None, no tocamos las empresas (mantiene las que tenía o todas por defecto).
+                if company_ids is not None:
+                    shift.monitored_companies.set(company_ids)
+                
+                action = "updated"
+            else:
+                # Borrar turno
+                OperatorShift.objects.filter(operator_id=operator_id, date=date_str).delete()
+                action = "deleted"
+
+            return JsonResponse({'status': 'success', 'action': action})
+        except Exception as e:
+            return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
+    return JsonResponse({'status': 'error'}, status=405)
 
 @login_required
 @user_passes_test(is_supervisor)
@@ -693,6 +808,67 @@ def get_operator_companies(operator_user):
 
 @login_required
 @user_passes_test(is_supervisor)
+def shift_matrix_view(request):
+    # 1. Determinar el mes y año a visualizar (por defecto el actual)
+    today = timezone.now().date()
+    year = int(request.GET.get('year', today.year))
+    month = int(request.GET.get('month', today.month))
+    
+    # Calcular fechas del mes
+    num_days = calendar.monthrange(year, month)[1]
+    start_date = date(year, month, 1)
+    end_date = date(year, month, num_days)
+    days_in_month = [start_date + timedelta(days=i) for i in range(num_days)]
+
+    # 2. Obtener datos base
+    operators = User.objects.filter(is_superuser=False).order_by('first_name')
+    shift_types = ShiftType.objects.all()
+    
+    # 3. Obtener turnos existentes en ese rango optimizado
+    existing_shifts = OperatorShift.objects.filter(
+        date__range=[start_date, end_date]
+    ).select_related('shift_type')
+
+    # 4. Crear estructura de diccionario para acceso rápido: assignments[(user_id, date_str)] = shift_obj
+    assignments = {}
+    for shift in existing_shifts:
+        assignments[(shift.operator_id, shift.date.strftime('%Y-%m-%d'))] = shift
+
+    # 5. Preparar datos para el template
+    matrix_rows = []
+    for operator in operators:
+        row_data = {
+            'operator': operator,
+            'days': []
+        }
+        for day in days_in_month:
+            day_str = day.strftime('%Y-%m-%d')
+            shift = assignments.get((operator.id, day_str))
+            row_data['days'].append({
+                'date': day_str,
+                'shift': shift, # Puede ser None si no hay turno
+            })
+        matrix_rows.append(row_data)
+
+    # Navegación de meses
+    prev_month_date = start_date - timedelta(days=1)
+    next_month_date = end_date + timedelta(days=1)
+
+    context = {
+        'current_date': start_date,
+        'days_in_month': days_in_month,
+        'matrix_rows': matrix_rows,
+        'shift_types': shift_types,
+        'prev_year': prev_month_date.year,
+        'prev_month': prev_month_date.month,
+        'next_year': next_month_date.year,
+        'next_month': next_month_date.month,
+    }
+    return render(request, 'manage_shifts_matrix.html', context)
+
+
+@login_required
+@user_passes_test(is_supervisor)
 def manage_shift_types(request):
     shift_types = ShiftType.objects.all().order_by('start_time')
     return render(request, 'manage_shift_types.html', {'shift_types': shift_types})
@@ -705,6 +881,7 @@ def create_shift_type(request):
         if form.is_valid(): form.save(); return redirect('manage_shift_types')
     else: form = ShiftTypeForm()
     return render(request, 'shift_type_form.html', {'form': form, 'title': 'Crear Nuevo Tipo de Turno'})
+
 
 @login_required
 @user_passes_test(is_supervisor)
@@ -2435,3 +2612,52 @@ def get_multiple_cities_weather(request):
                 }
     
     return JsonResponse(weather_results)
+
+@login_required
+@user_passes_test(is_supervisor)
+@csrf_exempt
+@transaction.atomic # Importante: Si uno falla, no se guarda ninguno
+def api_save_shift_batch(request):
+    if request.method == 'POST':
+        try:
+            payload = json.loads(request.body)
+            changes = payload.get('changes', [])
+            
+            updated_count = 0
+            deleted_count = 0
+
+            for item in changes:
+                operator_id = item.get('operator_id')
+                date_str = item.get('date')
+                shift_type_id = item.get('shift_type_id')
+                company_ids = item.get('company_ids') # Puede ser None, [], o [1,2]
+
+                if not operator_id or not date_str:
+                    continue
+
+                if shift_type_id:
+                    # Crear o Actualizar
+                    shift, created = OperatorShift.objects.update_or_create(
+                        operator_id=operator_id,
+                        date=date_str,
+                        defaults={'shift_type_id': shift_type_id}
+                    )
+                    # Actualizar empresas si vienen en el payload
+                    if company_ids is not None:
+                        shift.monitored_companies.set(company_ids)
+                    
+                    updated_count += 1
+                else:
+                    # Eliminar si shift_type_id es vacío/null
+                    OperatorShift.objects.filter(operator_id=operator_id, date=date_str).delete()
+                    deleted_count += 1
+
+            return JsonResponse({
+                'status': 'success', 
+                'message': f'Se guardaron {updated_count} asignaciones y se eliminaron {deleted_count}.'
+            })
+
+        except Exception as e:
+            return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
+    
+    return JsonResponse({'status': 'error'}, status=405)

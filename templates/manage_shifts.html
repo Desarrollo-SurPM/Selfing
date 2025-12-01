@@ -1,37 +1,551 @@
 {% extends 'base.html' %}
 {% load static %}
-{% block title %}Gestión de Turnos{% endblock %}
-{% block content %}
-<div class="d-flex justify-content-between align-items-center mb-3">
-    <h2>Turnos Asignados (Próximos 7 días)</h2>
-    <a href="{% url 'assign_shift' %}" class="btn btn-success">Asignar Nuevo Turno</a>
-</div>
 
-<div class="card shadow-sm">
-    <div class="list-group list-group-flush">
-        {% for shift in assigned_shifts %}
-        <div class="list-group-item">
-            <div class="d-flex w-100 justify-content-between">
-                <div>
-                    <h5 class="mb-1">{{ shift.operator.get_full_name|default:shift.operator.username }}</h5>
-                    <p class="mb-1">
-                        <span class="badge bg-primary">{{ shift.shift_type.name }}</span>
-                        {{ shift.shift_type.start_time|time:"H:i" }} - {{ shift.shift_type.end_time|time:"H:i" }}
-                    </p>
+{% block title %}Planificación de Turnos{% endblock %}
+
+{% block extra_css %}
+<style>
+    /* Contenedor de la matriz */
+    .matrix-wrapper {
+        position: relative;
+        overflow-x: auto;
+        border-top: 1px solid #e3e6f0;
+        /* Sombra suave para indicar scroll si es necesario */
+        background: white;
+    }
+    
+    /* Estado Bloqueado */
+    .matrix-locked {
+        background-color: #f8f9fc;
+        opacity: 0.95;
+    }
+    .matrix-locked table {
+        pointer-events: none;
+        filter: grayscale(90%);
+    }
+
+    /* TABLA PERSONALIZADA - ESTILO EXPANDIDO */
+    .table-matrix {
+        margin-bottom: 0;
+        width: 100%;
+        border-collapse: separate; /* Permite bordes más limpios */
+        border-spacing: 0;
+    }
+
+    .table-matrix th, .table-matrix td {
+        vertical-align: middle;
+        text-align: center;
+        padding: 0;
+        /* AUMENTO DE TAMAÑO AQUÍ */
+        height: 65px;       /* Antes 40px -> Ahora 65px para hacer clic fácil */
+        min-width: 75px;    /* Antes 50px -> Ahora 75px para más aire */
+        border: 1px solid #d1d3e2;
+    }
+    
+    /* Cabecera Sticky (Fechas) */
+    .table-matrix thead th {
+        position: sticky;
+        top: 0;
+        background-color: #eaecf4; /* Gris un poco más oscuro para diferenciar */
+        color: #4e73df;
+        font-weight: 800;
+        font-size: 1.1rem; /* Fecha más grande */
+        z-index: 10;
+        box-shadow: 0 2px 2px rgba(0,0,0,0.1);
+        border-bottom: 2px solid #4e73df;
+    }
+
+    /* Primera Columna Sticky (Operadores) */
+    .table-matrix tbody td:first-child, 
+    .table-matrix thead th:first-child {
+        position: sticky;
+        left: 0;
+        background-color: #fff;
+        z-index: 20;
+        min-width: 250px; /* Más espacio para nombres largos */
+        text-align: left;
+        padding-left: 20px;
+        border-right: 3px solid #d1d3e2; /* División clara */
+        font-weight: 700;
+        color: #5a5c69;
+        font-size: 1rem;
+    }
+    .table-matrix thead th:first-child {
+        z-index: 30;
+        background-color: #eaecf4;
+    }
+
+    /* Celdas Interactivas */
+    .shift-cell { 
+        cursor: pointer; 
+        transition: all 0.15s ease-in-out; 
+        background-color: #fff;
+    }
+    .shift-cell:hover { 
+        background-color: #f1f3f5; 
+        transform: scale(0.98); /* Efecto de clic sutil */
+        box-shadow: inset 0 0 0 2px #4e73df; /* Borde azul al pasar mouse */
+    }
+    
+    .shift-cell.unsaved-change {
+        box-shadow: inset 0 0 0 3px #f6c23e; /* Borde naranja más grueso */
+        background-color: #fff3cd;
+    }
+
+    /* Badge de Turno (La letra D, T, N) */
+    .shift-badge {
+        width: 100%; height: 100%;
+        display: flex; flex-direction: column; 
+        align-items: center; justify-content: center;
+        color: white; 
+        font-weight: 900; 
+        font-size: 1.6rem; /* LETRA GRANDE Y CLARA */
+        text-shadow: 1px 1px 2px rgba(0,0,0,0.3);
+    }
+    
+    .special-indicator { 
+        font-size: 14px; 
+        margin-top: -5px; 
+        background: rgba(0,0,0,0.2);
+        padding: 0 4px;
+        border-radius: 4px;
+    }
+    
+    .weekend-col { background-color: #f8f9fc; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+
+    <div class="d-flex align-items-center justify-content-between mb-4">
+        <h1 class="h3 mb-0 text-gray-800">Planificación de Turnos</h1>
+        
+        <a href="{% url 'assign_shift' %}" class="btn btn-primary btn-lg shadow-sm px-4">
+            <i class="fas fa-calendar-plus me-2"></i> Asignación Manual
+        </a>
+    </div>
+
+    <div class="card shadow-sm mb-4 border-left-primary">
+        <div class="card-body py-3">
+            <form method="get" class="row g-3 align-items-end">
+                <div class="col-md-4">
+                    <label class="form-label fw-bold text-uppercase text-xs text-gray-600">Buscar Operador</label>
+                    <div class="input-group input-group-lg"> <span class="input-group-text bg-white border-end-0"><i class="fas fa-search text-gray-400"></i></span>
+                        <input type="text" name="q" class="form-control border-start-0 ps-0" 
+                               placeholder="Nombre..." value="{{ search_query }}">
+                    </div>
                 </div>
-                <div>
-                    <small class="text-muted">{{ shift.date|date:"l, d \d\e F" }}</small>
-                    <div class="mt-2">
-                        <a href="{% url 'edit_assigned_shift' shift.id %}" class="btn btn-sm btn-warning">Editar</a>
-                        <a href="{% url 'delete_assigned_shift' shift.id %}" class="btn btn-sm btn-danger">Eliminar</a>
+
+                <div class="col-md-3">
+                    <label class="form-label fw-bold text-uppercase text-xs text-gray-600">Desde</label>
+                    <input type="date" name="start_date" class="form-control form-control-lg" value="{{ current_start_date }}">
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label fw-bold text-uppercase text-xs text-gray-600">Hasta</label>
+                    <input type="date" name="end_date" class="form-control form-control-lg" value="{{ current_end_date }}">
+                </div>
+
+                <div class="col-md-2 d-flex gap-2">
+                    <button type="submit" class="btn btn-primary btn-lg w-100"><i class="fas fa-filter"></i></button>
+                    <a href="{% url 'manage_shifts' %}" class="btn btn-light btn-lg border" title="Reset"><i class="fas fa-sync-alt"></i></a>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div class="card shadow mb-4">
+        
+        <div class="card-header py-3 d-flex flex-wrap align-items-center justify-content-between gap-3 bg-white">
+            
+            <div class="d-flex align-items-center gap-3">
+                <div class="btn-group" role="group">
+                    <input type="radio" class="btn-check" name="lockState" id="btnLocked" autocomplete="off" checked onchange="toggleLock(true)">
+                    <label class="btn btn-outline-secondary px-3" for="btnLocked"><i class="fas fa-lock me-1"></i> Bloqueado</label>
+
+                    <input type="radio" class="btn-check" name="lockState" id="btnUnlocked" autocomplete="off" onchange="toggleLock(false)">
+                    <label class="btn btn-outline-warning text-dark px-3 fw-bold" for="btnUnlocked"><i class="fas fa-pen me-1"></i> Habilitar Edición</label>
+                </div>
+
+                <div id="editControls" class="d-none border-start ps-3 d-flex align-items-center gap-2">
+                    <span class="text-xs fw-bold text-uppercase text-muted me-2">Modo:</span>
+                    <div class="btn-group">
+                        <input type="radio" class="btn-check" name="editMode" id="modeAssign" value="assign" checked>
+                        <label class="btn btn-outline-primary px-3" for="modeAssign">🖌️ Asignar Rápido</label>
+
+                        <input type="radio" class="btn-check" name="editMode" id="modeConfig" value="config">
+                        <label class="btn btn-outline-info text-dark px-3" for="modeConfig">⚙️ Empresas</label>
+                    </div>
+                </div>
+            </div>
+
+            <div id="saveControls" class="d-none">
+                <button class="btn btn-danger me-2 px-3" onclick="location.reload()">
+                    <i class="fas fa-times me-1"></i> Cancelar
+                </button>
+                <button class="btn btn-success fw-bold shadow px-4 py-2" onclick="prepareSave()">
+                    <i class="fas fa-save me-2"></i> GUARDAR CAMBIOS
+                    <span id="pendingCountBadge" class="badge bg-white text-success ms-2 d-none">0</span>
+                </button>
+            </div>
+        </div>
+
+        <div class="card-body p-0">
+            <div id="matrixWrapper" class="matrix-wrapper matrix-locked">
+                <table class="table table-matrix">
+                    <thead>
+                        <tr>
+                            <th>OPERADORES</th>
+                            {% for day in days_range %}
+                            <th class="{% if day.weekday >= 5 %}weekend-col{% endif %}">
+                                <div style="line-height: 1.2;">{{ day|date:"d" }}</div>
+                                <div style="font-size: 0.8rem; font-weight: 400; text-transform: uppercase;">{{ day|date:"D"|slice:":2" }}</div>
+                            </th>
+                            {% endfor %}
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for row in matrix_rows %}
+                        <tr>
+                            <td>
+                                <div class="d-flex align-items-center">
+                                    <div class="rounded-circle bg-gradient-primary text-white d-flex align-items-center justify-content-center me-3 shadow-sm" 
+                                         style="width: 40px; height: 40px; font-size: 1.2rem;">
+                                        <i class="fas fa-user"></i>
+                                    </div>
+                                    <div class="text-truncate">
+                                        <div class="fw-bold text-gray-800" style="font-size: 1.05rem;">
+                                            {{ row.operator.first_name }} {{ row.operator.last_name }}
+                                        </div>
+                                        <div class="small text-gray-500">@{{ row.operator.username }}</div>
+                                    </div>
+                                </div>
+                            </td>
+                            
+                            {% for day_info in row.days %}
+                            <td class="shift-cell {% if day_info.date.weekday >= 5 %}weekend-col{% endif %}"
+                                data-operator="{{ row.operator.id }}"
+                                data-date="{{ day_info.date }}"
+                                data-current-type="{{ day_info.shift.shift_type.id|default:'' }}"
+                                data-companies="{{ day_info.company_ids|default:'[]' }}"
+                                onclick="handleCellClick(this)">
+                                
+                                <div class="cell-content h-100">
+                                    {% if day_info.shift %}
+                                        <div class="shift-badge" style="background-color: {{ day_info.shift.shift_type.color|default:'#888' }};">
+                                            <span>{{ day_info.shift.shift_type.name|slice:":1" }}</span>
+                                            {% if day_info.shift.monitored_companies.exists %}
+                                                <span class="special-indicator" title="Empresas Específicas">👁️</span>
+                                            {% endif %}
+                                        </div>
+                                    {% endif %}
+                                </div>
+                            </td>
+                            {% endfor %}
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="{{ days_range|length|add:1 }}" class="py-5 text-center text-muted">
+                                <i class="fas fa-search fa-3x mb-3 text-gray-300"></i>
+                                <p class="h5">No se encontraron resultados.</p>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            
+            <div class="card-footer bg-white border-top py-3">
+                <div class="d-flex align-items-center gap-4 flex-wrap">
+                    <span class="fw-bold text-gray-700">Referencias:</span>
+                    {% for type in shift_types %}
+                        <div class="d-flex align-items-center border rounded pe-3 ps-1 py-1 bg-light">
+                            <span class="badge me-2 shadow-sm d-flex align-items-center justify-content-center" 
+                                  style="background-color: {{ type.color|default:'#888' }}; width: 30px; height: 30px; font-size: 1rem;">
+                                  {{ type.name|slice:":1" }}
+                            </span>
+                            <span class="fw-bold text-gray-700">{{ type.name }}</span>
+                        </div>
+                    {% endfor %}
+                    <div class="border-start ps-3 ms-2 text-muted">
+                         <i class="fas fa-eye"></i> = Monitoreo Personalizado
                     </div>
                 </div>
             </div>
         </div>
-        {% empty %}
-        <div class="list-group-item text-center p-4">No hay turnos asignados para los próximos 7 días.</div>
-        {% endfor %}
+    </div>
+
+</div>
+
+<div class="modal fade" id="companyModal" tabindex="-1">
+    <div class="modal-dialog"> <div class="modal-content">
+            <div class="modal-header bg-info text-white">
+                <h5 class="modal-title"><i class="fas fa-building me-2"></i> Configurar Empresas</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p class="text-muted mb-3">Selecciona las empresas que <strong>este operador</strong> monitoreará en <strong>este turno</strong>:</p>
+                <form id="companyForm">
+                    <div class="row g-2">
+                        {% for company in all_companies %}
+                        <div class="col-md-6">
+                            <div class="form-check border rounded p-2 ps-5 position-relative hover-bg-light">
+                                <input class="form-check-input company-checkbox position-absolute top-50 start-0 translate-middle-y ms-2" 
+                                       style="width: 1.3em; height: 1.3em;"
+                                       type="checkbox" value="{{ company.id }}" id="comp_{{ company.id }}">
+                                <label class="form-check-label w-100 stretched-link py-1 fw-bold text-gray-700" for="comp_{{ company.id }}">
+                                    {{ company.name }}
+                                </label>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer bg-light">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-info text-white fw-bold px-4" onclick="applyCompanyConfig()">
+                    <i class="fas fa-check me-1"></i> Aplicar Configuración
+                </button>
+            </div>
+        </div>
     </div>
 </div>
-<a href="{% url 'admin_dashboard' %}" class="btn btn-secondary mt-3">Volver al Panel</a>
+
+<div class="modal fade" id="confirmSaveModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-success text-white">
+                <h5 class="modal-title"><i class="fas fa-check-circle me-2"></i> Confirmar Cambios</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <h6 class="fw-bold">Resumen de cambios pendientes:</h6>
+                <ul id="changesSummary" class="list-group list-group-flush mb-3 small border rounded bg-light" style="max-height: 300px; overflow-y: auto;">
+                    </ul>
+                <div class="alert alert-warning d-flex align-items-center">
+                    <i class="fas fa-exclamation-triangle fa-2x me-3"></i>
+                    <div>
+                        <strong>¡Atención!</strong><br>
+                        Estos cambios se aplicarán inmediatamente a la base de datos.
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Seguir Editando</button>
+                <button type="button" class="btn btn-success fw-bold px-4 py-2" onclick="submitBatchSave()">
+                    <i class="fas fa-save me-2"></i> CONFIRMAR AHORA
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script id="shift-types-data" type="application/json">
+    [{"id": "", "color": "transparent", "code": ""},
+    {% for st in shift_types %}
+    {"id": "{{ st.id }}", "color": "{{ st.color|default:'#0d6efd' }}", "code": "{{ st.name|slice:':1' }}", "name": "{{ st.name }}"}{% if not forloop.last %},{% endif %}
+    {% endfor %}]
+</script>
+
+<script>
+    // --- LÓGICA JAVASCRIPT (Idéntica a la anterior, solo re-renderizada para contexto) ---
+    const shiftTypes = JSON.parse(document.getElementById('shift-types-data').textContent);
+    let pendingChanges = {};
+    let isLocked = true;
+    let companyModalCell = null;
+    let companyModal = null;
+    let saveModal = null;
+
+    document.addEventListener("DOMContentLoaded", function(){
+        companyModal = new bootstrap.Modal(document.getElementById('companyModal'));
+        saveModal = new bootstrap.Modal(document.getElementById('confirmSaveModal'));
+    });
+
+    function toggleLock(locked) {
+        isLocked = locked;
+        const matrix = document.getElementById('matrixWrapper');
+        const editControls = document.getElementById('editControls');
+        const saveControls = document.getElementById('saveControls');
+
+        if (locked) {
+            matrix.classList.add('matrix-locked');
+            editControls.classList.add('d-none');
+        } else {
+            matrix.classList.remove('matrix-locked');
+            editControls.classList.remove('d-none');
+            saveControls.classList.remove('d-none');
+        }
+    }
+
+    function handleCellClick(cell) {
+        if (isLocked) return;
+        const mode = document.querySelector('input[name="editMode"]:checked').value;
+        if (mode === 'assign') {
+            cycleShiftLocal(cell);
+        } else if (mode === 'config') {
+            openCompanyConfig(cell);
+        }
+    }
+
+    function cycleShiftLocal(cell) {
+        let currentTypeId = cell.getAttribute('data-current-type');
+        let idx = shiftTypes.findIndex(s => s.id == currentTypeId);
+        if(idx === -1) idx = 0;
+        let nextIdx = (idx + 1) % shiftTypes.length;
+        let nextShift = shiftTypes[nextIdx];
+        updateVisualCell(cell, nextShift.id, nextShift.color, nextShift.code);
+        registerChange(cell, nextShift.id, null); 
+    }
+
+    function openCompanyConfig(cell) {
+        let typeId = cell.getAttribute('data-current-type');
+        if (!typeId) {
+            // Usamos un toast o alerta más suave si prefieres, por ahora alert
+            alert("⚠️ Primero debes asignar un turno (Día/Noche).");
+            return;
+        }
+        companyModalCell = cell;
+        let currentCompanies = JSON.parse(cell.getAttribute('data-companies'));
+        document.querySelectorAll('.company-checkbox').forEach(cb => {
+            cb.checked = currentCompanies.includes(parseInt(cb.value));
+        });
+        companyModal.show();
+    }
+
+    function applyCompanyConfig() {
+        if (!companyModalCell) return;
+        let selectedIds = [];
+        document.querySelectorAll('.company-checkbox:checked').forEach(cb => {
+            selectedIds.push(parseInt(cb.value));
+        });
+        toggleEyeIcon(companyModalCell, selectedIds.length > 0);
+        let currentTypeId = companyModalCell.getAttribute('data-current-type');
+        registerChange(companyModalCell, currentTypeId, selectedIds);
+        companyModalCell.setAttribute('data-companies', JSON.stringify(selectedIds));
+        companyModal.hide();
+    }
+
+    function updateVisualCell(cell, id, color, code) {
+        let contentDiv = cell.querySelector('.cell-content');
+        contentDiv.innerHTML = ''; 
+        if (id) {
+            let badge = document.createElement('div');
+            badge.className = 'shift-badge';
+            badge.style.backgroundColor = color;
+            let span = document.createElement('span');
+            span.textContent = code;
+            badge.appendChild(span);
+            contentDiv.appendChild(badge);
+        }
+        cell.setAttribute('data-current-type', id);
+    }
+
+    function toggleEyeIcon(cell, show) {
+        let badge = cell.querySelector('.shift-badge');
+        if (!badge) return;
+        let existingEye = badge.querySelector('.special-indicator');
+        if (show) {
+            if (!existingEye) {
+                let eye = document.createElement('span');
+                eye.className = 'special-indicator';
+                eye.textContent = '👁️';
+                badge.appendChild(eye);
+            }
+        } else {
+            if (existingEye) existingEye.remove();
+        }
+    }
+
+    function registerChange(cell, typeId, companyIds) {
+        const opId = cell.dataset.operator;
+        const date = cell.dataset.date;
+        const key = `${opId}_${date}`;
+        let companiesToSave = companyIds;
+        if (companiesToSave === null) {
+            companiesToSave = JSON.parse(cell.getAttribute('data-companies'));
+        }
+        // Obtener nombre del operador desde la primera celda de la fila
+        let opName = cell.parentElement.cells[0].innerText.replace(/\s+/g, ' ').trim();
+
+        pendingChanges[key] = {
+            operator_id: opId,
+            date: date,
+            shift_type_id: typeId,
+            company_ids: companiesToSave,
+            opName: opName,
+            shiftName: getShiftName(typeId)
+        };
+        cell.classList.add('unsaved-change');
+        updatePendingCounter();
+    }
+
+    function getShiftName(id) {
+        let s = shiftTypes.find(x => x.id == id);
+        return s ? s.name : 'Borrado';
+    }
+
+    function updatePendingCounter() {
+        const count = Object.keys(pendingChanges).length;
+        const badge = document.getElementById('pendingCountBadge');
+        badge.innerText = count;
+        badge.classList.remove('d-none');
+        if(count === 0) badge.classList.add('d-none');
+    }
+
+    function prepareSave() {
+        const changes = Object.values(pendingChanges);
+        if (changes.length === 0) {
+            alert("No hay cambios pendientes.");
+            return;
+        }
+        const list = document.getElementById('changesSummary');
+        list.innerHTML = '';
+        let byOp = {};
+        changes.forEach(c => {
+            if(!byOp[c.opName]) byOp[c.opName] = [];
+            byOp[c.opName].push(c);
+        });
+        for (const [op, items] of Object.entries(byOp)) {
+            let li = document.createElement('li');
+            li.className = 'list-group-item';
+            // Mostrar fechas de forma más corta
+            let desc = items.map(i => `<span class="badge bg-secondary text-white">${i.date.slice(8)}</span> ${i.shiftName}`).join(' | ');
+            li.innerHTML = `<div class="fw-bold text-primary">${op}</div><div class="ms-2">${desc}</div>`;
+            list.appendChild(li);
+        }
+        saveModal.show();
+    }
+
+    function submitBatchSave() {
+        const changes = Object.values(pendingChanges);
+        const csrf = document.querySelector('[name=csrfmiddlewaretoken]').value;
+        fetch("{% url 'api_save_shift_batch' %}", {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrf },
+            body: JSON.stringify({ changes: changes })
+        })
+        .then(r => r.json())
+        .then(data => {
+            if (data.status === 'success') {
+                pendingChanges = {};
+                document.querySelectorAll('.unsaved-change').forEach(el => el.classList.remove('unsaved-change'));
+                updatePendingCounter();
+                saveModal.hide();
+                
+                // Usamos Toast o Alert simple
+                alert("✅ " + data.message);
+                
+                toggleLock(true);
+                document.getElementById('btnLocked').checked = true;
+            } else {
+                alert("Error: " + data.message);
+            }
+        })
+        .catch(err => {
+            alert("Error de red.");
+            console.error(err);
+        });
+    }
+</script>
 {% endblock %}

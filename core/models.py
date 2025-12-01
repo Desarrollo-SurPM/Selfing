@@ -32,6 +32,11 @@ class ShiftType(models.Model):
     start_time = models.TimeField()
     end_time = models.TimeField()
     duration_hours = models.PositiveIntegerField(help_text="Duración del turno en horas (ej: 8, 12)")
+    color = models.CharField(
+        max_length=7, 
+        default="#CCCCCC", 
+        help_text="Código de color Hex (ej: #FF0000 para rojo)"
+    )
     def __str__(self):
         return f"{self.name} ({self.start_time.strftime('%H:%M')} - {self.end_time.strftime('%H:%M')})"
 

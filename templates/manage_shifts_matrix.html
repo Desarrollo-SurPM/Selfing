@@ -1,0 +1,238 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Planificador de Turnos{% endblock %}
+
+{% block extra_css %}
+<style>
+    .matrix-container {
+        overflow-x: auto;
+        max-width: 100%;
+        border: 1px solid #ddd;
+        border-radius: 8px;
+    }
+    .shift-table {
+        border-collapse: collapse;
+        width: 100%;
+        font-size: 0.9rem;
+    }
+    .shift-table th, .shift-table td {
+        border: 1px solid #e0e0e0;
+        padding: 4px;
+        text-align: center;
+        min-width: 60px;
+    }
+    /* Cabecera y primera columna fija */
+    .shift-table th {
+        background-color: #f8f9fa;
+        position: sticky;
+        top: 0;
+        z-index: 10;
+        font-weight: 600;
+    }
+    .shift-table td:first-child, .shift-table th:first-child {
+        position: sticky;
+        left: 0;
+        background-color: #fff;
+        z-index: 5;
+        font-weight: bold;
+        text-align: left;
+        padding-left: 10px;
+        border-right: 2px solid #ddd;
+    }
+    .shift-table th:first-child {
+        z-index: 15; /* Esquina superior izquierda */
+        background-color: #f8f9fa;
+    }
+    
+    /* Celdas interactivas */
+    .shift-cell {
+        cursor: pointer;
+        transition: all 0.2s;
+        height: 40px;
+        vertical-align: middle;
+        position: relative;
+    }
+    .shift-cell:hover {
+        border: 2px solid #666;
+    }
+    
+    /* Estilos visuales de los turnos */
+    .shift-badge {
+        display: block;
+        width: 100%;
+        height: 100%;
+        border-radius: 4px;
+        color: #fff; /* Texto blanco por defecto */
+        font-weight: bold;
+        line-height: 38px;
+        box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+        text-shadow: 0 1px 1px rgba(0,0,0,0.3);
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2>Planificación Mensual: {{ current_date|date:"F Y"|title }}</h2>
+    <div>
+        <a href="?month={{ prev_month }}&year={{ prev_year }}" class="btn btn-outline-primary btn-sm">&laquo; Anterior</a>
+        <a href="?month={{ next_month }}&year={{ next_year }}" class="btn btn-outline-primary btn-sm">Siguiente &raquo;</a>
+    </div>
+</div>
+
+<div class="mb-3 d-flex gap-2 flex-wrap">
+    {% for type in shift_types %}
+        <div class="badge d-flex align-items-center p-2" 
+             style="background-color: {{ type.color|default:'#888' }}; color: white; cursor: pointer;"
+             draggable="true"
+             ondragstart="drag(event)"
+             data-type-id="{{ type.id }}"
+             data-color="{{ type.color }}">
+             {{ type.name }}
+        </div>
+    {% endfor %}
+    <div class="badge bg-light text-dark border p-2" draggable="true" ondragstart="drag(event)" data-type-id="" data-color="transparent">
+        🗑️ Borrar Turno
+    </div>
+</div>
+
+<div class="matrix-container">
+    <table class="shift-table">
+        <thead>
+            <tr>
+                <th style="min-width: 150px;">Operador</th>
+                {% for day in days_in_month %}
+                <th class="{% if day.weekday >= 5 %}bg-light{% endif %}" title="{{ day|date:'l' }}">
+                    {{ day|date:"d" }}<br>
+                    <small style="font-weight: normal; font-size: 0.7em;">{{ day|date:"D" }}</small>
+                </th>
+                {% endfor %}
+            </tr>
+        </thead>
+        <tbody>
+            {% for row in matrix_rows %}
+            <tr>
+                <td>{{ row.operator.first_name }} {{ row.operator.last_name }}</td>
+                {% for day_info in row.days %}
+                <td 
+                    class="shift-cell" 
+                    data-operator="{{ row.operator.id }}" 
+                    data-date="{{ day_info.date }}"
+                    ondrop="drop(event)"
+                    ondragover="allowDrop(event)"
+                    onclick="cycleShift(this)"
+                >
+                    {% if day_info.shift %}
+                        <div class="shift-badge" 
+                             style="background-color: {{ day_info.shift.shift_type.color|default:'#888' }};">
+                            {{ day_info.shift.shift_type.name|slice:":1" }} </div>
+                    {% endif %}
+                </td>
+                {% endfor %}
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<script id="shift-types-data" type="application/json">
+    [
+        {"id": "", "color": "transparent", "code": ""},
+        {% for st in shift_types %}
+        {"id": "{{ st.id }}", "color": "{{ st.color|default:'#888' }}", "code": "{{ st.name|slice:':1' }}"}{% if not forloop.last %},{% endif %}
+        {% endfor %}
+    ]
+</script>
+
+{% csrf_token %}
+
+<script>
+    // --- Lógica JavaScript para la interactividad ---
+    const shiftTypes = JSON.parse(document.getElementById('shift-types-data').textContent);
+
+    function getCsrfToken() {
+        return document.querySelector('[name=csrfmiddlewaretoken]').value;
+    }
+
+    // Función para actualizar en el servidor
+    function saveShift(operatorId, date, typeId, cellElement) {
+        fetch("{% url 'api_update_shift' %}", {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCsrfToken()
+            },
+            body: JSON.stringify({
+                operator_id: operatorId,
+                date: date,
+                shift_type_id: typeId
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if(data.status !== 'success') {
+                alert("Error al guardar: " + data.message);
+                // Aquí podrías revertir el cambio visual si falló
+            }
+        });
+    }
+
+    // 1. Funcionalidad Click para rotar turnos (Click rápido)
+    function cycleShift(cell) {
+        // Obtenemos el ID actual (buscamos en base al color o un atributo data guardado)
+        // Para simplificar, buscamos qué tipo tiene el color de fondo actual
+        let currentBadge = cell.querySelector('.shift-badge');
+        let currentColor = currentBadge ? currentBadge.style.backgroundColor : 'transparent';
+        
+        // Encontrar índice actual
+        // Nota: Esto es una simplificación visual. Lo ideal es guardar el ID en un data-attribute.
+        // Vamos a mejorar guardando el ID en el badge.
+        let currentId = currentBadge ? currentBadge.dataset.typeId : "";
+        
+        let idx = shiftTypes.findIndex(s => s.id == currentId);
+        let nextIdx = (idx + 1) % shiftTypes.length;
+        let nextShift = shiftTypes[nextIdx];
+
+        updateCellVisuals(cell, nextShift);
+        saveShift(cell.dataset.operator, cell.dataset.date, nextShift.id, cell);
+    }
+
+    // Helper para pintar la celda
+    function updateCellVisuals(cell, shiftType) {
+        cell.innerHTML = ''; // Limpiar
+        if (shiftType.id) {
+            let badge = document.createElement('div');
+            badge.className = 'shift-badge';
+            badge.style.backgroundColor = shiftType.color;
+            badge.textContent = shiftType.code;
+            badge.dataset.typeId = shiftType.id; // Guardamos el ID para saber cuál es
+            cell.appendChild(badge);
+        }
+    }
+
+    // 2. Funcionalidad Drag & Drop (Arrastrar desde la leyenda)
+    function allowDrop(ev) {
+        ev.preventDefault();
+    }
+
+    function drag(ev) {
+        ev.dataTransfer.setData("typeId", ev.target.dataset.typeId);
+        ev.dataTransfer.setData("color", ev.target.dataset.color);
+    }
+
+    function drop(ev) {
+        ev.preventDefault();
+        // Evitar que el evento click se dispare después del drop
+        ev.stopPropagation(); 
+
+        var typeId = ev.dataTransfer.getData("typeId");
+        var cell = ev.target.closest('td'); // Asegurarse de agarrar la celda TD
+        
+        let selectedShift = shiftTypes.find(s => s.id == typeId) || shiftTypes[0]; // 0 es borrar
+        
+        updateCellVisuals(cell, selectedShift);
+        saveShift(cell.dataset.operator, cell.dataset.date, selectedShift.id, cell);
+    }
+</script>
+{% endblock %}

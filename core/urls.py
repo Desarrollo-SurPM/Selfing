@@ -42,6 +42,9 @@ urlpatterns = [
     path('dashboard/turn-reports/', views.view_turn_reports, name='view_turn_reports'),
     
     # --- Rutas de Gestión de Turnos (Fase 1) ---
+    path('dashboard/shifts/matrix/', views.shift_matrix_view, name='shift_matrix_view'),
+    path('api/shifts/update/', views.api_update_shift, name='api_update_shift'),
+    path('api/shifts/batch-save/', views.api_save_shift_batch, name='api_save_shift_batch'),
     path('dashboard/shift-types/', views.manage_shift_types, name='manage_shift_types'),
     path('dashboard/shift-types/add/', views.create_shift_type, name='create_shift_type'),
     path('dashboard/shift-types/edit/<int:type_id>/', views.edit_shift_type, name='edit_shift_type'),
