@@ -23,7 +23,8 @@
             {% endif %}
         </div>
     </div>
-{% if active_notes %}
+
+    {% if active_notes %}
     <div class="mb-4">
         <h4 class="h5 text-warning"><i class="fas fa-exclamation-circle me-2"></i> Notas </h4>
         {% for note in active_notes %}
@@ -83,8 +84,9 @@
                                     <button type="button" class="action-btn" style="background-color: #ffc107; color: #212529;" data-bs-toggle="modal" data-bs-target="#shiftNoteModal">
                                         <i class="fas fa-sticky-note"></i><span>Nota para Próximo Turno</span>
                                     </button>
+                                    
                                     {% if progress_percentage >= 99 %}
-                                    <a href="{% url 'end_turn_preview' %}" class="action-btn animate__animated animate__heartBeat animate__infinite" style="background-color: #dc3545; color: white;" onclick="pauseRoundTimer()">
+                                    <a href="{% url 'end_turn_preview' %}" class="action-btn animate__animated animate__heartBeat animate__infinite" style="background-color: #dc3545; color: white;">
                                         <i class="fas fa-power-off"></i><span>Finalizar Turno</span>
                                     </a>
                                     {% endif %}
@@ -93,6 +95,7 @@
                         </div>
                     </div>
                 </div>
+                
                 <div class="col-lg-4">
                     
                     <div class="mb-4">
@@ -106,20 +109,21 @@
                         <div class="card-body"><h3 class="display-2 fw-bold text-primary" id="dashboard-round-countdown">--:--</h3></div>
                         <div class="card-footer bg-light">
                             {% if not active_round_id %}
-                                <form method="post" action="{% url 'start_virtual_round' %}" class="d-grid" onsubmit="startRoundTimer()">
+                                <form method="post" action="{% url 'start_virtual_round' %}" class="d-grid">
                                     {% csrf_token %}
                                     <button type="submit" class="btn btn-primary">
                                         <i class="fas fa-play-circle me-2"></i>Iniciar Ronda
                                     </button>
                                 </form>
                             {% else %}
-                                {# --- BOTÓN MODIFICADO PARA ABRIR MODAL --- #}
+                                {# BOTÓN ACTUALIZADO PARA USAR MODAL #}
                                 <button type="button" class="btn btn-danger btn-lg shadow-sm w-100" onclick="openFinishRoundModal('{{ active_round_id }}')">
                                      <i class="fas fa-stop-circle me-2"></i>Finalizar Ronda en Curso
                                 </button>
                             {% endif %}
                         </div>
                     </div>
+
                     <div class="card shadow-sm mt-4">
                         <div class="card-header bg-light text-secondary"><h5 class="mb-0"><i class="fas fa-heartbeat me-2"></i>Estado de Servicios</h5></div>
                         <div id="service-status-panel">
@@ -128,17 +132,19 @@
                             </div>
                         </div>
                     </div>
-                    </div>
+                </div>
 
+                <div class="col-12">
                     <div class="card shadow-sm border-info">
                         <div class="card-header bg-light text-secondary"><h5 class="mb-0"><i class="fas fa-history me-2"></i>Tu Actividad Reciente</h5></div>
                         <ul class="list-group list-group-flush activity-panel">
-                            {% for log in traceability_logs|slice:":5" %}<li class="list-group-item"><small>{{ log.action }} <span class="text-muted">- {{ log.timestamp|timesince }} atrás</span></small></li>{% empty %}<li class="list-group-item text-center text-muted py-3">No tienes actividad reciente.</li>{% endfor %}
+                            {% for log in traceability_logs|slice:":5" %}
+                                <li class="list-group-item"><small>{{ log.action }} <span class="text-muted">- {{ log.timestamp|timesince }} atrás</span></small></li>
+                            {% empty %}
+                                <li class="list-group-item text-center text-muted py-3">No tienes actividad reciente.</li>
+                            {% endfor %}
                         </ul>
                     </div>
-
-                    
-            </div>
                 </div>
             </div>
         {% else %}
@@ -284,7 +290,7 @@
 </script>
 
 <script>
-// --- FUNCIÓN PARA ABRIR EL MODAL DE FINALIZAR RONDA ---
+// --- FUNCIÓN PARA ABRIR EL MODAL DE FINALIZAR RONDA (LÓGICA ACTUAL) ---
 function openFinishRoundModal(roundId) {
     const modalEl = document.getElementById('finishRoundModal');
     const modalBody = document.getElementById('finishRoundModalBody');
@@ -336,17 +342,23 @@ function openFinishRoundModal(roundId) {
     });
 }
 
-// ... Resto de tus scripts (Timer, Alarmas, Pánico, Servicios) ...
 document.addEventListener('DOMContentLoaded', function() {
+    
+    // =================================================================
+    // FIX IMPORTANTE: Desbloquear audio con la primera interacción
+    // =================================================================
     document.body.addEventListener('click', function() {
         const alarmSound = document.getElementById('task-alarm-sound');
         if (alarmSound) {
+            // Reproducimos y pausamos inmediatamente para que el navegador "confíe"
             alarmSound.play().then(() => {
                 alarmSound.pause();
                 alarmSound.currentTime = 0;
             }).catch(() => {});
         }
-    }, { once: true }); // Se ejecuta solo una vez al primer clic
+    }, { once: true });
+
+
     // =================================================================
     // Lógica de Alarma de Checklist
     // =================================================================
@@ -371,7 +383,10 @@ document.addEventListener('DOMContentLoaded', function() {
                         const alarmShown = sessionStorage.getItem(sessionKey);
                         if (!alarmShown) {
                             overdueTaskDescription.textContent = data.overdue_tasks[0].description;
-                            if(alarmSound) alarmSound.play().catch(e => console.error("Error al reproducir sonido:", e));
+                            if(alarmSound) {
+                                alarmSound.currentTime = 0;
+                                alarmSound.play().catch(e => console.error("Error al reproducir sonido:", e));
+                            }
                             alarmModal.show();
                             sessionStorage.setItem(sessionKey, 'shown');
                         }
@@ -391,11 +406,16 @@ document.addEventListener('DOMContentLoaded', function() {
         setTimeout(checkApiForAlarms, 30000);
     }
     
-    // Pánico
+    // =================================================================
+    // Funcionalidad del Modal de Pánico
+    // =================================================================
     const panicModalElement = document.getElementById('panicModal');
     if (panicModalElement) {
-        panicModalElement.addEventListener('show.bs.modal', function() { loadEmergencyContacts(); });
+        panicModalElement.addEventListener('show.bs.modal', function() {
+            loadEmergencyContacts();
+        });
     }
+
     function loadEmergencyContacts() {
         const modalContent = document.getElementById('panicModalContent');
         fetch("{% url 'panic_button' %}")
@@ -404,62 +424,119 @@ document.addEventListener('DOMContentLoaded', function() {
                 const parser = new DOMParser();
                 const doc = parser.parseFromString(html, 'text/html');
                 const bodyContent = doc.querySelector('body .container');
-                if (bodyContent) modalContent.innerHTML = bodyContent.innerHTML;
-                else modalContent.innerHTML = '<div class="alert alert-danger">Error.</div>';
+                if (bodyContent) {
+                    modalContent.innerHTML = bodyContent.innerHTML;
+                } else {
+                    modalContent.innerHTML = '<div class="alert alert-danger">Error al cargar los contactos.</div>';
+                }
+            })
+            .catch(error => {
+                modalContent.innerHTML = `<div class="alert alert-danger text-center"><h5>Error al cargar contactos</h5></div>`;
             });
     }
 
-    // Timer Rondas
+    // =================================================================
+    // LÓGICA DE TEMPORIZADOR DE RONDAS Y AUDIO CORREGIDA
+    // =================================================================
     const timerDataElement = document.getElementById('round-timer-data');
-    if (timerDataElement) {
-        const timerData = JSON.parse(timerDataElement.textContent);
-        const countdownElementIds = ['dashboard-round-countdown', 'global-round-countdown'];
-        
-        let lastCheckedMinute = new Date().getMinutes();
-        let roundCompletedThisCycle = timerData.roundCompletedThisCycle;
+    if (!timerDataElement) return;
 
-        function createRoundSessionKey(date) {
-            return `round_alarm_${date.toDateString()}_${date.getHours()}`;
+    const timerData = JSON.parse(timerDataElement.textContent);
+    const countdownElementIds = ['dashboard-round-countdown', 'global-round-countdown'];
+    
+    // Intentamos obtener el modal si existe en tu base, sino se omitirá sin error
+    const roundModalElement = document.getElementById('roundAlarmModal');
+    let roundModal = null;
+    if (roundModalElement) {
+        roundModal = new bootstrap.Modal(roundModalElement);
+    }
+
+    let lastCheckedMinute = new Date().getMinutes();
+    let roundCompletedThisCycle = timerData.roundCompletedThisCycle;
+
+    function mainTimerLoop() {
+        const now = new Date();
+        const currentMinute = now.getMinutes();
+
+        // 1. Detectar si estamos en hora de alerta (minuto 00 o 30)
+        // Se agregó soporte para minuto 00 también, que es estándar
+        if ((currentMinute === 30 || currentMinute === 0) && lastCheckedMinute !== currentMinute) {
+            lastCheckedMinute = currentMinute;
+            
+            // CORRECCIÓN PRINCIPAL: Usamos el ID correcto definido en el HTML
+            const alarmSound = document.getElementById('task-alarm-sound');
+            
+            // Disparar Modal Visual
+            if (roundModal) roundModal.show();
+            
+            // Disparar Sonido con Fallback
+            if (alarmSound) {
+                alarmSound.currentTime = 0;
+                alarmSound.play().catch(e => {
+                    console.log("Audio bloqueado, usando alerta del navegador");
+                    // Fallback visual agresivo si el audio falla
+                    alert("¡ATENCIÓN! HORA DE LA RONDA VIRTUAL");
+                });
+            }
+            
+            // Reiniciar estado de completado para el nuevo ciclo
+            roundCompletedThisCycle = false; 
+
+        } else if (currentMinute !== lastCheckedMinute) {
+            lastCheckedMinute = currentMinute;
         }
 
-        function mainTimerLoop() {
-            const now = new Date();
-            
-            // Verificamos si estamos en el minuto 30 (o el que definas para la ronda)
-            if (now.getMinutes() === 30 && lastCheckedMinute !== 30) {
-                lastCheckedMinute = 30;
-                
-                // --- CÓDIGO AGREGADO: Reproducir sonido y mostrar modal ---
-                const alarmSound = document.getElementById('task-alarm-sound');
-                
-                // Intentar mostrar el modal visual (si existe el elemento)
-                const modalElement = document.getElementById('roundAlarmModal');
-                if (modalElement) {
-                    const modal = new bootstrap.Modal(modalElement);
-                    modal.show();
-                }
-
-                // Intentar reproducir el sonido
-                if (alarmSound) {
-                    alarmSound.currentTime = 0; // Reiniciar audio
-                    alarmSound.play().catch(error => {
-                        console.error("Audio bloqueado por el navegador:", error);
-                        // Fallback visual brusco si el audio falla
-                        alert("¡ATENCIÓN! ES HORA DE LA RONDA VIRTUAL"); 
-                    });
-                }
-                // ----------------------------------------------------------
-
-            } else if (now.getMinutes() !== 30) {
-                lastCheckedMinute = now.getMinutes();
+        let timeToDisplay = "00:00";
+        
+        // 2. Calcular cuenta regresiva
+        if (roundCompletedThisCycle) {
+            timeToDisplay = "00:00";
+        } else {
+            const nextDueTime = new Date(now);
+            if (now.getMinutes() >= 30) {
+                nextDueTime.setHours(now.getHours() + 1, 30, 0, 0); // Próxima: XX:30 del siguiente
+                // Si prefieres ciclos de 30 min exactos:
+                // nextDueTime.setMinutes(nextDueTime.getMinutes() + 30);
+            } else {
+                nextDueTime.setHours(now.getHours(), 30, 0, 0); // Próxima: XX:30 actual
             }
-    
-    // Servicios
+            
+            // Ajuste simple: Si la lógica es cada 30 min (00 y 30), cambiar arriba.
+            // Por ahora mantenemos la lógica de tu archivo antiguo (apuntar al minuto 30).
+            
+            const timeRemaining = nextDueTime - now;
+
+            if (timeRemaining > 0) {
+                const minutes = String(Math.floor((timeRemaining / 1000 / 60) % 60)).padStart(2, '0');
+                const seconds = String(Math.floor((timeRemaining / 1000) % 60)).padStart(2, '0');
+                timeToDisplay = `${minutes}:${seconds}`;
+            }
+        }
+        
+        // 3. Actualizar UI
+        countdownElementIds.forEach(id => {
+            const element = document.getElementById(id);
+            if (element) element.textContent = timeToDisplay;
+        });
+    }
+
+    if (timerData.shiftStartTime) {
+        setInterval(mainTimerLoop, 1000);
+        mainTimerLoop();
+    }
+
+    // =================================================================
+    // Estado de Servicios
+    // =================================================================
     const statusPanel = document.getElementById('service-status-panel');
     function updateServiceStatus() {
         if (!statusPanel) return;
-        fetch(`{% url 'ajax_get_service_status' %}?timestamp=${new Date().getTime()}`)
-            .then(r => r.text()).then(html => { statusPanel.innerHTML = html; });
+        const url = `{% url 'ajax_get_service_status' %}?timestamp=${new Date().getTime()}`;
+        
+        fetch(url)
+            .then(response => response.text())
+            .then(html => { statusPanel.innerHTML = html; })
+            .catch(error => console.error('Error servicios:', error));
     }
     updateServiceStatus();
     setInterval(updateServiceStatus, 5000);
