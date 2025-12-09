@@ -338,7 +338,15 @@ function openFinishRoundModal(roundId) {
 
 // ... Resto de tus scripts (Timer, Alarmas, Pánico, Servicios) ...
 document.addEventListener('DOMContentLoaded', function() {
-    
+    document.body.addEventListener('click', function() {
+        const alarmSound = document.getElementById('task-alarm-sound');
+        if (alarmSound) {
+            alarmSound.play().then(() => {
+                alarmSound.pause();
+                alarmSound.currentTime = 0;
+            }).catch(() => {});
+        }
+    }, { once: true }); // Se ejecuta solo una vez al primer clic
     // =================================================================
     // Lógica de Alarma de Checklist
     // =================================================================
@@ -416,35 +424,35 @@ document.addEventListener('DOMContentLoaded', function() {
 
         function mainTimerLoop() {
             const now = new Date();
+            
+            // Verificamos si estamos en el minuto 30 (o el que definas para la ronda)
             if (now.getMinutes() === 30 && lastCheckedMinute !== 30) {
                 lastCheckedMinute = 30;
-                // Lógica de alerta de ronda (simplificada para este ejemplo)
+                
+                // --- CÓDIGO AGREGADO: Reproducir sonido y mostrar modal ---
+                const alarmSound = document.getElementById('task-alarm-sound');
+                
+                // Intentar mostrar el modal visual (si existe el elemento)
+                const modalElement = document.getElementById('roundAlarmModal');
+                if (modalElement) {
+                    const modal = new bootstrap.Modal(modalElement);
+                    modal.show();
+                }
+
+                // Intentar reproducir el sonido
+                if (alarmSound) {
+                    alarmSound.currentTime = 0; // Reiniciar audio
+                    alarmSound.play().catch(error => {
+                        console.error("Audio bloqueado por el navegador:", error);
+                        // Fallback visual brusco si el audio falla
+                        alert("¡ATENCIÓN! ES HORA DE LA RONDA VIRTUAL"); 
+                    });
+                }
+                // ----------------------------------------------------------
+
             } else if (now.getMinutes() !== 30) {
                 lastCheckedMinute = now.getMinutes();
             }
-
-            let timeToDisplay = "00:00";
-            if (!roundCompletedThisCycle) {
-                const nextDueTime = new Date(now);
-                if (now.getMinutes() >= 30) nextDueTime.setHours(now.getHours() + 1, 30, 0, 0);
-                else nextDueTime.setHours(now.getHours(), 30, 0, 0);
-                const timeRemaining = nextDueTime - now;
-                if (timeRemaining > 0) {
-                    const minutes = String(Math.floor((timeRemaining / 1000 / 60) % 60)).padStart(2, '0');
-                    const seconds = String(Math.floor((timeRemaining / 1000) % 60)).padStart(2, '0');
-                    timeToDisplay = `${minutes}:${seconds}`;
-                }
-            }
-            countdownElementIds.forEach(id => {
-                const element = document.getElementById(id);
-                if (element) element.textContent = timeToDisplay;
-            });
-        }
-        if (timerData.shiftStartTime) {
-            setInterval(mainTimerLoop, 1000);
-            mainTimerLoop();
-        }
-    }
     
     // Servicios
     const statusPanel = document.getElementById('service-status-panel');
