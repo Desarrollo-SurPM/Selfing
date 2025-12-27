@@ -442,7 +442,6 @@ def delete_operator(request, user_id):
     if request.method == 'POST': op.delete(); return redirect('manage_operators')
     return render(request, 'operator_confirm_delete.html', {'operator': op})
 
-
 @login_required
 @user_passes_test(is_supervisor)
 def manage_companies(request):
@@ -532,7 +531,6 @@ def manage_checklist_items(request):
     items = ChecklistItem.objects.all() # El orden por defecto ya está en el modelo
     return render(request, 'manage_checklist.html', {'items': items})
 
-
 @login_required
 @user_passes_test(is_supervisor)
 def create_checklist_item(request):
@@ -591,7 +589,6 @@ def delete_monitored_service(request, service_id):
     if request.method == 'POST': service.delete(); return redirect('manage_monitored_services')
     return render(request, 'monitored_service_confirm_delete.html', {'service': service})
 
-
 @login_required
 @user_passes_test(is_supervisor)
 def view_turn_reports(request):
@@ -632,7 +629,6 @@ def view_turn_reports(request):
         'selected_order_by': order_by,
     }
     return render(request, 'view_turn_reports.html', context)
-
 
 @login_required
 @user_passes_test(is_supervisor)
@@ -866,7 +862,6 @@ def shift_matrix_view(request):
     }
     return render(request, 'manage_shifts_matrix.html', context)
 
-
 @login_required
 @user_passes_test(is_supervisor)
 def manage_shift_types(request):
@@ -881,7 +876,6 @@ def create_shift_type(request):
         if form.is_valid(): form.save(); return redirect('manage_shift_types')
     else: form = ShiftTypeForm()
     return render(request, 'shift_type_form.html', {'form': form, 'title': 'Crear Nuevo Tipo de Turno'})
-
 
 @login_required
 @user_passes_test(is_supervisor)
@@ -908,7 +902,6 @@ def shift_calendar_view(request):
     operators = User.objects.filter(is_superuser=False).order_by('username')
     context = {'operators': operators}
     return render(request, 'shift_calendar.html', context)
-
 
 @login_required
 @user_passes_test(is_supervisor)
@@ -991,16 +984,48 @@ def get_active_shift(user):
 def start_shift(request):
     """
     Vista corregida que maneja la ACCIÓN de iniciar un turno.
+    Usa cálculo de diferencial de tiempo para ser exacto con los 30 minutos.
     """
     if request.method == 'POST':
-        # 1. Usar la lógica centralizada para encontrar el turno correcto.
-        #    get_active_shift() ya busca turnos pendientes de hoy/ayer.
         shift_to_start = get_active_shift(request.user)
 
-        # 2. Validar el turno encontrado
         if shift_to_start and shift_to_start.actual_start_time is None:
-            # 3. Es el turno pendiente correcto, ¡iniciarlo!
-            shift_to_start.actual_start_time = timezone.now()
+            
+            # --- VALIDACIÓN ROBUSTA DE 30 MINUTOS ---
+            # 1. Obtenemos la zona horaria actual configurada (Santiago)
+            current_tz = timezone.get_current_timezone()
+            
+            # 2. Construimos la fecha/hora de inicio programada (Naive)
+            scheduled_naive = datetime.combine(shift_to_start.date, shift_to_start.shift_type.start_time)
+            
+            # 3. La convertimos a Aware (con zona horaria) para poder restar con 'now'
+            if timezone.is_naive(scheduled_naive):
+                scheduled_start = timezone.make_aware(scheduled_naive, current_tz)
+            else:
+                scheduled_start = scheduled_naive
+
+            # 4. Obtenemos la hora actual
+            now = timezone.now()
+
+            # 5. Calculamos cuánto falta para el turno
+            # Si el turno es a las 08:30 y son las 02:16, time_difference será aprox 6 horas.
+            # Si el turno fue ayer, time_difference será negativo.
+            time_difference = scheduled_start - now
+
+            # 6. La Condición: Si faltan MÁS de 30 minutos (timedelta > 30 min), bloqueamos.
+            # Esto permite iniciar turnos pasados (diferencia negativa) o próximos (diferencia < 30 min).
+            if time_difference > timedelta(minutes=30):
+                # Calculamos la hora exacta de habilitación para mostrarla en el mensaje
+                allowed_entry_time = scheduled_start - timedelta(minutes=30)
+                messages.error(
+                    request, 
+                    f"Es muy temprano. Podrás iniciar turno a partir de las {allowed_entry_time.strftime('%H:%M')} (30 min antes)."
+                )
+                return redirect('operator_dashboard')
+            # -----------------------------------------------------
+
+            # Si pasa la validación, iniciamos
+            shift_to_start.actual_start_time = now
             shift_to_start.save()
             
             # Registro de trazabilidad
@@ -1012,11 +1037,9 @@ def start_shift(request):
             messages.success(request, f"Turno '{shift_to_start.shift_type.name}' iniciado correctamente.")
         
         elif shift_to_start and shift_to_start.actual_start_time is not None:
-            # 4. El turno ya estaba iniciado (prevención de doble-clic o error)
             messages.warning(request, "El turno ya se encuentra iniciado.")
         
         else:
-            # 5. get_active_shift no encontró nada
             messages.error(request, "No se pudo encontrar un turno pendiente para iniciar.")
 
     return redirect('operator_dashboard')
@@ -1028,12 +1051,42 @@ def operator_dashboard(request):
     
     # Formulario para crear notas de turno desde el modal
     shift_note_form = ShiftNoteForm()
+
+    # --- LÓGICA DE BLOQUEO VISUAL (NUEVO) ---
+    start_blocked = False
+    allowed_start_time = None
+
+    # Si hay turno pero no ha iniciado, verificamos la hora
+    if active_shift and not active_shift.actual_start_time:
+        try:
+            current_tz = timezone.get_current_timezone()
+            # Combinamos fecha del turno + hora de inicio
+            scheduled_naive = datetime.combine(active_shift.date, active_shift.shift_type.start_time)
+            
+            # Aseguramos zona horaria
+            if timezone.is_naive(scheduled_naive):
+                scheduled_start = timezone.make_aware(scheduled_naive, current_tz)
+            else:
+                scheduled_start = scheduled_naive
+            
+            # Calculamos hora permitida (30 min antes)
+            allowed_start_time = scheduled_start - timedelta(minutes=30)
+            
+            # Si ahora es antes de la hora permitida -> BLOQUEADO
+            if timezone.now() < allowed_start_time:
+                start_blocked = True
+        except Exception as e:
+            # En caso de error de fechas, no bloqueamos por seguridad
+            print(f"Error calculando bloqueo: {e}")
+    # ----------------------------------------
     
     # Preparamos un contexto base
     context = {
         'active_shift': active_shift,
         'active_notes': active_notes,
         'shift_note_form': shift_note_form,
+        'start_blocked': start_blocked,           # <-- Variable nueva
+        'allowed_start_time': allowed_start_time, # <-- Variable nueva
     }
 
     # Si el turno ya ha sido iniciado, calculamos todo el progreso y las tareas.
@@ -1133,7 +1186,7 @@ def operator_dashboard(request):
 def my_logbook_view(request):
     """
     Muestra al operador un resumen de sus novedades.
-    VERSIÓN SIMPLIFICADA Y ROBUSTA.
+    VERSIÓN SIMPLIFICADA Y ROBUSTA (Con mejora de ordenamiento por horario).
     """
     active_shift = get_active_shift(request.user)
     
@@ -1141,10 +1194,33 @@ def my_logbook_view(request):
     if not active_shift:
         return render(request, 'my_logbook.html', {'logbook_data': {}})
 
-    # 1. Hacemos la consulta más directa posible.
-    logs_del_turno = UpdateLog.objects.filter(
+    # 1. Hacemos la consulta y aplicamos la LÓGICA DE ORDENAMIENTO
+    logs_del_turno_qs = UpdateLog.objects.filter(
         operator_shift=active_shift
-    ).select_related('installation', 'installation__company').order_by('created_at')
+    ).select_related('installation', 'installation__company')
+
+    # Anotamos la hora efectiva y calculamos la fecha correcta para el orden
+    logs_del_turno = logs_del_turno_qs.annotate(
+        # Usamos la hora manual si existe, si no, extraemos la hora de created_at
+        effective_time=Coalesce(
+            'manual_timestamp', 
+            Cast('created_at', output_field=TimeField()),
+            output_field=TimeField()
+        ),
+    ).annotate(
+        effective_date=Case(
+            When(
+                # Lógica para turnos nocturnos: si el evento es en la madrugada (hora < inicio)
+                # se asume que pertenece al día siguiente.
+                Q(operator_shift__shift_type__end_time__lt=F('operator_shift__shift_type__start_time')) &
+                Q(effective_time__lt=F('operator_shift__shift_type__start_time')) &
+                Q(effective_time__lte=F('operator_shift__shift_type__end_time')),
+                then=ExpressionWrapper(F('operator_shift__date') + timedelta(days=1), output_field=DateField()),
+            ),
+            default=F('operator_shift__date'),
+            output_field=DateField()
+        )
+    ).order_by('effective_date', 'effective_time') # Ordenamos cronológicamente
 
     # Si la consulta no devuelve nada, devolvemos un diccionario vacío.
     if not logs_del_turno.exists():
@@ -1172,49 +1248,6 @@ def my_logbook_view(request):
     context = {
         'logbook_data': logbook_data,
         'shift_start_time': active_shift.actual_start_time
-    }
-    
-    return render(request, 'my_logbook.html', context)
-    """
-    Muestra al operador un resumen de sus novedades.
-    VERSIÓN FINAL: Esta vista busca las novedades del turno activo, pero si no
-    encuentra, busca todas las novedades del usuario en las últimas 24 horas
-    para asegurar que siempre vea su trabajo reciente.
-    """
-    active_shift = get_active_shift(request.user)
-    log_entries = None
-
-    # Estrategia 1: Intentar obtener los logs del turno activo actual (el método más preciso)
-    if active_shift and active_shift.actual_start_time:
-        log_entries = UpdateLog.objects.filter(
-            operator_shift=active_shift
-        ).select_related('installation__company').order_by('created_at')
-
-    # Estrategia 2 (Plan B): Si no se encontraron logs con el turno activo,
-    # buscamos todos los logs creados por el usuario en las últimas 24 horas.
-    if not log_entries:
-        time_threshold = timezone.now() - timedelta(hours=24)
-        log_entries = UpdateLog.objects.filter(
-            operator_shift__operator=request.user,
-            created_at__gte=time_threshold
-        ).select_related('installation__company').order_by('created_at')
-    
-    # Si después de ambas estrategias no hay logs, mostramos la página vacía.
-    if not log_entries:
-        messages.info(request, "No has registrado novedades en tu turno actual.")
-        return render(request, 'my_logbook.html', {'logbook_data': None})
-
-    # Si encontramos logs (con cualquiera de las dos estrategias), los procesamos.
-    logbook_data = defaultdict(lambda: defaultdict(list))
-    for log in log_entries:
-        if log.installation and log.installation.company:
-            company_name = log.installation.company.name
-            installation_name = log.installation.name
-            logbook_data[company_name][installation_name].append(log)
-
-    context = {
-        'logbook_data': dict(logbook_data),
-        'shift_start_time': active_shift.actual_start_time if active_shift else None
     }
     
     return render(request, 'my_logbook.html', context)
@@ -1506,7 +1539,6 @@ def checklist_view(request):
         'tasks_for_js': tasks_for_js,
     }
     return render(request, 'checklist.html', context)
-
 
 # Flujo de Rondas Virtuales
 @login_required
@@ -1884,7 +1916,6 @@ def check_pending_alarms(request):
                 overdue_tasks.append({'description': item.description})
 
     return JsonResponse({'overdue_tasks': overdue_tasks})
-
 
 # --- VISTAS DE CONTACTOS DE EMERGENCIA ---
 
@@ -2524,7 +2555,6 @@ def check_first_round_started(request):
         return JsonResponse({'has_rounds': has_rounds})
     
     return JsonResponse({'has_rounds': False})
-
 
 @login_required
 @user_passes_test(is_supervisor)

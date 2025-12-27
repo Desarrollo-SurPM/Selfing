@@ -83,5 +83,48 @@
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     {% block extra_js %}{% endblock %}
 
+    <script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const startRoundBtn = document.getElementById('startRoundFromModal');
+        const alarmSound = document.getElementById('alarm-sound');
+        
+        if (startRoundBtn) {
+            startRoundBtn.addEventListener('click', function() {
+                // Busca el token CSRF del formulario de logout existente en el navbar
+                const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
+                const url = "{% url 'start_virtual_round' %}"; 
+
+                fetch(url, {
+                    method: 'POST',
+                    headers: {
+                        'X-CSRFToken': csrfToken,
+                        'Content-Type': 'application/json',
+                        'X-Requested-With': 'XMLHttpRequest'
+                    },
+                    body: JSON.stringify({})
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.status === 'success') {
+                        // Ocultar modal y detener sonido
+                        const modalEl = document.getElementById('roundAlarmModal');
+                        const modalInstance = bootstrap.Modal.getInstance(modalEl);
+                        if (modalInstance) modalInstance.hide();
+                        
+                        if (alarmSound) {
+                            alarmSound.pause();
+                            alarmSound.currentTime = 0;
+                        }
+                        // Recargar para actualizar estado
+                        window.location.reload(); 
+                    } else {
+                        alert('Error: ' + data.message);
+                    }
+                })
+                .catch(error => console.error('Error:', error));
+            });
+        }
+    });
+    </script>
 </body>
 </html>
