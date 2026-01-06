@@ -16,7 +16,8 @@ from .models import (
 class UpdateLogForm(forms.ModelForm):
     class Meta:
         model = UpdateLog
-        fields = ['installation', 'message', 'manual_timestamp']
+        # Agregamos 'attachment'
+        fields = ['installation', 'message', 'manual_timestamp', 'attachment']
         widgets = {
             'installation': forms.HiddenInput(),
             'message': forms.Textarea(attrs={
@@ -25,17 +26,17 @@ class UpdateLogForm(forms.ModelForm):
                 'spellcheck': 'true',
                 'lang': 'es-LA'
             }),
-            # --- MODIFICACIÓN AQUÍ ---
-            # Cambiamos type='time' por type='text' y añadimos un patrón
             'manual_timestamp': forms.TimeInput(attrs={
-                                    'type': 'text', # Evita validación de hora del navegador
-                                    'pattern': '[0-9]{2}:[0-9]{2}', # Sugiere el formato HH:MM
+                                    'type': 'text',
+                                    'pattern': '[0-9]{2}:[0-9]{2}',
                                     'placeholder': 'HH:MM'
                                  }, format='%H:%M'),
-            # --- FIN DE MODIFICACIÓN ---
+            # Widget para adjuntar
+            'attachment': forms.ClearableFileInput(attrs={'class': 'form-control'}),
         }
         labels = {
-            'manual_timestamp': 'Hora del Evento (Opcional - Formato HH:MM)', # Etiqueta actualizada
+            'manual_timestamp': 'Hora del Evento (Opcional - Formato HH:MM)',
+            'attachment': 'Adjuntar Foto o Video (Opcional)'
         }
         # La función clean_manual_timestamp no necesita cambios por ahora
         def clean_manual_timestamp(self):
@@ -69,16 +70,17 @@ class UpdateLogForm(forms.ModelForm):
 class UpdateLogEditForm(forms.ModelForm):
     class Meta:
         model = UpdateLog
-        # Añadimos 'manual_timestamp' a los campos editables
-        fields = ['message', 'manual_timestamp']
+        # Agregamos 'attachment'
+        fields = ['message', 'manual_timestamp', 'attachment']
         widgets = {
             'message': forms.Textarea(attrs={'rows': 4}),
-            # Añadimos el widget de tiempo para una mejor experiencia
             'manual_timestamp': forms.TimeInput(attrs={'type': 'time'}, format='%H:%M'),
+            'attachment': forms.ClearableFileInput(attrs={'class': 'form-control'}),
         }
         labels = {
             'message': 'Corregir Novedad',
             'manual_timestamp': 'Hora Manual del Evento (Opcional)',
+            'attachment': 'Cambiar Adjunto (Dejar vacío para mantener el actual)'
         }
 
     # Añadimos la misma validación que en el formulario de creación
@@ -120,17 +122,18 @@ class AdminUpdateLogForm(forms.ModelForm):
 
     class Meta:
         model = UpdateLog
-        # Campos DEL MODELO UpdateLog que este formulario manejará directamente
-        fields = ['installation', 'message', 'manual_timestamp']
-        # Los campos 'company' y 'target_shift' son campos EXTRA del formulario
+        # Agregamos 'attachment'
+        fields = ['installation', 'message', 'manual_timestamp', 'attachment']
         labels = {
             'installation': 'Instalación',
             'message': 'Mensaje de la Novedad',
             'manual_timestamp': 'Hora del Evento (Opcional)',
+            'attachment': 'Adjuntar Foto/Video'
         }
         widgets = {
             'message': forms.Textarea(attrs={'rows': 3, 'placeholder': 'Ej: Apertura de sucursal OK.'}),
             'manual_timestamp': forms.TimeInput(attrs={'type': 'time'}),
+            'attachment': forms.ClearableFileInput(attrs={'class': 'form-control'}),
         }
 
     # *** CORRECCIÓN APLICADA AQUÍ ***

@@ -286,3 +286,119 @@ main > * {
 #activity-card .activity-panel::-webkit-scrollbar-thumb:hover {
     background: #555;
 }
+
+/* =========================================
+   SELECTION CARDS (Diseño Clean UI)
+   ========================================= */
+
+/* Contenedor Grid Responsivo */
+.selection-grid {
+    display: grid;
+    /* Crea columnas automáticas de mínimo 240px */
+    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+    gap: 1.5rem;
+    padding: 0.5rem;
+}
+
+/* Tarjeta Base */
+.selection-card {
+    background: #ffffff;
+    border: 1px solid #e3e6f0; /* Borde sutil */
+    border-radius: 12px;
+    padding: 2rem 1.5rem;
+    position: relative;
+    overflow: hidden;
+    cursor: pointer;
+    transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+    box-shadow: 0 0.15rem 1.75rem 0 rgba(58, 59, 69, 0.05); /* Sombra muy suave */
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    min-height: 200px;
+    text-align: center;
+}
+
+/* Indicador de Color Lateral (Barra izquierda) */
+.selection-card::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 5px;
+    background-color: var(--card-color, #4e73df); /* Color dinámico */
+}
+
+/* Efecto Hover */
+.selection-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 1rem 3rem rgba(0,0,0,0.1);
+    border-color: transparent;
+}
+
+/* Contenedor del Icono (Círculo) */
+.card-icon-wrapper {
+    width: 80px;
+    height: 80px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 1rem;
+    background-color: var(--card-bg-soft, #f8f9fc); /* Fondo suave dinámico */
+    color: var(--card-color, #4e73df); /* Color del icono dinámico */
+    font-size: 2rem;
+    transition: transform 0.3s ease;
+}
+
+.selection-card:hover .card-icon-wrapper {
+    transform: scale(1.1) rotate(5deg);
+}
+
+/* Título de la tarjeta */
+.selection-card h5 {
+    color: #5a5c69;
+    font-weight: 700;
+    font-size: 1.1rem;
+    margin: 0;
+    line-height: 1.4;
+}
+
+/* --- Variantes de Color (Define el color principal y el fondo suave) --- */
+.variant-blue   { --card-color: #4e73df; --card-bg-soft: rgba(78, 115, 223, 0.1); }
+.variant-green  { --card-color: #1cc88a; --card-bg-soft: rgba(28, 200, 138, 0.1); }
+.variant-cyan   { --card-color: #36b9cc; --card-bg-soft: rgba(54, 185, 204, 0.1); }
+.variant-yellow { --card-color: #f6c23e; --card-bg-soft: rgba(246, 194, 62, 0.1); }
+.variant-red    { --card-color: #e74a3b; --card-bg-soft: rgba(231, 74, 59, 0.1); }
+.variant-purple { --card-color: #6f42c1; --card-bg-soft: rgba(111, 66, 193, 0.1); }
+.variant-orange { --card-color: #fd7e14; --card-bg-soft: rgba(253, 126, 20, 0.1); }
+.variant-teal   { --card-color: #20c997; --card-bg-soft: rgba(32, 201, 151, 0.1); }
+.variant-dark   { --card-color: #5a5c69; --card-bg-soft: rgba(90, 92, 105, 0.1); }
+
+/* --- Optimización Móvil (Transforma a lista) --- */
+@media (max-width: 576px) {
+    .selection-grid {
+        grid-template-columns: 1fr; /* Una sola columna */
+        gap: 1rem;
+    }
+    .selection-card {
+        flex-direction: row; /* Icono a la izquierda, texto derecha */
+        justify-content: flex-start;
+        padding: 1.25rem;
+        min-height: auto; /* Altura automática */
+        text-align: left;
+    }
+    .card-icon-wrapper {
+        width: 50px;
+        height: 50px;
+        font-size: 1.25rem;
+        margin-bottom: 0;
+        margin-right: 1rem;
+        flex-shrink: 0; /* Evita que el icono se aplaste */
+    }
+    .selection-card h5 {
+        font-size: 1rem;
+    }
+}

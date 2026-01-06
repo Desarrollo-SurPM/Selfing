@@ -214,7 +214,7 @@ def review_and_send_novedades(request):
     if request.method == 'POST':
         if 'action' in request.POST and request.POST['action'] == 'add_novedad':
             # Pasar cycle_shifts_qs para validación
-            form = AdminUpdateLogForm(request.POST, cycle_shifts=cycle_shifts_qs)
+            form = AdminUpdateLogForm(request.POST, request.FILES, cycle_shifts=cycle_shifts_qs)
             if form.is_valid():
                 selected_shift = form.cleaned_data.get('target_shift')
                 if selected_shift and cycle_shifts_qs.filter(pk=selected_shift.pk).exists():
@@ -293,6 +293,10 @@ def review_and_send_novedades(request):
 
             if recipient_list:
                 try:
+                    protocol = 'https' if request.is_secure() else 'http'
+                    domain = request.get_host()
+                    base_url = f"{protocol}://{domain}"
+                    
                     email_context = {
                         'company': company,
                         'updates': updates_to_send_in_email,
@@ -300,6 +304,7 @@ def review_and_send_novedades(request):
                         'enviado_por': request.user,
                         'cycle_start': start_of_cycle,
                         'cycle_end': end_of_cycle,
+                        'base_url': base_url,
                     }
                     html_message = render_to_string('emails/reporte_novedades.html', email_context)
                     send_mail(
@@ -1361,7 +1366,7 @@ def edit_update_log(request, log_id):
         log_entry.original_message = log_entry.message
 
     if request.method == 'POST':
-        form = UpdateLogEditForm(request.POST, instance=log_entry)
+        form = UpdateLogEditForm(request.POST, request.FILES, instance=log_entry)
         if form.is_valid():
             log_entry.is_edited = True
             log_entry.edited_at = timezone.now()
@@ -1397,7 +1402,7 @@ def update_log_view(request):
 
     # 2. Manejamos el guardado del formulario cuando se envía.
     if request.method == 'POST':
-        form = UpdateLogForm(request.POST)
+        form = UpdateLogForm(request.POST, request.FILES)
         if form.is_valid():
             new_log = form.save(commit=False)
             new_log.operator_shift = active_shift

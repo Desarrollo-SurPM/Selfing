@@ -172,11 +172,10 @@ class UpdateLog(models.Model):
     message = models.TextField()
     created_at = models.DateTimeField(auto_now_add=True)
     
-    # --- CAMPO AÑADIDO ---
-    # Para saber si esta novedad ya fue incluida en un correo.
+    # Campo existente
     is_sent = models.BooleanField(default=False, verbose_name="¿Enviado en reporte?")
 
-    # --- 👇 NUEVOS CAMPOS PARA SPRINT 1 👇 ---
+    # Campos existentes del Sprint 1
     manual_timestamp = models.TimeField(
         null=True, 
         blank=True, 
@@ -196,12 +195,27 @@ class UpdateLog(models.Model):
         blank=True, 
         verbose_name="Fecha de Edición"
     )
-    # --- 👆 FIN DE NUEVOS CAMPOS 👆 ---
+
+    # --- 👇 NUEVO CAMPO PARA ADJUNTOS 👇 ---
+    attachment = models.FileField(
+        upload_to='novedades/%Y/%m/%d/',
+        blank=True,
+        null=True,
+        verbose_name="Adjunto (Foto/Video)",
+        help_text="Formatos sugeridos: JPG, PNG, MP4"
+    )
+    # --- 👆 FIN DE NUEVO CAMPO 👆 ---
 
     def __str__(self):
         return f"Novedad para {self.installation.name} por {self.operator_shift.operator.username}"
 
-
+    # --- 👇 NUEVO MÉTODO HELPER 👇 ---
+    def is_image(self):
+        if not self.attachment:
+            return False
+        name = self.attachment.name.lower()
+        return name.endswith(('.png', '.jpg', '.jpeg', '.gif', '.webp'))
+    # --- 👆 FIN MÉTODO HELPER 👆 ---
 class Email(models.Model):
     operator = models.ForeignKey(User, on_delete=models.CASCADE, related_name='emails_sent')
     company = models.ForeignKey(Company, on_delete=models.CASCADE, related_name='emails_received')

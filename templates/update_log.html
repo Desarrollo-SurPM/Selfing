@@ -4,81 +4,198 @@
 {% block title %}Registrar Novedad en Bitácora{% endblock %}
 
 {% block content %}
-<div class="container">
-    <div class="text-center mb-4">
-        <h2 class="h3">Registrar Novedad en Bitácora</h2>
-        <p class="text-muted">Siga los pasos para registrar un nuevo evento.</p>
+
+<style>
+    /* --- ESTILOS VISUALES --- */
+    .bitacora-container {
+        max-width: 1200px;
+        margin: 0 auto;
+        padding: 20px;
+    }
+
+    /* GRID ROBUSTO: Se cuadra siempre */
+    .saas-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+        gap: 20px;
+        margin-bottom: 30px;
+    }
+
+    /* TARJETA UNIFICADA: Altura igual para todas */
+    .saas-card {
+        background: white;
+        border: 1px solid #e3e6f0;
+        border-radius: 10px;
+        padding: 20px;
+        cursor: pointer;
+        transition: transform 0.2s, box-shadow 0.2s, border-color 0.2s;
+        display: flex;
+        flex-direction: column; /* Icono arriba, texto abajo para cuadrar mejor */
+        align-items: center;
+        justify-content: center;
+        text-align: center;
+        height: 100%; /* Ocupa toda la altura de la fila */
+        min-height: 160px; /* Altura mínima garantizada */
+        box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+    }
+
+    .saas-card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 10px 20px rgba(0,0,0,0.12);
+        border-color: #4e73df;
+    }
+
+    /* Icono dentro de la tarjeta */
+    .card-icon {
+        width: 60px;
+        height: 60px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin-bottom: 15px;
+        font-size: 1.8rem;
+    }
+
+    .card-title-text {
+        font-weight: 700;
+        color: #4a4a4a;
+        font-size: 1.1rem;
+        line-height: 1.3;
+    }
+
+    /* Pasos */
+    .step-header {
+        border-bottom: 2px solid #f0f2f5;
+        padding-bottom: 15px;
+        margin-bottom: 25px;
+        display: flex;
+        align-items: center;
+    }
+    .step-badge {
+        background: #4e73df;
+        color: white;
+        width: 32px;
+        height: 32px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: bold;
+        margin-right: 15px;
+        flex-shrink: 0;
+    }
+    
+    /* Clase utilitaria para ocultar el select original pero que siga funcionando */
+    .visually-hidden-input {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        padding: 0;
+        margin: -1px;
+        overflow: hidden;
+        clip: rect(0, 0, 0, 0);
+        border: 0;
+    }
+</style>
+
+<div class="bitacora-container">
+    
+    <div class="text-center mb-5">
+        <h2 class="h3 fw-bold text-gray-800">Bitácora Operativa</h2>
+        <p class="text-muted">Registro de novedades e incidencias</p>
     </div>
 
-    <div id="company-selection">
-        <h4 class="mb-3 fw-normal">Paso 1: Seleccione la Empresa</h4>
-        <div class="row g-4 justify-content-center">
+    <div id="section-companies">
+        <div class="step-header">
+            <span class="step-badge">1</span>
+            <h4 class="m-0 text-gray-700">Seleccione Empresa</h4>
+        </div>
+
+        <div class="saas-grid">
             {% for company in companies %}
-            <div class="col-md-3">
-                <div class="card h-100 card-option company-card company-unique-{{ forloop.counter0|add:0 }}" 
-                     data-company-id="{{ company.id }}" 
-                     data-company-name="{{ company.name }}"
-                     style="border-left: 5px solid {% cycle '#4e73df' '#1cc88a' '#36b9cc' '#f6c23e' '#e74a3b' '#9b59b6' '#fd7e14' '#20c997' '#6f42c1' '#dc3545' %}; 
-                            box-shadow: 0 4px 8px rgba(0,0,0,0.1); 
-                            transition: all 0.3s ease;"
-                     onmouseover="this.style.transform='translateY(-5px)'; this.style.boxShadow='0 8px 16px rgba(0,0,0,0.2)';"
-                     onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='0 4px 8px rgba(0,0,0,0.1)';">
-                    <div class="card-body d-flex flex-column justify-content-center align-items-center" 
-                         style="background: {% cycle 'linear-gradient(135deg, #4e73df, #224abe)' 'linear-gradient(135deg, #1cc88a, #17a673)' 'linear-gradient(135deg, #36b9cc, #2c9faf)' 'linear-gradient(135deg, #f6c23e, #dda20a)' 'linear-gradient(135deg, #e74a3b, #c0392b)' 'linear-gradient(135deg, #9b59b6, #8e44ad)' 'linear-gradient(135deg, #fd7e14, #e8590c)' 'linear-gradient(135deg, #20c997, #1ba085)' 'linear-gradient(135deg, #6f42c1, #59359a)' 'linear-gradient(135deg, #dc3545, #c82333)' %}; 
-                                color: white; 
-                                border-radius: 0.375rem;">
-                        <i class="fas {% cycle 'fa-building' 'fa-industry' 'fa-store' 'fa-home' 'fa-hospital' 'fa-school' 'fa-university' 'fa-clinic-medical' 'fa-fire-station' 'fa-warehouse' %} fa-3x mb-3" 
-                           style="color: rgba(255,255,255,0.9);"></i>
-                        <h5 class="card-title h6 text-center" style="color: white; font-weight: 600;">{{ company.name }}</h5>
-                    </div>
+            <div class="saas-card company-trigger" 
+                 data-company-id="{{ company.id }}" 
+                 data-company-name="{{ company.name }}">
+                
+                <div class="card-icon" style="background-color: {% cycle '#e8f0fe' '#e6fffa' '#fff8e1' '#fce4ec' '#f3e5f5' %}; color: {% cycle '#1a73e8' '#00b894' '#ffa000' '#e91e63' '#9c27b0' %};">
+                    <i class="fas {% cycle 'fa-building' 'fa-industry' 'fa-store' 'fa-warehouse' 'fa-hospital' %}"></i>
                 </div>
+                <div class="card-title-text">{{ company.name }}</div>
             </div>
             {% endfor %}
         </div>
-        <div class="text-center mt-4">
-            <a href="{% url 'operator_dashboard' %}" class="btn btn-outline-secondary">
+
+        <div class="text-center">
+            <a href="{% url 'operator_dashboard' %}" class="btn btn-secondary">
                 <i class="fas fa-arrow-left me-2"></i>Volver al Panel
             </a>
         </div>
     </div>
 
-    <div id="installation-selection" style="display: none;">
-        <hr class="my-4">
-        <h4 class="mb-3 fw-normal">Paso 2: Seleccione la Instalación para <strong id="company-name-for-installations"></strong></h4>
-        <div id="installation-list" class="row g-4 justify-content-center">
-            </div>
+    <div id="section-installations" style="display: none;">
+        <div class="step-header">
+            <span class="step-badge">2</span>
+            <h4 class="m-0 text-gray-700">Instalación en <strong id="lbl-company-name" class="text-primary"></strong></h4>
+        </div>
+
+        <div id="installations-grid-target" class="saas-grid"></div>
+
         <div class="text-center mt-4">
-            <button type="button" class="btn btn-outline-secondary back-to-companies">
-                <i class="fas fa-arrow-left me-2"></i>Volver a Empresas
+            <button class="btn btn-outline-secondary btn-back-companies">
+                <i class="fas fa-arrow-left me-2"></i>Cambiar Empresa
             </button>
         </div>
     </div>
 
-    <div id="update-form-container" style="display: none;">
-        <hr class="my-4">
-        <h4 class="mb-3 fw-normal">Paso 3: Describa la Novedad para <strong id="installation-name-for-form"></strong></h4>
-        <form method="post" class="card shadow-sm">
-            <div class="card-body">
-                {% csrf_token %}
-                {{ form.installation|as_crispy_field }}
-                {{ form.message|as_crispy_field }}
+    <div id="section-form" style="display: none;">
+        <div class="step-header">
+            <span class="step-badge">3</span>
+            <h4 class="m-0 text-gray-700">Reporte para <strong id="lbl-installation-name" class="text-primary"></strong></h4>
+        </div>
 
-                <div class="mb-3">
-                    <button type="button" class="btn btn-sm btn-outline-secondary" id="toggle-manual-time">
-                        <i class="fas fa-clock me-1"></i> Registrar hora específica (Opcional)
-                    </button>
-                </div>
-                <div id="manual-time-container" style="display: none;">
-                    {{ form.manual_timestamp|as_crispy_field }}
-                </div>
+        <div class="row justify-content-center">
+            <div class="col-lg-8">
+                <div class="card shadow mb-4">
+                    <div class="card-body p-4">
+                        <form method="post" enctype="multipart/form-data">
+                            {% csrf_token %}
+                            
+                            <div class="d-none">
+                                {{ form.installation }} 
+                            </div>
 
-                <div class="d-flex justify-content-end mt-3">
-                    <button type="button" class="btn btn-outline-secondary me-2 back-to-installations">Volver</button>
-                    <button type="submit" class="btn btn-primary">Guardar Novedad</button>
+                            {{ form.message|as_crispy_field }}
+                            
+                            <div class="row mt-3">
+                                <div class="col-md-12">
+                                    {{ form.attachment|as_crispy_field }}
+                                </div>
+                            </div>
+
+                            <div class="mt-3 pt-3 border-top">
+                                <button type="button" class="btn btn-light text-primary btn-sm fw-bold" id="btn-toggle-time">
+                                    <i class="fas fa-clock"></i> Registrar hora manual (opcional)
+                                </button>
+                                <div id="manual-time-box" class="mt-3" style="display: none;">
+                                    {{ form.manual_timestamp|as_crispy_field }}
+                                    <small class="text-muted">Formato: HH:MM</small>
+                                </div>
+                            </div>
+
+                            <div class="d-flex justify-content-between mt-4">
+                                <button type="button" class="btn btn-outline-secondary btn-back-installations">Atrás</button>
+                                <button type="submit" class="btn btn-primary px-4 fw-bold">
+                                    <i class="fas fa-save me-2"></i>Guardar Novedad
+                                </button>
+                            </div>
+                        </form>
+                    </div>
                 </div>
             </div>
-        </form>
+        </div>
     </div>
+
 </div>
 
 <script id="installations-data" type="application/json">
@@ -97,162 +214,127 @@
     {% endfor %}
 }
 </script>
-{% endblock %}
 
+{% endblock %}
 
 {% block extra_js %}
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    const installationsData = JSON.parse(document.getElementById('installations-data').textContent);
-
-    const companySelectionDiv = document.getElementById('company-selection');
-    const installationSelectionDiv = document.getElementById('installation-selection');
-    const formContainer = document.getElementById('update-form-container');
-
-    const installationListDiv = document.getElementById('installation-list');
-    const hiddenInstallationInput = document.querySelector('input[name="installation"]');
+    // 1. Cargar Datos
+    const data = JSON.parse(document.getElementById('installations-data').textContent);
     
-    let currentCompanyId = null;
+    // 2. Referencias DOM
+    const secCompanies = document.getElementById('section-companies');
+    const secInstallations = document.getElementById('section-installations');
+    const secForm = document.getElementById('section-form');
+    
+    const gridInstallations = document.getElementById('installations-grid-target');
+    const lblCompany = document.getElementById('lbl-company-name');
+    const lblInstallation = document.getElementById('lbl-installation-name');
+    
+    // Este es el SELECT real generado por Django. Buscamos por ID estándar o por nombre
+    const djangoSelect = document.getElementById('id_installation') || document.querySelector('[name="installation"]');
+    
+    let selectedCompanyId = null;
 
-    // --- MANEJO DE CLICS ---
+    // 3. Manejo de Eventos (Delegación para elementos dinámicos)
     document.body.addEventListener('click', function(e) {
-        const companyCard = e.target.closest('.company-card');
-        const installationCard = e.target.closest('.installation-card');
-        const backToCompaniesBtn = e.target.closest('.back-to-companies');
-        const backToInstallationsBtn = e.target.closest('.back-to-installations');
-
+        
+        // Click en Tarjeta Empresa
+        const companyCard = e.target.closest('.company-trigger');
         if (companyCard) {
-            handleCompanySelection(companyCard);
-        } else if (installationCard) {
-            handleInstallationSelection(installationCard);
-        } else if (backToCompaniesBtn) {
-            showSection('companies');
-        } else if (backToInstallationsBtn) {
-            // Re-popula las instalaciones de la empresa actual antes de mostrar
-            const companyName = installationsData[currentCompanyId].name;
-            populateInstallations(currentCompanyId, companyName);
-            showSection('installations');
+            selectedCompanyId = companyCard.dataset.companyId;
+            const name = companyCard.dataset.companyName;
+            loadInstallations(selectedCompanyId, name);
+        }
+
+        // Click en Tarjeta Instalación
+        const instCard = e.target.closest('.installation-trigger');
+        if (instCard) {
+            const instId = instCard.dataset.instId;
+            const instName = instCard.dataset.instName;
+            selectInstallation(instId, instName);
+        }
+
+        // Botones Volver
+        if (e.target.closest('.btn-back-companies')) {
+            showSection(secCompanies);
+        }
+        if (e.target.closest('.btn-back-installations')) {
+            showSection(secInstallations);
+        }
+
+        // Toggle Hora Manual
+        if (e.target.closest('#btn-toggle-time')) {
+            const box = document.getElementById('manual-time-box');
+            const input = document.querySelector('[name="manual_timestamp"]');
+            if (box.style.display === 'none') {
+                box.style.display = 'block';
+            } else {
+                box.style.display = 'none';
+                if(input) input.value = ''; // Limpiar si se oculta
+            }
         }
     });
 
-    // --- FUNCIONES LÓGICAS ---
-    function handleCompanySelection(card) {
-        currentCompanyId = card.dataset.companyId;
-        const companyData = installationsData[currentCompanyId];
-        const companyName = companyData.name;
-        const companyInstallations = companyData.installations;
+    // 4. Funciones Lógicas
+    function showSection(section) {
+        secCompanies.style.display = 'none';
+        secInstallations.style.display = 'none';
+        secForm.style.display = 'none';
+        section.style.display = 'block';
+        window.scrollTo(0,0);
+    }
 
-        if (companyInstallations && companyInstallations.length > 0) {
-            populateInstallations(currentCompanyId, companyName);
-            showSection('installations');
-        } else {
-            alert(`La empresa '${companyName}' no tiene instalaciones registradas.`);
+    function loadInstallations(companyId, companyName) {
+        const companyData = data[companyId];
+        if (!companyData || !companyData.installations.length) {
+            alert('Esta empresa no tiene instalaciones registradas.');
+            return;
         }
-    }
 
-    function handleInstallationSelection(card) {
-        const installationId = card.dataset.installationId;
-        const installationName = card.dataset.installationName;
-        const companyName = installationsData[currentCompanyId].name;
-        
-        hiddenInstallationInput.value = installationId;
-        document.getElementById('installation-name-for-form').textContent = `${installationName} (${companyName})`;
-        showSection('form');
-    }
-    
-    function populateInstallations(companyId, companyName) {
-        installationListDiv.innerHTML = '';
-        const companyInstallations = installationsData[companyId].installations;
-        document.getElementById('company-name-for-installations').textContent = companyName;
+        lblCompany.textContent = companyName;
+        gridInstallations.innerHTML = ''; // Limpiar anterior
 
-        // Array de colores y estilos únicos para cada instalación
-        const installationStyles = [
-            { color: '#4e73df', gradient: 'linear-gradient(135deg, #4e73df, #224abe)', icon: 'fa-warehouse' },
-            { color: '#1cc88a', gradient: 'linear-gradient(135deg, #1cc88a, #17a673)', icon: 'fa-industry' },
-            { color: '#36b9cc', gradient: 'linear-gradient(135deg, #36b9cc, #2c9faf)', icon: 'fa-building' },
-            { color: '#f6c23e', gradient: 'linear-gradient(135deg, #f6c23e, #dda20a)', icon: 'fa-store' },
-            { color: '#e74a3b', gradient: 'linear-gradient(135deg, #e74a3b, #c0392b)', icon: 'fa-home' },
-            { color: '#9b59b6', gradient: 'linear-gradient(135deg, #9b59b6, #8e44ad)', icon: 'fa-hospital' },
-            { color: '#fd7e14', gradient: 'linear-gradient(135deg, #fd7e14, #e8590c)', icon: 'fa-school' },
-            { color: '#20c997', gradient: 'linear-gradient(135deg, #20c997, #1ba085)', icon: 'fa-university' },
-            { color: '#6f42c1', gradient: 'linear-gradient(135deg, #6f42c1, #59359a)', icon: 'fa-clinic-medical' },
-            { color: '#dc3545', gradient: 'linear-gradient(135deg, #dc3545, #c82333)', icon: 'fa-fire-station' }
-        ];
-
-        companyInstallations.forEach((inst, index) => {
-            // Usar el índice para seleccionar un estilo único, con ciclo si hay más instalaciones que estilos
-            const styleIndex = index % installationStyles.length;
-            const style = installationStyles[styleIndex];
-            
-            installationListDiv.innerHTML += `
-                <div class="col-md-3">
-                    <div class="card h-100 card-option installation-card installation-unique-${styleIndex}" 
-                         data-installation-id="${inst.id}" 
-                         data-installation-name="${inst.name}"
-                         style="border-left: 5px solid ${style.color}; box-shadow: 0 4px 8px rgba(0,0,0,0.1); transition: all 0.3s ease;"
-                         onmouseover="this.style.transform='translateY(-5px)'; this.style.boxShadow='0 8px 16px rgba(0,0,0,0.2)';"
-                         onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='0 4px 8px rgba(0,0,0,0.1)';">
-                        <div class="card-body d-flex flex-column justify-content-center align-items-center" 
-                             style="background: ${style.gradient}; color: white; border-radius: 0.375rem;">
-                            <i class="fas ${style.icon} fa-3x mb-3" style="color: rgba(255,255,255,0.9);"></i>
-                            <h5 class="card-title h6 text-center" style="color: white; font-weight: 600;">${inst.name}</h5>
-                        </div>
+        // Generar HTML de instalaciones
+        companyData.installations.forEach(inst => {
+            const cardHtml = `
+                <div class="saas-card installation-trigger" 
+                     data-inst-id="${inst.id}" 
+                     data-inst-name="${inst.name}">
+                    <div class="card-icon" style="background-color: #e3f2fd; color: #1565c0;">
+                        <i class="fas fa-map-marker-alt"></i>
                     </div>
-                </div>`;
+                    <div class="card-title-text">${inst.name}</div>
+                </div>
+            `;
+            gridInstallations.insertAdjacentHTML('beforeend', cardHtml);
         });
-    }
-    
-    function showSection(sectionName) {
-        companySelectionDiv.style.display = 'none';
-        installationSelectionDiv.style.display = 'none';
-        formContainer.style.display = 'none';
 
-        if (sectionName === 'companies') companySelectionDiv.style.display = 'block';
-        if (sectionName === 'installations') installationSelectionDiv.style.display = 'block';
-        if (sectionName === 'form') formContainer.style.display = 'block';
+        showSection(secInstallations);
     }
 
-    // --- SCRIPT PARA MOSTRAR/OCULTAR LA HORA MANUAL ---
-    const toggleButton = document.getElementById('toggle-manual-time');
-    const timeContainer = document.getElementById('manual-time-container');
-    const manualTimeInput = document.getElementById('id_manual_timestamp');
+    function selectInstallation(id, name) {
+        // ACTUALIZAR EL FORMULARIO DE DJANGO OCULTO
+        if (djangoSelect) {
+            djangoSelect.value = id;
+            // Para asegurar compatibilidad si es un select2 o similar, disparamos evento change
+            djangoSelect.dispatchEvent(new Event('change'));
+        } else {
+            console.error("Error: No se encontró el campo 'installation' del formulario Django.");
+        }
 
-    if (manualTimeInput) {
-        // Añadir el listener para auto-formatear la hora
-        manualTimeInput.addEventListener('input', function (e) {
-            // 1. Quitar todo lo que no sea un número
-            let value = e.target.value.replace(/[^0-9]/g, ''); 
-            
-            if (value.length > 2) {
-                // 2. Añadir los dos puntos después de los dos primeros dígitos
-                value = value.substring(0, 2) + ':' + value.substring(2, 4);
-            }
-            
-            // 3. Limitar la longitud total a 5 caracteres (HH:MM)
-            e.target.value = value.substring(0, 5);
-        });
+        lblInstallation.textContent = name;
+        showSection(secForm);
     }
 
-    if (toggleButton) {
-        toggleButton.addEventListener('click', function() {
-            if (timeContainer.style.display === 'none') {
-                timeContainer.style.display = 'block';
-
-                // Al mostrar el campo, establece la hora máxima a la actual
-                const manualTimeInput = document.getElementById('id_manual_timestamp');
-                if (manualTimeInput) {
-                    const now = new Date();
-                    const hours = String(now.getHours()).padStart(2, '0');
-                    const minutes = String(now.getMinutes()).padStart(2, '0');
-                    manualTimeInput.max = `${hours}:${minutes}`;
-                }
-            } else {
-                timeContainer.style.display = 'none';
-                const manualTimestampInput = document.getElementById('id_manual_timestamp');
-                if(manualTimestampInput) {
-                    manualTimestampInput.value = '';
-                }
-            }
+    // Máscara simple para la hora (opcional)
+    const timeInput = document.getElementById('id_manual_timestamp');
+    if (timeInput) {
+        timeInput.addEventListener('input', function(e) {
+            let v = this.value.replace(/\D/g,'');
+            if (v.length >= 3) v = v.slice(0,2) + ':' + v.slice(2,4);
+            this.value = v.slice(0,5);
         });
     }
 });

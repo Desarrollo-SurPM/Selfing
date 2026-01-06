@@ -34,7 +34,8 @@
                 </div>
                 <div class="card-body">
                     <p class="text-muted small">Use este formulario para agregar una novedad que falte en el reporte del ciclo actual.</p>
-                    <form method="post">
+                    
+                    <form method="post" enctype="multipart/form-data">
                         {% csrf_token %}
                         <input type="hidden" name="action" value="add_novedad">
                         
@@ -46,6 +47,11 @@
                         {{ add_novedad_form.installation|as_crispy_field }}
                         {{ add_novedad_form.target_shift|as_crispy_field }}
                         {{ add_novedad_form.message|as_crispy_field }}
+                        
+                        <div class="mb-2">
+                             {{ add_novedad_form.attachment|as_crispy_field }}
+                        </div>
+
                         {{ add_novedad_form.manual_timestamp|as_crispy_field }}
                         
                         <div class="d-grid mt-3">
@@ -67,44 +73,62 @@
                             {% csrf_token %}
                             <input type="hidden" name="company_id" value="{{ selected_company.id }}">
                             <p class="text-muted">Seleccione y/o edite las novedades a incluir en el correo.</p>
-                            <div class="novedades-list mb-4" style="max-height: 450px; overflow-y: auto; border: 1px solid #ddd; padding: 1rem; border-radius: .25rem;">
+                            
+                            <div class="novedades-list mb-4" style="max-height: 600px; overflow-y: auto; border: 1px solid #ddd; padding: 1rem; border-radius: .25rem;">
                                 {% regroup novedades_pendientes by installation.name as installation_list %}
                                 {% for installation in installation_list %}
                                     <fieldset class="mb-4">
                                         <legend class="h6 border-bottom pb-2 mb-3"><i class="fas fa-map-marker-alt text-secondary me-2"></i>Instalación: {{ installation.grouper }}</legend>
                                         {% for update in installation.list %}
                                         {% load custom_filters %}
-    <div class="form-check mb-3">
-        <input class="form-check-input" type="checkbox" name="updates_to_send" value="{{ update.id }}" id="update_{{ update.id }}">
-        <label class="form-check-label" for="update_{{ update.id }}">
-    <strong>
-        {% if update.manual_timestamp %}
-            {% with shift_type=update.operator_shift.shift_type shift_date=update.operator_shift.date manual_time=update.manual_timestamp %}
-                {% comment %} Verifica si el turno cruza medianoche Y si la hora manual es del día siguiente {% endcomment %}
-                {% if shift_type.end_time < shift_type.start_time and manual_time < shift_type.start_time %}
-                    {% comment %} Suma 1 día a la fecha del turno {% endcomment %}
-                    {{ shift_date|add_days:1|date:"d/m" }} {{ manual_time|time:"H:i" }}*
-                {% else %}
-                    {% comment %} Usa la fecha del turno directamente {% endcomment %}
-                    {{ shift_date|date:"d/m" }} {{ manual_time|time:"H:i" }}*
-                {% endif %}
-            {% endwith %}
-        {% else %}
-            {% comment %} Si no hay hora manual, usa created_at como antes {% endcomment %}
-            {{ update.created_at|date:"d/m H:i" }}
-        {% endif %}
-    </strong>
-    (por {{ update.operator_shift.operator.username }}):
-    {% if update.is_edited %}<em class="text-muted" style="font-size: 0.8em;">(editado)</em>{% endif %}
-</label>
-        <input type="text" name="message_{{ update.id }}" value="{{ update.message }}" class="form-control form-control-sm mt-1">
-    </div>
-{% endfor %}
+                                        
+                                        <div class="form-check mb-3 p-3 border rounded bg-light d-flex align-items-start">
+                                            
+                                            <input class="form-check-input me-3" type="checkbox" name="updates_to_send" value="{{ update.id }}" id="update_{{ update.id }}" checked
+                                                   style="width: 25px; height: 25px; margin-top: 2px; cursor: pointer; flex-shrink: 0;"
+                                                   data-attachment-url="{% if update.attachment %}{{ update.attachment.url }}{% endif %}"
+                                                   data-is-image="{% if update.is_image %}true{% else %}false{% endif %}">
+                                            
+                                            <div class="w-100">
+                                                <label class="form-check-label w-100" for="update_{{ update.id }}" style="cursor: pointer;">
+                                                    <strong>
+                                                        {% if update.manual_timestamp %}
+                                                            {% with shift_type=update.operator_shift.shift_type shift_date=update.operator_shift.date manual_time=update.manual_timestamp %}
+                                                                {% if shift_type.end_time < shift_type.start_time and manual_time < shift_type.start_time %}
+                                                                    {{ shift_date|add_days:1|date:"d/m" }} {{ manual_time|time:"H:i" }}*
+                                                                {% else %}
+                                                                    {{ shift_date|date:"d/m" }} {{ manual_time|time:"H:i" }}*
+                                                                {% endif %}
+                                                            {% endwith %}
+                                                        {% else %}
+                                                            {{ update.created_at|date:"d/m H:i" }}
+                                                        {% endif %}
+                                                    </strong>
+                                                    (por {{ update.operator_shift.operator.username }}):
+                                                    {% if update.is_edited %}<em class="text-muted" style="font-size: 0.8em;">(editado)</em>{% endif %}
+                                                    
+                                                    {% if update.attachment %}
+                                                        <span class="badge bg-info text-dark ms-2"><i class="fas fa-paperclip"></i> Adjunto</span>
+                                                    {% endif %}
+                                                </label>
+                                                
+                                                <input type="text" name="message_{{ update.id }}" value="{{ update.message }}" class="form-control form-control-sm mt-2">
+                                                
+                                                {% if update.attachment and update.is_image %}
+                                                    <div class="mt-2">
+                                                        <small class="text-muted d-block mb-1"><i class="fas fa-image"></i> Vista previa:</small>
+                                                        <img src="{{ update.attachment.url }}" style="height: 60px; width: auto; border-radius: 4px; border: 1px solid #ccc; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+                                                    </div>
+                                                {% endif %}
+                                            </div>
+                                        </div>
+                                        {% endfor %}
                                     </fieldset>
                                 {% empty %}
                                     <p>No hay novedades pendientes para esta empresa.</p>
                                 {% endfor %}
                             </div>
+
                             <div class="mb-3">
                                 <label for="observations" class="form-label fw-bold">Observaciones Generales (Opcional)</label>
                                 <textarea name="observations" id="observations" class="form-control" rows="4" placeholder="Añada aquí cualquier comentario general..."></textarea>
@@ -116,7 +140,7 @@
                     </div>
                 </div>
             {% else %}
-                <div class="text-center p-5 bg-light rounded">
+                <div class="text-center p-5 bg-light rounded shadow-sm">
                     <i class="fas fa-arrow-left fa-3x text-muted mb-3"></i>
                     <h4>Seleccione una empresa</h4>
                     <p>Elija una empresa para ver sus novedades pendientes y generar el reporte.</p>
@@ -133,9 +157,9 @@
         <h5 class="modal-title" id="previewModalLabel">Vista Previa del Correo de Novedades</h5>
         <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
       </div>
-      <div class="modal-body">
-        <div id="modal-content-body">
-            </div>
+      <div class="modal-body bg-light">
+        <div id="modal-content-body" class="bg-white p-4 rounded border shadow-sm" style="max-width: 800px; margin: auto;">
+        </div>
       </div>
       <div class="modal-footer">
         <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
@@ -164,14 +188,34 @@ document.addEventListener('DOMContentLoaded', function() {
         previewButton.addEventListener('click', function() {
             const formData = new FormData(mainForm);
             const updates = [];
+            
             document.querySelectorAll('input[name="updates_to_send"]:checked').forEach(checkbox => {
                 const updateId = checkbox.value;
-                const labelElement = document.querySelector(`label[for="update_${updateId}"]`);
-                const labelText = labelElement ? labelElement.innerText : '';
+                const attachmentUrl = checkbox.dataset.attachmentUrl;
+                const isImage = checkbox.dataset.isImage === 'true';
                 const message = formData.get(`message_${updateId}`);
+                
+                // Buscar label limpiamente
+                const labelElement = document.querySelector(`label[for="update_${updateId}"]`);
+                let labelText = '';
+                if(labelElement) {
+                    const clone = labelElement.cloneNode(true);
+                    // Eliminamos badges e inputs hijos para obtener solo el texto
+                    clone.querySelectorAll('.badge, input, small, .text-muted').forEach(e => e.remove());
+                    labelText = clone.innerText.replace(/\s+/g, ' ').trim(); 
+                }
+
                 const installationElement = checkbox.closest('fieldset').querySelector('legend');
                 const installation = installationElement ? installationElement.innerText.replace('Instalación: ', '') : 'Desconocida';
-                updates.push({ id: updateId, label: labelText, message, installation });
+                
+                updates.push({ 
+                    id: updateId, 
+                    label: labelText, 
+                    message: message, 
+                    installation: installation,
+                    attachmentUrl: attachmentUrl,
+                    isImage: isImage
+                });
             });
             const observations = formData.get('observations');
 
@@ -180,17 +224,58 @@ document.addEventListener('DOMContentLoaded', function() {
                 return acc;
             }, {});
 
-            let modalHtml = `<div class="email-content-preview border p-3 rounded bg-light"><p>A continuación, se detallan las novedades:</p>`;
+            // Construir HTML del Modal
+            let modalHtml = `
+                <div style="font-family: Arial, sans-serif; color: #333;">
+                    <h3 style="color: #1e3c72; border-bottom: 2px solid #1e3c72; padding-bottom: 10px; text-align: center;">Reporte de Novedades</h3>
+                    <p>Estimado cliente, a continuación el detalle operativo:</p>
+            `;
+            
             for (const installation in updatesByInstallation) {
-                modalHtml += `<div style="margin-top: 15px;"><h6 style="color: #2a5298; border-bottom: 1px solid #eee; padding-bottom: 5px;"><strong>${installation}:</strong></h6><div style="font-size: 0.9em; line-height: 1.6; padding-left: 10px;">`;
+                modalHtml += `
+                    <div style="margin-top: 25px; background-color: #f9f9f9; padding: 15px; border-radius: 8px;">
+                        <h4 style="color: #2a5298; margin-top: 0; border-bottom: 1px solid #ddd; padding-bottom: 5px;">
+                            ${installation}
+                        </h4>
+                        <div style="padding-left: 10px;">
+                `;
+                
                 updatesByInstallation[installation].forEach(update => {
-                    modalHtml += `<p style="margin: 0;"><strong>${update.label.trim()}</strong> - ${update.message}</p>`;
+                    modalHtml += `
+                        <div style="margin-bottom: 15px; border-bottom: 1px solid #eee; padding-bottom: 10px;">
+                            <p style="margin: 0;"><strong>${update.label}</strong> ${update.message}</p>
+                    `;
+                    
+                    if (update.attachmentUrl) {
+                        modalHtml += `<div style="margin-top: 10px; margin-left: 20px;">`;
+                        if (update.isImage) {
+                            modalHtml += `
+                                <div style="border: 1px solid #ccc; padding: 3px; border-radius: 4px; display: inline-block; background: white;">
+                                    <img src="${update.attachmentUrl}" alt="Adjunto" style="max-width: 300px; height: auto; display: block;">
+                                </div>
+                            `;
+                        } else {
+                            modalHtml += `
+                                <a href="${update.attachmentUrl}" target="_blank" class="btn btn-sm btn-outline-secondary" style="border-radius: 20px;">
+                                    <i class="fas fa-video"></i> Ver Video Adjunto
+                                </a>
+                            `;
+                        }
+                        modalHtml += `</div>`;
+                    }
+                    
+                    modalHtml += `</div>`;
                 });
                 modalHtml += `</div></div>`;
             }
 
             if (observations) {
-                modalHtml += `<div style="margin-top: 20px;"><h6 style="color: #1e3c72;"><strong>Observaciones Generales:</strong></h6><div style="background-color: #eaf2f8; padding: 10px; border-left: 4px solid #2a5298; border-radius: 4px;"><p style="margin: 0;">${observations.replace(/\n/g, '<br>')}</p></div></div>`;
+                modalHtml += `
+                    <div style="margin-top: 20px; background-color: #fff3cd; color: #856404; padding: 15px; border-radius: 4px; border: 1px solid #ffeeba;">
+                        <h5 style="margin-top: 0;"><strong>Observaciones Generales:</strong></h5>
+                        <p style="margin: 0;">${observations.replace(/\n/g, '<br>')}</p>
+                    </div>
+                `;
             }
             modalHtml += `</div>`;
 
@@ -248,8 +333,6 @@ document.addEventListener('DOMContentLoaded', function() {
             companySelect.addEventListener('change', updateInstallations);
             
             if (companySelect.value && installationSelect.options.length <= 1) {
-                // Si hay una empresa seleccionada (por ej, tras un error de validación),
-                // y las instalaciones no están cargadas, las cargamos.
                 updateInstallations();
             } else if (!companySelect.value) {
                 installationSelect.disabled = true;
