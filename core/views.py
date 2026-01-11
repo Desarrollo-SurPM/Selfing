@@ -30,6 +30,8 @@ from django.views.decorators.csrf import csrf_exempt
 import re # Importar el módulo de expresiones regulares
 from django.db.models.functions import Coalesce, Cast
 from django.db.models import TimeField
+from django.core.mail import EmailMultiAlternatives # <--- Importante
+import mimetypes # <--- Importante para detectar si es png/jpg/pdf
 
 from .models import (
     Company, Installation, OperatorProfile, ShiftType, OperatorShift,
@@ -158,62 +160,91 @@ def admin_dashboard(request):
     return render(request, 'admin_dashboard.html', context)
 
 # VISTA ACTUALIZADA
+from django.core.mail import EmailMultiAlternatives
+from django.template.loader import render_to_string
+from django.utils import timezone
+from datetime import timedelta, datetime, time, date
+from django.contrib import messages
+from django.shortcuts import render, redirect, get_object_or_404
+from django.db import transaction
+from django.contrib.auth.decorators import login_required, user_passes_test
+# Asegúrate de importar tus modelos y formularios aquí
+from .models import Company, OperatorShift, UpdateLog, TraceabilityLog, Email
+from .forms import AdminUpdateLogForm
+import os
+
+
+# --- Función auxiliar para calcular la fecha real (Poner antes de la vista) ---
+def calculate_log_datetime(log):
+    """
+    Calcula la fecha y hora cronológica exacta de un log, manejando 
+    correctamente los turnos que cruzan la medianoche.
+    """
+    # 1. Determinar la hora del evento (Manual tiene prioridad)
+    event_time = log.manual_timestamp if log.manual_timestamp else log.created_at.time()
+    
+    # 2. Datos del turno asociado
+    shift = log.operator_shift
+    start = shift.shift_type.start_time
+    end = shift.shift_type.end_time
+    base_date = shift.date # Fecha de inicio del turno (ej: 10/01)
+
+    # 3. Lógica de Turno Noche (ej: 20:00 a 08:00)
+    if end < start:
+        # Si la hora del evento es menor que el inicio (ej: 00:01 < 20:00)
+        # y también menor o igual al fin (para asegurar), pertenece al día siguiente.
+        if event_time < start:
+             return datetime.combine(base_date + timedelta(days=1), event_time)
+    
+    # Caso Turno Día o Turno Noche (parte antes de medianoche)
+    return datetime.combine(base_date, event_time)
+
+# --- Vista Principal Corregida ---
 @login_required
-@user_passes_test(is_supervisor)
+@user_passes_test(lambda u: u.is_superuser)
 def review_and_send_novedades(request):
     """
-    Gestiona el envío de novedades con una lógica de ciclo de 24 horas
-    robusta y un ordenamiento cronológico corregido.
+    Gestiona el envío de novedades con ordenamiento cronológico corregido en Python.
     """
-    
-    # --- 1. LÓGICA DE CICLO MEJORADA ---
-    # Definimos el corte del "día operativo" (ej: 08:30 AM).
+    # --- 1. LÓGICA DE CICLO ---
     CUTOFF_TIME = time(8, 30)
-
     ahora = timezone.now()
     today_at_cutoff = ahora.replace(hour=CUTOFF_TIME.hour, minute=CUTOFF_TIME.minute, second=0, microsecond=0)
 
-    # Determinamos el último ciclo de 24 horas completado.
     if ahora.time() < CUTOFF_TIME:
-        # Si son antes de las 08:30 (ej: 7 AM), el ciclo terminó AYER a las 08:30.
         end_of_cycle = today_at_cutoff - timedelta(days=1)
     else:
-        # Si son después de las 08:30 (ej: 10 AM), el ciclo terminó HOY a las 08:30.
         end_of_cycle = today_at_cutoff
     
-    start_of_cycle = end_of_cycle - timedelta(days=1) # El ciclo dura 24 horas.
+    start_of_cycle = end_of_cycle - timedelta(days=1)
 
-    # Obtenemos TODOS los turnos que INICIARON dentro de ese ciclo de 24 horas.
-    # Esto puede ser 1, 2, 3, o los turnos que sean, sin errores si falta uno.
     cycle_shifts_qs = OperatorShift.objects.filter(
         actual_start_time__gte=start_of_cycle,
         actual_start_time__lt=end_of_cycle
     ).select_related('operator', 'shift_type').order_by('actual_start_time')
 
-    shifts_in_cycle_pks = list(cycle_shifts_qs.values_list('pk', flat=True))
-
+    # Validaciones iniciales
     if not cycle_shifts_qs.exists():
         messages.info(request, "Aún no ha finalizado un ciclo de turnos para generar un reporte.")
-        add_novedad_form = AdminUpdateLogForm(cycle_shifts=cycle_shifts_qs)
-        return render(request, 'review_and_send.html', {'companies': None, 'add_novedad_form': add_novedad_form})
+        return render(request, 'review_and_send.html', {
+            'companies': None, 
+            'add_novedad_form': AdminUpdateLogForm(cycle_shifts=cycle_shifts_qs)
+        })
 
-    # Verificar si el ciclo ya está cerrado (sin cambios)
-    next_shift_after_cycle = OperatorShift.objects.filter(
-        actual_start_time__gte=end_of_cycle
-    ).order_by('actual_start_time').first()
-
+    next_shift_after_cycle = OperatorShift.objects.filter(actual_start_time__gte=end_of_cycle).first()
     if next_shift_after_cycle and next_shift_after_cycle.actual_end_time is not None:
         messages.info(request, "El periodo para enviar el reporte del ciclo anterior ha finalizado.")
-        add_novedad_form = AdminUpdateLogForm(cycle_shifts=OperatorShift.objects.none())
-        return render(request, 'review_and_send.html', {'companies': None, 'add_novedad_form': add_novedad_form})
+        return render(request, 'review_and_send.html', {
+            'companies': None, 
+            'add_novedad_form': AdminUpdateLogForm(cycle_shifts=OperatorShift.objects.none())
+        })
     
-    # Variable para el formulario que se pasará al template
     form_to_render = None
 
-    # --- 2. LÓGICA POST (Con la misma validación de turno) ---
+    # --- 2. LÓGICA POST ---
     if request.method == 'POST':
+        # --- A. AGREGAR NOVEDAD MANUAL ---
         if 'action' in request.POST and request.POST['action'] == 'add_novedad':
-            # Pasar cycle_shifts_qs para validación
             form = AdminUpdateLogForm(request.POST, request.FILES, cycle_shifts=cycle_shifts_qs)
             if form.is_valid():
                 selected_shift = form.cleaned_data.get('target_shift')
@@ -221,73 +252,58 @@ def review_and_send_novedades(request):
                     new_log = form.save(commit=False)
                     new_log.operator_shift = selected_shift
                     new_log.save()
-                    messages.success(request, f'Novedad agregada correctamente al turno de {selected_shift.operator.username} ({selected_shift.shift_type.name} - {selected_shift.date.strftime("%d/%m")}).')
+                    messages.success(request, f'Novedad agregada al turno de {selected_shift.operator.username}.')
                 else:
-                    messages.error(request, 'Error: El turno seleccionado no pertenece al ciclo de reporte actual o no es válido.')
-
+                    messages.error(request, 'El turno seleccionado no es válido.')
+                
+                # Redirección inteligente para no perder la vista actual
                 company_id_redirect = request.POST.get('company_id_for_redirect', '')
                 if company_id_redirect:
                     return redirect(f"{request.path}?company_id={company_id_redirect}")
                 return redirect('review_and_send_novedades')
             else:
-                messages.error(request, 'Hubo un error al agregar la novedad. Por favor, revisa los datos.')
+                messages.error(request, 'Error al agregar la novedad.')
                 form_to_render = form
         
+        # --- B. ENVIAR CORREO (AQUÍ ESTÁ LA CORRECCIÓN DE ORDEN) ---
         elif 'confirm_send' in request.POST:
             company_id_form = request.POST.get('company_id')
             company = get_object_or_404(Company, id=company_id_form)
             selected_ids = request.POST.getlist('updates_to_send')
             observations = request.POST.get('observations', '')
 
-            # (Lógica de edición de mensajes sin cambios)
+            # 1. Procesar ediciones de texto
             with transaction.atomic():
                  for update_id in selected_ids:
                     new_message = request.POST.get(f'message_{update_id}')
                     if new_message is not None:
                         try:
-                            log_to_update = UpdateLog.objects.get(id=update_id)
-                            if log_to_update.message != new_message:
-                                if not log_to_update.original_message and not log_to_update.is_edited:
-                                     log_to_update.original_message = log_to_update.message
-                                log_to_update.message = new_message
-                                log_to_update.is_edited = True
-                                log_to_update.edited_at = timezone.now()
-                                log_to_update.save()
+                            log_to = UpdateLog.objects.get(id=update_id)
+                            if log_to.message != new_message:
+                                if not log_to.original_message and not log_to.is_edited:
+                                     log_to.original_message = log_to.message
+                                log_to.message = new_message
+                                log_to.is_edited = True
+                                log_to.edited_at = timezone.now()
+                                log_to.save()
                         except UpdateLog.DoesNotExist:
-                            messages.warning(request, f"Se intentó editar una novedad (ID: {update_id}) que ya no existe.")
                             continue
 
-            # --- 3. LÓGICA DE ORDENAMIENTO CORREGIDA (Para el Email) ---
-            updates_to_send_in_email = UpdateLog.objects.filter(id__in=selected_ids).select_related(
-                'operator_shift__shift_type', 'installation'
-            ).annotate(
-                # 1. Primero, determina la HORA efectiva (manual o automática)
-                effective_time=Coalesce('manual_timestamp', 'created_at__time', output_field=TimeField()),
-            ).annotate(
-                # 2. Luego, usa esa HORA para determinar la FECHA efectiva
-                effective_date=Case(
-                   When(
-                        # Condición 1: Es un turno nocturno (fin < inicio)
-                        Q(operator_shift__shift_type__end_time__lt=F('operator_shift__shift_type__start_time')) &
-                        # Condición 2: La hora del evento es "menor" que la hora de inicio
-                        Q(effective_time__lt=F('operator_shift__shift_type__start_time')) &
-                        # Condición 3 (NUEVA): Y la hora del evento es también menor/igual a la hora de FIN
-                        # (Esto distingue 01:00 AM de 16:00 PM)
-                        Q(effective_time__lte=F('operator_shift__shift_type__end_time')),
-                        # Entonces:
-                        then=ExpressionWrapper(F('operator_shift__date') + timedelta(days=1), output_field=DateField()),
-                    ),
-                    
-                    default=F('operator_shift__date'),
-                    output_field=DateField()
-                )
-            ).order_by(
-                'installation__name', # Agrupa por instalación
-                'effective_date',     # Ordena por la fecha CALCULADA
-                'effective_time'      # Ordena por la hora efectiva DENTRO de esa fecha
+            # 2. OBTENER Y ORDENAR (Corrección Definitiva)
+            # Traemos los datos sin orden específico de SQL para no confundirnos
+            updates_qs = UpdateLog.objects.filter(id__in=selected_ids).select_related(
+                'operator_shift__shift_type', 'installation', 'operator_shift'
             )
-            # --- FIN DE LA LÓGICA DE ORDENAMIENTO ---
+            
+            # Convertimos a lista Python
+            updates_list = list(updates_qs)
 
+            # ORDENAMOS EN PYTHON:
+            # Primero por Instalación (A-Z)
+            # Segundo por Fecha Real calculada (Ascendente: 22:00 -> 23:00 -> 00:01)
+            updates_list.sort(key=lambda x: (x.installation.name, calculate_log_datetime(x)))
+
+            # 3. Construcción del correo
             email_string = company.email or ""
             recipient_list = [email.strip() for email in email_string.split(',') if email.strip()]
 
@@ -299,106 +315,82 @@ def review_and_send_novedades(request):
                     
                     email_context = {
                         'company': company,
-                        'updates': updates_to_send_in_email,
+                        'updates': updates_list, # Lista ordenada
                         'observations': observations,
                         'enviado_por': request.user,
                         'cycle_start': start_of_cycle,
                         'cycle_end': end_of_cycle,
                         'base_url': base_url,
                     }
-                    html_message = render_to_string('emails/reporte_novedades.html', email_context)
-                    send_mail(
-                        subject=f"Reporte de Novedades - {company.name} - {end_of_cycle.strftime('%d/%m/%Y')}",
-                        message="", from_email=None, recipient_list=recipient_list,
-                        fail_silently=False, html_message=html_message
-                    )
+                    
+                    html_content = render_to_string('emails/reporte_novedades.html', email_context)
+                    subject = f"Reporte de Novedades - {company.name} - {end_of_cycle.strftime('%d/%m/%Y')}"
+                    
+                    msg = EmailMultiAlternatives(subject, "Reporte HTML", None, recipient_list)
+                    msg.attach_alternative(html_content, "text/html")
+
+                    # Adjuntar imágenes
+                    count_imgs = 0
+                    for update in updates_list:
+                        if update.attachment and os.path.exists(update.attachment.path):
+                            try:
+                                msg.attach_file(update.attachment.path)
+                                count_imgs += 1
+                            except Exception:
+                                pass
+
+                    msg.send()
+                    
                     UpdateLog.objects.filter(id__in=selected_ids).update(is_sent=True)
-                    TraceabilityLog.objects.create(user=request.user, action=f"Envió correo de novedades a {company.name}.")
-                    messages.success(request, f"Correo para {company.name} enviado.")
+                    TraceabilityLog.objects.create(user=request.user, action=f"Envió correo a {company.name} ({count_imgs} imgs).")
+                    messages.success(request, f"Correo enviado a {company.name}.")
                 except Exception as e:
-                    messages.error(request, f"Error al enviar correo a {company.name}: {e}")
+                    messages.error(request, f"Error al enviar: {e}")
             else:
-                messages.warning(request, f"{company.name} no tiene correo configurado.")
+                messages.warning(request, f"{company.name} no tiene correo.")
 
             return redirect('review_and_send_novedades')
     
     # --- FIN LÓGICA POST ---
 
-    # Inicializa el formulario para GET si no viene de un POST con error
     if form_to_render is None:
         form_to_render = AdminUpdateLogForm(cycle_shifts=cycle_shifts_qs)
 
-    # --- LÓGICA GET (para mostrar novedades pendientes) ---
+    # --- LÓGICA GET (VISTA PREVIA) ---
     company_id = request.GET.get('company_id')
     selected_company = None
-    novedades_pendientes = None
-    companies_with_pending_updates = Company.objects.none()
+    novedades_pendientes = None # Inicializamos como None
+    
+    # Base Query: Novedades NO enviadas de los turnos del ciclo
+    base_qs = UpdateLog.objects.filter(
+        is_sent=False,
+        operator_shift__in=cycle_shifts_qs
+    ).select_related('installation__company', 'operator_shift__shift_type', 'operator_shift')
 
-    if cycle_shifts_qs.exists():
-        # Query base (sin ordenar aún)
-        relevant_updates_base = UpdateLog.objects.filter(
-            is_sent=False,
-            operator_shift__in=cycle_shifts_qs
-        ).select_related(
-            'installation__company',
-            'operator_shift__operator',
-            'operator_shift__shift_type'
-        )
+    # Lista de empresas para el menú lateral
+    company_ids = base_qs.values_list('installation__company_id', flat=True).distinct()
+    companies_with_pending_updates = Company.objects.filter(id__in=company_ids).order_by('name')
 
-        # --- 3. LÓGICA DE ORDENAMIENTO CORREGIDA (Para la Vista de Revisión) ---
-        relevant_updates_annotated = relevant_updates_base.annotate(
-            # 1. Primero, determina la HORA efectiva (manual o automática)
-            effective_time=Coalesce('manual_timestamp', 'created_at__time', output_field=TimeField()),
-        ).annotate(
-            # 2. Luego, usa esa HORA para determinar la FECHA efectiva
-            effective_date=Case(
-                When(
-                    # Condición 1: Es un turno nocturno (fin < inicio)
-                    Q(operator_shift__shift_type__end_time__lt=F('operator_shift__shift_type__start_time')) &
-                    # Condición 2: La hora del evento es "menor" que la hora de inicio
-                    Q(effective_time__lt=F('operator_shift__shift_type__start_time')) &
-                    # Condición 3 (NUEVA): Y la hora del evento es también menor/igual a la hora de FIN
-                    Q(effective_time__lte=F('operator_shift__shift_type__end_time')),
-                    # Entonces:
-                    then=ExpressionWrapper(F('operator_shift__date') + timedelta(days=1), output_field=DateField()),
-                ),
-                default=F('operator_shift__date'),
-                output_field=DateField()
-            )
-        )
-        # --- FIN DE LA LÓGICA DE ORDENAMIENTO ---
+    if company_id:
+        try:
+            selected_company = companies_with_pending_updates.get(id=int(company_id))
+            
+            # 1. Filtramos por la empresa seleccionada
+            raw_updates = list(base_qs.filter(installation__company=selected_company))
+            
+            # 2. APLICAMOS EL MISMO ORDENAMIENTO QUE EN EL CORREO
+            # Esto asegura que lo que ves en pantalla sea idéntico a lo que se envía.
+            raw_updates.sort(key=lambda x: (x.installation.name, calculate_log_datetime(x)))
+            
+            novedades_pendientes = raw_updates
 
-        # Calcula compañías con pendientes
-        company_ids_with_pending = relevant_updates_base.values_list('installation__company_id', flat=True).distinct()
-        companies_with_pending_updates = Company.objects.filter(id__in=company_ids_with_pending).annotate(
-            pending_count=Count('installations__updatelog', filter=Q(installations__updatelog__in=relevant_updates_base))
-        ).filter(pending_count__gt=0).distinct().order_by('name')
-
-        if company_id:
-            try:
-                company_id_int = int(company_id)
-                selected_company = companies_with_pending_updates.filter(id=company_id_int).first()
-                if not selected_company:
-                     company_id = None
-                     novedades_pendientes = None
-                else:
-                    # Filtra el queryset ANOTADO y ordena usando los campos anotados
-                    novedades_pendientes = relevant_updates_annotated.filter(
-                        installation__company=selected_company
-                    ).order_by(
-                        'installation__name', # Agrupa por instalación
-                        'effective_date',     # Ordena por la fecha CALCULADA
-                        'effective_time'      # Ordena por la hora efectiva DENTRO de esa fecha
-                    )
-            except (ValueError, TypeError):
-                 company_id = None
-                 selected_company = None
-                 novedades_pendientes = None
+        except (Company.DoesNotExist, ValueError):
+            selected_company = None
 
     context = {
         'companies': companies_with_pending_updates,
         'selected_company': selected_company,
-        'novedades_pendientes': novedades_pendientes,
+        'novedades_pendientes': novedades_pendientes, # Lista Python Ordenada
         'cycle_end': end_of_cycle,
         'start_of_cycle': start_of_cycle,
         'add_novedad_form': form_to_render,
@@ -1191,7 +1183,7 @@ def operator_dashboard(request):
 def my_logbook_view(request):
     """
     Muestra al operador un resumen de sus novedades.
-    VERSIÓN SIMPLIFICADA Y ROBUSTA (Con mejora de ordenamiento por horario).
+    VERSIÓN CORREGIDA: Ordenamiento cronológico real usando Python.
     """
     active_shift = get_active_shift(request.user)
     
@@ -1199,55 +1191,38 @@ def my_logbook_view(request):
     if not active_shift:
         return render(request, 'my_logbook.html', {'logbook_data': {}})
 
-    # 1. Hacemos la consulta y aplicamos la LÓGICA DE ORDENAMIENTO
+    # 1. Traemos los datos SIN ordenar por DB (para no confundir la lógica)
     logs_del_turno_qs = UpdateLog.objects.filter(
         operator_shift=active_shift
     ).select_related('installation', 'installation__company')
 
-    # Anotamos la hora efectiva y calculamos la fecha correcta para el orden
-    logs_del_turno = logs_del_turno_qs.annotate(
-        # Usamos la hora manual si existe, si no, extraemos la hora de created_at
-        effective_time=Coalesce(
-            'manual_timestamp', 
-            Cast('created_at', output_field=TimeField()),
-            output_field=TimeField()
-        ),
-    ).annotate(
-        effective_date=Case(
-            When(
-                # Lógica para turnos nocturnos: si el evento es en la madrugada (hora < inicio)
-                # se asume que pertenece al día siguiente.
-                Q(operator_shift__shift_type__end_time__lt=F('operator_shift__shift_type__start_time')) &
-                Q(effective_time__lt=F('operator_shift__shift_type__start_time')) &
-                Q(effective_time__lte=F('operator_shift__shift_type__end_time')),
-                then=ExpressionWrapper(F('operator_shift__date') + timedelta(days=1), output_field=DateField()),
-            ),
-            default=F('operator_shift__date'),
-            output_field=DateField()
-        )
-    ).order_by('effective_date', 'effective_time') # Ordenamos cronológicamente
+    # 2. Convertimos a lista y ORDENAMOS CON PYTHON
+    # Clave de orden: 
+    #  A) Nombre Empresa (para agrupar visualmente)
+    #  B) Nombre Instalación 
+    #  C) Fecha/Hora REAL calculada (Aquí es donde se arregla el 23:10 vs 00:01)
+    logs_list = list(logs_del_turno_qs)
+    logs_list.sort(key=lambda x: (
+        x.installation.company.name, 
+        x.installation.name, 
+        calculate_log_datetime(x)
+    ))
 
-    # Si la consulta no devuelve nada, devolvemos un diccionario vacío.
-    if not logs_del_turno.exists():
-        return render(request, 'my_logbook.html', {'logbook_data': {}})
-
-    # 2. Agrupamos los datos manualmente para asegurar la estructura correcta.
+    # 3. Agrupamos los datos (Iteramos la lista YA ORDENADA)
     logbook_data = {}
-    for log in logs_del_turno:
-        # Verificamos que el log tenga la información necesaria
+    for log in logs_list:
         if log.installation and log.installation.company:
             company_name = log.installation.company.name
             installation_name = log.installation.name
             
-            # Si la empresa no existe en nuestro diccionario, la creamos.
+            # Crear claves si no existen
             if company_name not in logbook_data:
                 logbook_data[company_name] = {}
             
-            # Si la instalación no existe dentro de la empresa, la creamos.
             if installation_name not in logbook_data[company_name]:
                 logbook_data[company_name][installation_name] = []
             
-            # Finalmente, añadimos la novedad a la lista correcta.
+            # Como logs_list ya está ordenada cronológicamente, el append mantiene el orden
             logbook_data[company_name][installation_name].append(log)
 
     context = {

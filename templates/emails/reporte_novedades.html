@@ -1,5 +1,5 @@
 {% load static %}
-<!DOCTYPE html>
+{% load custom_filters %} <!DOCTYPE html>
 <html lang="es">
 <head>
     <meta charset="UTF-8">
@@ -13,36 +13,54 @@
                     <h1 style="color: #1e3c72; margin: 0;">Reporte de Novedades</h1>
                 </div>
                 <p>Estimado cliente <strong>{{ company.name }}</strong>,</p>
-                <p>A continuación, se detallan las novedades del ciclo de turnos (del {{ cycle_start|date:"d/m/Y" }}  al {{ cycle_end|date:"d/m/Y" }}):</p>
+                <p>A continuación, se detallan las novedades del ciclo de turnos (del {{ cycle_start|date:"d/m/Y" }} al {{ cycle_end|date:"d/m/Y" }}):</p>
 
+                {# IMPORTANTE: Como ahora pasamos una LISTA 'updates' ordenada desde la vista, #}
+                {# usamos 'regroup' de la misma manera #}
                 {% regroup updates by installation.name as installation_list %}
-{% for installation in installation_list %}
-    <div style="margin-top: 25px;">
-        <h3 style="color: #2a5298; border-bottom: 1px solid #eee; padding-bottom: 5px; font-size: 1.2em; font-weight: bold;">
-            {{ installation.grouper }}:
-        </h3>
-        <div style="font-family: Arial, sans-serif; font-size: 1em; line-height: 1.6; padding-left: 10px;">
-            {% for update in installation.list %}
-                {% load custom_filters %} {# <-- Asegúrate de cargar tus filtros personalizados #}
-<p style="margin: 0;">
-    <strong>
-        {% if update.manual_timestamp %}
-            {% with shift_type=update.operator_shift.shift_type shift_date=update.operator_shift.date manual_time=update.manual_timestamp %}
-                {% if shift_type.end_time < shift_type.start_time and manual_time < shift_type.start_time %}
-                    {{ shift_date|add_days:1|date:"d/m" }} {{ manual_time|time:"H:i" }}*
-                {% else %}
-                    {{ shift_date|date:"d/m" }} {{ manual_time|time:"H:i" }}*
-                {% endif %}
-            {% endwith %}
-        {% else %}
-            {{ update.created_at|date:"d/m H:i" }}
-        {% endif %}
-    </strong> {{ update.message }}
-</p>
-            {% endfor %}
-        </div>
-    </div>
-{% endfor %}
+
+                {% for installation in installation_list %}
+                    <div style="margin-top: 25px;">
+                        <h3 style="color: #2a5298; border-bottom: 1px solid #eee; padding-bottom: 5px; font-size: 1.2em; font-weight: bold;">
+                            {{ installation.grouper }}:
+                        </h3>
+                        <div style="font-family: Arial, sans-serif; font-size: 1em; line-height: 1.6; padding-left: 10px;">
+                            {% for update in installation.list %}
+                                <div style="margin-bottom: 12px; border-bottom: 1px solid #f5f5f5; padding-bottom: 8px;">
+                                    <p style="margin: 0;">
+                                        <strong>
+                                            {% if update.manual_timestamp %}
+                                                {# La lógica de ordenamiento ya se hizo en el backend, aquí solo mostramos la hora #}
+                                                {# Añadimos lógica visual simple para la fecha si cruzó medianoche #}
+                                                {% with shift_start=update.operator_shift.shift_type.start_time shift_end=update.operator_shift.shift_type.end_time manual=update.manual_timestamp %}
+                                                    {% if shift_end < shift_start and manual < shift_start %}
+                                                        {{ update.operator_shift.date|add_days:1|date:"d/m" }} {{ manual|time:"H:i" }}*
+                                                    {% else %}
+                                                        {{ update.operator_shift.date|date:"d/m" }} {{ manual|time:"H:i" }}*
+                                                    {% endif %}
+                                                {% endwith %}
+                                            {% else %}
+                                                {{ update.created_at|date:"d/m H:i" }}
+                                            {% endif %}
+                                        </strong> 
+                                        {{ update.message }}
+                                    </p>
+
+                                    {# --- LÓGICA PARA IMÁGENES --- #}
+                                    {% if update.attachment %}
+                                        <div style="margin-top: 4px; font-size: 0.85em; color: #666; background-color: #f8f9fa; padding: 4px; border-radius: 4px; display: inline-block;">
+                                            <span>📎 <strong>Imagen adjunta:</strong> {{ update.attachment.name|cut:"novedades/" }}</span>
+                                            <br>
+                                            <a href="{{ base_url }}{{ update.attachment.url }}" target="_blank" style="color: #1e3c72; text-decoration: none;">
+                                                [Ver imagen online]
+                                            </a>
+                                        </div>
+                                    {% endif %}
+                                </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                {% endfor %}
 
                 {% if observations %}
                     <div style="margin-top: 30px;">
@@ -54,13 +72,12 @@
                 {% endif %}
 
                 <div style="font-size: 0.8em; color: #888; text-align: center; margin-top: 30px; padding-top: 15px; border-top: 1px solid #eee;">
-    <p style="margin: 0;">Este correo fue generado automáticamente por la plataforma SELFING.</p>
-    <p style="margin: 5px 0 0 0;">Reporte enviado por: Operador de turno Selfing.</p>
-
-    <div style="margin-top: 20px;">
-        <img src="https://selfing-production.up.railway.app{% static 'images/Logo.png' %}" alt="SELFING Logo" style="height: 30px;">
-    </div>
-    </div>
+                    <p style="margin: 0;">Este correo fue generado automáticamente por la plataforma SELFING.</p>
+                    <p style="margin: 5px 0 0 0;">Reporte enviado por: Operador de turno Selfing.</p>
+                    <div style="margin-top: 20px;">
+                        <img src="https://selfing-production.up.railway.app/static/images/Logo.png" alt="SELFING Logo" style="height: 30px;">
+                    </div>
+                </div>
             </td>
         </tr>
     </table>
