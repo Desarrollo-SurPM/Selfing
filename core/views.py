@@ -173,31 +173,57 @@ from .models import Company, OperatorShift, UpdateLog, TraceabilityLog, Email
 from .forms import AdminUpdateLogForm
 import os
 
-
-# --- Función auxiliar para calcular la fecha real (Poner antes de la vista) ---
 def calculate_log_datetime(log):
     """
-    Calcula la fecha y hora cronológica exacta de un log, manejando 
-    correctamente los turnos que cruzan la medianoche.
+    Calcula la fecha cronológica exacta para ordenar el reporte.
+    Maneja correctamente:
+    - Turnos noche (cruce de medianoche).
+    - Novedades ingresadas ANTES del inicio del turno (pre-shift).
+    - Conversión de zona horaria para logs automáticos.
     """
-    # 1. Determinar la hora del evento (Manual tiene prioridad)
-    event_time = log.manual_timestamp if log.manual_timestamp else log.created_at.time()
+    # 1. Obtener la hora del evento corregida
+    if log.manual_timestamp:
+        event_time = log.manual_timestamp
+    else:
+        # IMPORTANTE: Convertir a hora local antes de extraer el tiempo
+        # De lo contrario, usará UTC y el orden será incorrecto.
+        event_time = timezone.localtime(log.created_at).time()
     
-    # 2. Datos del turno asociado
+    # 2. Datos del turno
     shift = log.operator_shift
+    base_date = shift.date           # Fecha nominal del turno (ej: 10/01)
     start = shift.shift_type.start_time
     end = shift.shift_type.end_time
-    base_date = shift.date # Fecha de inicio del turno (ej: 10/01)
 
-    # 3. Lógica de Turno Noche (ej: 20:00 a 08:00)
-    if end < start:
-        # Si la hora del evento es menor que el inicio (ej: 00:01 < 20:00)
-        # y también menor o igual al fin (para asegurar), pertenece al día siguiente.
-        if event_time < start:
+    # 3. Lógica para Turnos que cruzan medianoche (Noche)
+    # Ej: Inicia 23:00 -> Termina 07:00
+    if start > end:
+        # A) Madrugada del día siguiente (00:00 - 07:00)
+        if event_time <= end:
+            return datetime.combine(base_date + timedelta(days=1), event_time)
+        
+        # B) Noche del día actual (23:00 - 23:59)
+        elif event_time >= start:
+            return datetime.combine(base_date, event_time)
+            
+        # C) HORA "LIMBO" (fuera del rango oficial del turno)
+        # Aquí solucionamos el problema de las 22:04 en un turno de las 23:00
+        else:
+            # Si es PM (tarde/noche), asumimos que es llegada anticipada -> DÍA ACTUAL
+            if event_time.hour >= 12:
+                return datetime.combine(base_date, event_time)
+            # Si es AM (mañana), asumimos que es salida tardía -> DÍA SIGUIENTE
+            else:
+                return datetime.combine(base_date + timedelta(days=1), event_time)
+            
+    # 4. Lógica para Turnos de Día (ej: 08:00 -> 20:00)
+    else:
+        # Caso especial: Hora de madrugada (ej: 01:00 AM) en turno de día
+        # Significa que se quedaron muy tarde -> Día siguiente
+        if event_time < start and event_time.hour < 12:
              return datetime.combine(base_date + timedelta(days=1), event_time)
-    
-    # Caso Turno Día o Turno Noche (parte antes de medianoche)
-    return datetime.combine(base_date, event_time)
+        
+        return datetime.combine(base_date, event_time)
 
 # --- Vista Principal Corregida ---
 @login_required
