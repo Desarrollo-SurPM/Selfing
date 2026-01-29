@@ -176,55 +176,63 @@ import os
 def calculate_log_datetime(log):
     """
     Calcula la fecha cronológica exacta para ordenar el reporte.
-    Maneja correctamente:
-    - Turnos noche (cruce de medianoche).
-    - Novedades ingresadas ANTES del inicio del turno (pre-shift).
-    - Conversión de zona horaria para logs automáticos.
+    Ajustada para:
+    - Turno Día (08:30 - 16:30)
+    - Turno Tarde (16:30 - 00:30) -> Cruza medianoche
+    - Turno Noche (00:30 - 08:30) -> Inicia madrugada
     """
     # 1. Obtener la hora del evento corregida
     if log.manual_timestamp:
         event_time = log.manual_timestamp
     else:
-        # IMPORTANTE: Convertir a hora local antes de extraer el tiempo
-        # De lo contrario, usará UTC y el orden será incorrecto.
+        # Convertir a hora local para evitar desorden por UTC
         event_time = timezone.localtime(log.created_at).time()
     
     # 2. Datos del turno
     shift = log.operator_shift
-    base_date = shift.date           # Fecha nominal del turno (ej: 10/01)
+    base_date = shift.date
     start = shift.shift_type.start_time
     end = shift.shift_type.end_time
 
-    # 3. Lógica para Turnos que cruzan medianoche (Noche)
-    # Ej: Inicia 23:00 -> Termina 07:00
+    # CASO A: Turnos que cruzan la medianoche (Ej: Tarde 16:30 - 00:30)
     if start > end:
-        # A) Madrugada del día siguiente (00:00 - 07:00)
         if event_time <= end:
+            # Si es 00:15, es la madrugada del día siguiente al inicio del turno
             return datetime.combine(base_date + timedelta(days=1), event_time)
-        
-        # B) Noche del día actual (23:00 - 23:59)
         elif event_time >= start:
+            # Si es 23:00, es el día de inicio
             return datetime.combine(base_date, event_time)
-            
-        # C) HORA "LIMBO" (fuera del rango oficial del turno)
-        # Aquí solucionamos el problema de las 22:04 en un turno de las 23:00
         else:
-            # Si es PM (tarde/noche), asumimos que es llegada anticipada -> DÍA ACTUAL
+            # HORA "LIMBO": Fuera del horario oficial
+            # Si es > 12:00 (ej: 16:20 para turno de 16:30), asumimos llegada temprana HOY
             if event_time.hour >= 12:
                 return datetime.combine(base_date, event_time)
-            # Si es AM (mañana), asumimos que es salida tardía -> DÍA SIGUIENTE
+            # Si es < 12:00 (ej: 00:40 para turno que acaba 00:30), salida tardía MAÑANA
             else:
                 return datetime.combine(base_date + timedelta(days=1), event_time)
             
-    # 4. Lógica para Turnos de Día (ej: 08:00 -> 20:00)
+    # CASO B: Turnos "normales" donde Inicio < Fin (Ej: 00:30-08:30 y 08:30-16:30)
     else:
-        # Caso especial: Hora de madrugada (ej: 01:00 AM) en turno de día
-        # Significa que se quedaron muy tarde -> Día siguiente
-        if event_time < start and event_time.hour < 12:
-             return datetime.combine(base_date + timedelta(days=1), event_time)
-        
-        return datetime.combine(base_date, event_time)
+        # DETECCIÓN DE TURNO NOCHE (00:30 - 08:30)
+        # Si el turno empieza muy temprano (antes de las 06:00 AM)
+        if start.hour < 6:
+            # 1. Llegada MUY anticipada el día anterior (ej: 23:50 del día previo)
+            if event_time.hour >= 20: 
+                return datetime.combine(base_date - timedelta(days=1), event_time)
+            
+            # 2. Llegada anticipada el MISMO día (ej: 00:15 para turno 00:30)
+            # Como es el mismo día calendario, NO sumamos ni restamos días.
+            return datetime.combine(base_date, event_time)
 
+        # DETECCIÓN DE TURNO DÍA (08:30 - 16:30)
+        else:
+            # Caso especial: Hora de madrugada (ej: 01:00 AM) en turno que empezó a las 08:30 AM
+            # Significa que se quedaron muy tarde trabajando -> Día siguiente
+            if event_time < start and event_time.hour < 12:
+                 return datetime.combine(base_date + timedelta(days=1), event_time)
+            
+            # Comportamiento normal (mismo día)
+            return datetime.combine(base_date, event_time)
 # --- Vista Principal Corregida ---
 @login_required
 @user_passes_test(lambda u: u.is_superuser)
@@ -2103,6 +2111,7 @@ def create_shift_note_modal(request):
 def current_logbook_view(request):
     """
     Muestra al supervisor la bitácora actual del operador en turno.
+    CORREGIDO: Orden cronológico ascendente (Inicio -> Fin).
     """
     # Buscar operadores con turnos activos
     active_shifts = OperatorShift.objects.filter(
@@ -2115,14 +2124,23 @@ def current_logbook_view(request):
     for shift in active_shifts:
         operator_name = f"{shift.operator.first_name} {shift.operator.last_name}"
         
-        # Obtener las novedades del turno actual
-        logs_del_turno = UpdateLog.objects.filter(
+        # 1. Obtener las novedades
+        logs_del_turno_qs = UpdateLog.objects.filter(
             operator_shift=shift
-        ).select_related('installation', 'installation__company').order_by('-created_at')
+        ).select_related('installation', 'installation__company')
         
-        if logs_del_turno.exists():
+        # 2. Convertir a lista y ordenar con Python usando la lógica corregida
+        logs_list = list(logs_del_turno_qs)
+        
+        # --- CAMBIO AQUÍ ---
+        # Quitamos 'reverse=True' para que el orden sea cronológico normal
+        # (Ej: 23:50 -> 00:20 -> 00:30 -> 01:00)
+        logs_list.sort(key=lambda x: calculate_log_datetime(x)) 
+        # -------------------
+
+        if logs_list:
             logbook_data = {}
-            for log in logs_del_turno:
+            for log in logs_list:
                 if log.installation and log.installation.company:
                     company_name = log.installation.company.name
                     installation_name = log.installation.name
