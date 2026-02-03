@@ -2031,6 +2031,7 @@ def update_checklist_order(request):
 def full_logbook_view(request):
     """
     Muestra la bitácora del turno actual y los dos turnos anteriores.
+    CORREGIDO: Se eliminó el filtro que ocultaba turnos con traslape (handover).
     """
     shift_ids_to_show = []
 
@@ -2041,20 +2042,22 @@ def full_logbook_view(request):
     ).order_by('actual_start_time')
 
     if active_shifts.exists():
+        # Agregamos los IDs de los turnos activos
         shift_ids_to_show.extend(list(active_shifts.values_list('id', flat=True)))
 
-        # 2. Encontrar los 2 turnos completados antes del inicio del turno activo más antiguo
-        earliest_active_start_time = active_shifts.first().actual_start_time
+        # 2. Encontrar los últimos 2 turnos completados GLOBALES
+        # Eliminamos 'actual_end_time__lt' para permitir ver el turno saliente 
+        # incluso si terminó después de que el actual comenzara (traslape).
         previous_shifts = OperatorShift.objects.filter(
-            actual_end_time__isnull=False,
-            actual_end_time__lt=earliest_active_start_time
-        ).order_by('-actual_end_time')[:2]
+            actual_end_time__isnull=False
+        ).order_by('-actual_end_time')[:2] #
+        
         shift_ids_to_show.extend(list(previous_shifts.values_list('id', flat=True)))
     else:
         # Plan B: Si no hay turnos activos, muestra los últimos 3 turnos completados
         previous_shifts = OperatorShift.objects.filter(
             actual_end_time__isnull=False
-        ).order_by('-actual_end_time')[:3]
+        ).order_by('-actual_end_time')[:3] #
         shift_ids_to_show.extend(list(previous_shifts.values_list('id', flat=True)))
 
     # 3. Obtener y ordenar los logs de los turnos seleccionados
