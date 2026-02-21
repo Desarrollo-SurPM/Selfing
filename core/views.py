@@ -1192,20 +1192,12 @@ def operator_dashboard(request):
         
         context['active_round_id'] = request.session.get('active_round_id')
 
-        # Lógica para el nuevo temporizador de rondas con reinicio a los 30 minutos
+        # --- CORRECCIÓN: Lógica para el temporizador de rondas a 60 minutos ---
         round_completed_this_cycle = False
-        last_round = VirtualRoundLog.objects.filter(operator_shift=active_shift).order_by('-start_time').first()
         
         if last_round:
-            now = timezone.now()
-            # Determinar el inicio del ciclo actual (ej: 16:30, 17:30)
-            if now.minute >= 30:
-                start_of_current_cycle = now.replace(minute=30, second=0, microsecond=0)
-            else:
-                start_of_current_cycle = (now - timedelta(hours=1)).replace(minute=30, second=0, microsecond=0)
-            
-            # Si la última ronda se inició dentro del ciclo actual, se marca como completada
-            if last_round.start_time >= start_of_current_cycle:
+            # La ronda está completada si la última fue hace menos de 60 minutos
+            if timezone.now() < last_round.start_time + timedelta(minutes=60):
                 round_completed_this_cycle = True
         
         context['round_completed_this_cycle'] = round_completed_this_cycle
