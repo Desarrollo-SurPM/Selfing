@@ -303,7 +303,8 @@
 <script id="round-timer-data" type="application/json">
 {
     "shiftStartTime": {% if active_shift and active_shift.actual_start_time %}"{{ shift_start_time_iso }}"{% else %}null{% endif %},
-    "roundCompletedThisCycle": {{ round_completed_this_cycle|yesno:"true,false" }}
+    "roundCompletedThisCycle": {{ round_completed_this_cycle|yesno:"true,false" }},
+    "isRoundActive": {% if active_round_id %}true{% else %}false{% endif %}
 }
 </script>
 
@@ -454,7 +455,7 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     // =================================================================
-    // LÓGICA DE TEMPORIZADOR DE RONDAS Y AUDIO CORREGIDA
+    // LÓGICA DE TEMPORIZADOR DE RONDAS Y AUDIO CORREGIDA (NUEVA VERSIÓN)
     // =================================================================
     const timerDataElement = document.getElementById('round-timer-data');
     if (!timerDataElement) return;
@@ -471,17 +472,16 @@ document.addEventListener('DOMContentLoaded', function() {
 
     let lastCheckedMinute = new Date().getMinutes();
     let roundCompletedThisCycle = timerData.roundCompletedThisCycle;
+    let isRoundActive = timerData.isRoundActive; // VARIABLE AÑADIDA PARA CONTROLAR EL ESTADO
 
     function mainTimerLoop() {
         const now = new Date();
         const currentMinute = now.getMinutes();
 
-        // 1. Detectar si estamos en hora de alerta (minuto 00 o 30)
-        // Se agregó soporte para minuto 00 también, que es estándar
-        if ((currentMinute === 30 || currentMinute === 0) && lastCheckedMinute !== currentMinute) {
+        // 1. Detectar si estamos en el minuto 30 y SOLO alertar si no hay ronda activa
+        if (!isRoundActive && currentMinute === 30 && lastCheckedMinute !== currentMinute) {
             lastCheckedMinute = currentMinute;
             
-            // CORRECCIÓN PRINCIPAL: Usamos el ID correcto definido en el HTML
             const alarmSound = document.getElementById('task-alarm-sound');
             
             // Disparar Modal Visual
@@ -506,21 +506,19 @@ document.addEventListener('DOMContentLoaded', function() {
 
         let timeToDisplay = "00:00";
         
-        // 2. Calcular cuenta regresiva
+        // 2. Calcular cuenta regresiva hacia el próximo minuto 30
         if (roundCompletedThisCycle) {
             timeToDisplay = "00:00";
         } else {
             const nextDueTime = new Date(now);
-            if (now.getMinutes() >= 30) {
-                nextDueTime.setHours(now.getHours() + 1, 30, 0, 0); // Próxima: XX:30 del siguiente
-                // Si prefieres ciclos de 30 min exactos:
-                // nextDueTime.setMinutes(nextDueTime.getMinutes() + 30);
-            } else {
-                nextDueTime.setHours(now.getHours(), 30, 0, 0); // Próxima: XX:30 actual
-            }
             
-            // Ajuste simple: Si la lógica es cada 30 min (00 y 30), cambiar arriba.
-            // Por ahora mantenemos la lógica de tu archivo antiguo (apuntar al minuto 30).
+            // Si ya pasamos del minuto 30, apuntamos a las XX:30 de la siguiente hora
+            if (now.getMinutes() >= 30) {
+                nextDueTime.setHours(now.getHours() + 1, 30, 0, 0); 
+            } else {
+                // Si aún no llegamos al minuto 30, apuntamos a las XX:30 de la hora actual
+                nextDueTime.setHours(now.getHours(), 30, 0, 0); 
+            }
             
             const timeRemaining = nextDueTime - now;
 
