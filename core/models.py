@@ -476,7 +476,7 @@ class GPSIncident(models.Model):
     maps_url = models.URLField(max_length=1000, blank=True, null=True, verbose_name="Enlace de Google Maps")
     
     # Metadatos del sistema
-    cknowledged_at = models.DateTimeField(blank=True, null=True, verbose_name="Hora de toma del caso")
+    taken_at = models.DateTimeField(blank=True, null=True, verbose_name="Hora de toma del caso")
     received_at = models.DateTimeField(auto_now_add=True, verbose_name="Fecha de Recepción (Sistema)")
     
     # Relaciones calculadas por el Service Layer

@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <style>
+        body { font-family: Arial, sans-serif; color: #333; background-color: #f8f9fa; margin: 0; padding: 20px; }
+        .container { max-width: 600px; background: #ffffff; border-radius: 8px; overflow: hidden; box-shadow: 0 4px 6px rgba(0,0,0,0.1); margin: auto; }
+        .header { background-color: #dc3545; color: white; padding: 20px; text-align: center; }
+        .header h2 { margin: 0; font-size: 24px; }
+        .content { padding: 25px; }
+        .info-box { background-color: #fdfdfe; border-left: 4px solid #dc3545; padding: 15px; margin-bottom: 20px; border-radius: 4px; }
+        ul { list-style: none; padding: 0; margin: 0; }
+        ul li { padding: 8px 0; border-bottom: 1px solid #eee; }
+        ul li:last-child { border-bottom: none; }
+        .highlight { font-weight: bold; color: #dc3545; }
+        .footer { background-color: #f1f1f1; color: #777; font-size: 12px; text-align: center; padding: 15px; }
+        .btn { display: inline-block; background-color: #0d6efd; color: #ffffff; text-decoration: none; padding: 10px 20px; border-radius: 5px; margin-top: 15px; font-weight: bold; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h2>🚨 RESOLUCIÓN DE ALERTA GPS</h2>
+        </div>
+        <div class="content">
+            <p>Estimados,</p>
+            <p>Se informa que una alerta del sistema GPS ha sido gestionada y resuelta por la Torre de Control de SELFING.</p>
+            
+            <div class="info-box">
+                <ul>
+                    <li><strong>Unidad / Patente:</strong> {{ incident.license_plate }} {{ incident.unit_id|default:"" }}</li>
+                    <li><strong>Tipo de Alerta:</strong> <span class="highlight">{{ incident.alert_type }}</span></li>
+                    <li><strong>Conductor:</strong> {{ incident.driver_name|default:"S/Info" }}</li>
+                    <li><strong>Fecha y Hora de Alerta:</strong> {{ incident.incident_timestamp|date:"d/m/Y H:i:s" }}</li>
+                    <li><strong>Sector Asignado:</strong> {{ incident.sector_assigned.name|default:"No Detectado" }}</li>
+                </ul>
+            </div>
+
+            <h3 style="color: #495057; border-bottom: 2px solid #eee; padding-bottom: 5px;">📋 Detalles de la Gestión Operativa</h3>
+            <ul>
+                <li><strong>Operador de Torre (SELFING):</strong> {{ incident.operator.get_full_name|default:incident.operator.username }}</li>
+                <li><strong>Hora de Toma de Caso:</strong> {{ incident.taken_at|date:"H:i:s"|default:"-" }}</li>
+                <li><strong>Hora de Resolución:</strong> {{ incident.resolved_at|date:"H:i:s"|default:"-" }}</li>
+                <li><strong>Contacto en Sala de Control:</strong> {{ incident.who_answered }}</li>
+                <li><strong>Observaciones del Operador:</strong> <br> <em>"{{ incident.operator_notes }}"</em></li>
+            </ul>
+
+            {% if incident.maps_url %}
+            <div style="text-align: center;">
+                <a href="{{ incident.maps_url }}" class="btn">Ver Ubicación en Google Maps</a>
+            </div>
+            {% endif %}
+        </div>
+        <div class="footer">
+            Este es un mensaje automático generado por el Sistema de Monitoreo Centralizado SELFING. No responda a este correo.
+        </div>
+    </div>
+</body>
+</html>
