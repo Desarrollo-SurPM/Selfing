@@ -1,0 +1,107 @@
+{% extends "base.html" %}
+
+{% block title %}Auditoría de Reporte GPS{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-4 border-bottom pb-3">
+        <div>
+            <h2><i class="fas fa-file-invoice text-primary me-2"></i> Auditoría de Reporte Mensual GPS</h2>
+            <p class="text-muted mb-0">Previsualización en vivo de los datos que se incluirán en el Excel oficial.</p>
+        </div>
+        
+        <a href="{% url 'export_gps_excel' %}" class="btn btn-success btn-lg shadow fw-bold animate__animated animate__pulse animate__infinite">
+            <i class="fas fa-file-excel me-2"></i> Descargar Excel (Formato ENAP)
+        </a>
+    </div>
+
+    <div class="row mb-4">
+        <div class="col-md-3">
+            <div class="card border-primary text-center shadow-sm">
+                <div class="card-body">
+                    <h5 class="card-title text-primary"><i class="fas fa-list-ol"></i> Total Registros</h5>
+                    <h3 class="fw-bold">{{ incidents.count }}</h3>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="card shadow border-0">
+        <div class="card-header bg-dark text-white">
+            <h6 class="mb-0"><i class="fas fa-table me-2"></i> Vista Previa del Documento</h6>
+        </div>
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover table-striped table-bordered mb-0 align-middle" style="font-size: 0.85rem;">
+                    <thead class="table-light text-center align-middle">
+                        <tr>
+                            <th>ESTADO</th>
+                            <th>TIPO DE ALARMA</th>
+                            <th>FECHA</th>
+                            <th>HORA</th>
+                            <th>CONDUCTOR</th>
+                            <th>N° ENAP / PATENTE</th>
+                            <th>COORDENADAS</th>
+                            <th>SALA DE CONTROL</th>
+                            <th>OP. SALA CONTROL (ENAP)</th>
+                            <th>HORA AVISO</th>
+                            <th>OP. TORRE CONTROL (SELFING)</th>
+                            <th>OBSERVACIONES</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for inc in incidents %}
+                        <tr>
+                            <td class="text-center">
+                                {% if inc.status == 'resolved' %}
+                                    <span class="badge bg-success">Resuelto</span>
+                                {% elif inc.status == 'ignored' %}
+                                    <span class="badge bg-secondary">Ignorado</span>
+                                {% else %}
+                                    <span class="badge bg-warning text-dark">Pendiente</span>
+                                {% endif %}
+                            </td>
+                            <td class="fw-bold text-danger">{{ inc.alert_type }}</td>
+                            <td class="text-center">{{ inc.incident_timestamp|date:"d/m/Y" }}</td>
+                            <td class="text-center">{{ inc.incident_timestamp|date:"H:i:s" }}</td>
+                            <td>{{ inc.driver_name|default:"S/Info" }}</td>
+                            <td class="text-center fw-bold">{{ inc.license_plate }} {{ inc.unit_id|default:"" }}</td>
+                            <td class="text-center" style="font-size: 0.75rem;">
+                                {% if inc.latitude and inc.longitude %}
+                                    <a href="https://www.google.com/maps?q={{ inc.latitude }},{{ inc.longitude }}" target="_blank">
+                                        {{ inc.latitude }}<br>{{ inc.longitude }}
+                                    </a>
+                                {% else %}
+                                    N/A
+                                {% endif %}
+                            </td>
+                            <td>{{ inc.sector_assigned.name|default:"No Detectado" }}</td>
+                            <td>{{ inc.who_answered|default:"-" }}</td>
+                            <td class="text-center">{{ inc.resolved_at|date:"H:i:s"|default:"-" }}</td>
+                            
+                            <td class="text-center">
+                                {% if inc.operator %}
+                                    {{ inc.operator.get_full_name|default:inc.operator.username }}
+                                {% else %}
+                                    <span class="text-muted">-</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <span title="{{ inc.operator_notes }}">{{ inc.operator_notes|truncatechars:30|default:"-" }}</span>
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="12" class="text-center py-5 text-muted">
+                                <i class="fas fa-folder-open fa-3x mb-3"></i><br>
+                                Aún no hay registros de alertas GPS procesadas.
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

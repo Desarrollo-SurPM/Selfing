@@ -82,7 +82,9 @@ DATABASE_URL = os.getenv(
 # Parseamos la URL de conexión usando dj_database_url
 DATABASES = {
     "default": dj_database_url.parse(
-        DATABASE_URL, conn_max_age=600, ssl_require=True  # ssl_require asegura TLS en Railway
+        DATABASE_URL, 
+        conn_max_age=600, 
+        ssl_require=True if "postgresql" in DATABASE_URL else False
     )
 }
 
@@ -132,3 +134,8 @@ MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 CSRF_TRUSTED_ORIGINS = [
     'https://selfing-production.up.railway.app',
 ]
+
+GPS_EMAIL_HOST = os.getenv('GPS_EMAIL_HOST', 'mail.selfing.cl')
+GPS_EMAIL_PORT = int(os.getenv('GPS_EMAIL_PORT', 993))
+GPS_EMAIL_HOST_USER = os.getenv('GPS_EMAIL_HOST_USER', 'operador1@selfing.cl')
+GPS_EMAIL_HOST_PASSWORD = os.getenv('GPS_EMAIL_HOST_PASSWORD', '')

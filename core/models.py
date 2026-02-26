@@ -400,3 +400,140 @@ class VehicleRoute(models.Model):
     
     def __str__(self):
         return f"{self.vehicle.license_plate} - {self.start_time.strftime('%d/%m/%Y %H:%M')}"
+
+
+## nuevo modelo ##
+class Sector(models.Model):
+    """
+    Representa una zona geográfica o sector operativo para cruzar con la ubicación del correo.
+    """
+    name = models.CharField(max_length=150, unique=True, verbose_name="Nombre del Sector")
+    geofence_polygon = models.JSONField(
+        blank=True, 
+        null=True, 
+        verbose_name="Coordenadas de la Geocerca",
+        help_text="Formato: [[lat1, lon1], [lat2, lon2], [lat3, lon3], ...]"
+    )
+    description = models.TextField(blank=True, null=True, verbose_name="Descripción o Referencias")
+    
+    # Opcional: Vincularlo a una empresa si Selfing maneja multitenencia estricta en la vista del operador
+    company = models.ForeignKey(
+        'Company', 
+        on_delete=models.CASCADE, 
+        related_name='sectors', 
+        null=True, 
+        blank=True,
+        verbose_name="Empresa Asociada"
+    )
+
+    class Meta:
+        verbose_name = "Sector"
+        verbose_name_plural = "Sectores"
+        ordering = ['name']
+
+    def __str__(self):
+        return self.name
+
+
+class SectorContact(models.Model):
+    """
+    Encargados asociados a cada sector que serán contactados durante una alerta.
+    """
+    sector = models.ForeignKey(Sector, on_delete=models.CASCADE, related_name='contacts', verbose_name="Sector")
+    name = models.CharField(max_length=150, verbose_name="Nombre del Encargado")
+    phone = models.CharField(max_length=50, verbose_name="Teléfono")
+    email = models.EmailField(blank=True, null=True, verbose_name="Correo Electrónico")
+    is_active = models.BooleanField(default=True, verbose_name="¿Está activo?")
+    
+    class Meta:
+        verbose_name = "Contacto de Sector"
+        verbose_name_plural = "Contactos de Sector"
+        ordering = ['sector__name', 'name']
+
+    def __str__(self):
+        return f"{self.name} - {self.sector.name}"
+
+
+class GPSIncident(models.Model):
+    """
+    Alerta GPS parseada automáticamente desde el correo electrónico. Totalmente independiente.
+    """
+    STATUS_CHOICES = [
+        ('pending', 'Pendiente'),
+        ('resolved', 'Resuelto'),
+        ('ignored', 'Ignorado (Falso Positivo)')
+    ]
+
+    # Datos extraídos exclusivamente del correo electrónico (texto plano)
+    alert_type = models.CharField(max_length=100, verbose_name="Tipo de Alerta", help_text="Ej: Botón de Pánico, Ralentí, Colisión")
+    unit_id = models.CharField(max_length=100, blank=True, null=True, verbose_name="ID de Unidad")
+    license_plate = models.CharField(max_length=20, verbose_name="Codigo Enap")
+    driver_name = models.CharField(max_length=150, blank=True, null=True, verbose_name="Conductor")
+    location_text = models.TextField(verbose_name="Ubicación (Texto)")
+    incident_timestamp = models.DateTimeField(verbose_name="Fecha y Hora del Incidente")
+    latitude = models.FloatField(blank=True, null=True, verbose_name="Latitud")
+    longitude = models.FloatField(blank=True, null=True, verbose_name="Longitud")
+    maps_url = models.URLField(max_length=1000, blank=True, null=True, verbose_name="Enlace de Google Maps")
+    
+    # Metadatos del sistema
+    cknowledged_at = models.DateTimeField(blank=True, null=True, verbose_name="Hora de toma del caso")
+    received_at = models.DateTimeField(auto_now_add=True, verbose_name="Fecha de Recepción (Sistema)")
+    
+    # Relaciones calculadas por el Service Layer
+    sector_assigned = models.ForeignKey(Sector, on_delete=models.SET_NULL, null=True, blank=True, related_name='incidents', verbose_name="Sector Asignado")
+
+    # Gestión de Resolución (Triage por el Operador)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending', verbose_name="Estado")
+    operator = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='managed_incidents', verbose_name="Operador que resolvió")
+    who_answered = models.CharField(max_length=150, blank=True, null=True, verbose_name="¿Quién contestó la llamada?")
+    operator_notes = models.TextField(blank=True, null=True, verbose_name="Notas de Resolución")
+    
+    # Métricas para el Excel mensual
+    resolved_at = models.DateTimeField(null=True, blank=True, verbose_name="Fecha y Hora de Resolución")
+    response_time_seconds = models.PositiveIntegerField(null=True, blank=True, verbose_name="Tiempo de Respuesta (Segundos)", help_text="Calculado automáticamente al resolver.")
+
+    class Meta:
+        verbose_name = "Incidente GPS"
+        verbose_name_plural = "Incidentes GPS"
+        ordering = ['-incident_timestamp']
+
+    def __str__(self):
+        return f"{self.alert_type} - {self.license_plate} ({self.get_status_display()})"
+    
+    def calculate_response_time(self):
+        """Calcula el tiempo de respuesta en segundos al guardar la resolución"""
+        if self.resolved_at and self.received_at:
+            delta = self.resolved_at - self.received_at
+            self.response_time_seconds = int(delta.total_seconds())
+
+
+class GPSNotificationSettings(models.Model):
+    """
+    Configuración global para los destinatarios de correos del módulo GPS.
+    Actúa como un Singleton (solo debe existir un registro).
+    """
+    instant_emails = models.TextField(
+        verbose_name="Correos para Alertas Instantáneas (Triage)",
+        help_text="Separados por coma (,). Ej: jefe_turno@enap.cl, supervisor@selfing.cl",
+        default="jefatura@tuempresa.cl"
+    )
+    monthly_emails = models.TextField(
+        verbose_name="Correos para Reporte Mensual (Excel)",
+        help_text="Separados por coma (,). Ej: gerencia@enap.cl, admin@selfing.cl",
+        default="admin@tuempresa.cl"
+    )
+
+    class Meta:
+        verbose_name = "Configuración de Notificaciones GPS"
+        verbose_name_plural = "Configuración de Notificaciones GPS"
+
+    def __str__(self):
+        return "Gestión de Destinatarios GPS"
+
+    def get_instant_emails_list(self):
+        """Convierte el texto separado por comas en una lista de Python."""
+        return [email.strip() for email in self.instant_emails.split(',') if email.strip()]
+
+    def get_monthly_emails_list(self):
+        """Convierte el texto separado por comas en una lista de Python."""
+        return [email.strip() for email in self.monthly_emails.split(',') if email.strip()]

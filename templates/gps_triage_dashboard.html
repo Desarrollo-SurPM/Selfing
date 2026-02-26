@@ -1,0 +1,172 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2><i class="fas fa-satellite-dish text-danger shadow-sm"></i> Centro de Triage - Alertas GPS</h2>
+        <button class="btn btn-outline-secondary" onclick="location.reload()"><i class="fas fa-sync-alt"></i> Actualizar</button>
+    </div>
+    
+    <div id="alert-container" class="row">
+        {% for incident in incidents %}
+        <div class="col-lg-6 mb-4 incident-card" id="incident-card-{{ incident.id }}">
+            <div class="card shadow border-0 border-start border-danger border-4">
+                <div class="card-header bg-white d-flex justify-content-between align-items-center border-bottom-0 pt-3">
+                    <h5 class="mb-0 text-danger fw-bold"><i class="fas fa-exclamation-circle"></i> {{ incident.alert_type }}</h5>
+                    <span class="text-muted small"><i class="far fa-clock"></i> {{ incident.incident_timestamp|date:"d/m/Y - H:i:s" }}</span>
+                </div>
+                
+                <div class="card-body pt-2">
+                    <div class="row mb-3">
+                        <div class="col-sm-6">
+                            <p class="mb-1 text-muted small">N° ENAP / Serial (SN)</p>
+                            <p class="mb-0 fw-bold">{{ incident.license_plate }} <span class="badge bg-secondary">{{ incident.unit_id }}</span></p>
+                        </div>
+                        <div class="col-sm-6">
+                            <p class="mb-1 text-muted small">Conductor</p>
+                            <p class="mb-0 fw-bold"><i class="fas fa-id-card"></i> {{ incident.driver_name }}</p>
+                        </div>
+                    </div>
+
+                    <div class="bg-light p-3 rounded mb-3">
+                        <div class="d-flex justify-content-between align-items-start mb-2">
+                            <div>
+                                <p class="mb-1 text-muted small">Sector Asignado Automáticamente</p>
+                                <h6 class="mb-0 text-primary fw-bold"><i class="fas fa-map-marker-alt"></i> {{ incident.sector_assigned.name|default:"No Detectado" }}</h6>
+                            </div>
+                            {% if incident.maps_url %}
+                            <a href="{{ incident.maps_url }}" target="_blank" class="btn btn-primary btn-sm shadow-sm"><i class="fas fa-map-marked-alt"></i> Abrir Mapa</a>
+                            {% endif %}
+                        </div>
+                        <p class="small text-muted mb-0"><i class="fas fa-road"></i> {{ incident.location_text }}</p>
+                    </div>
+
+                    <hr>
+                    
+                    <div id="take-case-div-{{ incident.id }}" class="text-center {% if incident.status == 'in_progress' %}d-none{% endif %}">
+                        <p class="text-muted small mb-2">Debes tomar el caso para iniciar la gestión.</p>
+                        <button onclick="takeCase({{ incident.id }})" class="btn btn-warning btn-lg w-100 fw-bold shadow-sm" id="btn-take-{{ incident.id }}">
+                            <i class="fas fa-hand-paper"></i> TOMAR ESTE CASO
+                        </button>
+                    </div>
+
+                    <div id="resolve-form-div-{{ incident.id }}" class="{% if incident.status == 'pending' %}d-none{% endif %}">
+                        <div class="alert alert-info py-2 mb-3">
+                            <p class="mb-1 fw-bold small"><i class="fas fa-phone-volume"></i> Protocolo: Llamar a Sala de Control</p>
+                            <ul class="mb-0 small ps-3">
+                                {% for contacto in incident.sector_assigned.contacts.all %}
+                                    <li><strong>{{ contacto.name }}</strong> - Tel: {{ contacto.phone }}</li>
+                                {% empty %}
+                                    <li><em>No hay contactos registrados para este sector.</em></li>
+                                {% endfor %}
+                            </ul>
+                        </div>
+
+                        <form onsubmit="resolveIncident(event, {{ incident.id }})">
+                            <div class="row">
+                                <div class="col-md-6 mb-3">
+                                    <label class="form-label small fw-bold">Operador Sala de Control *</label>
+                                    <input type="text" class="form-control form-control-sm" id="who-{{ incident.id }}" placeholder="Ej: Felipe Vergara" required>
+                                </div>
+                                <div class="col-md-6 mb-3">
+                                    <label class="form-label small fw-bold">Observaciones *</label>
+                                    <textarea class="form-control form-control-sm" id="notes-{{ incident.id }}" rows="2" required></textarea>
+                                </div>
+                            </div>
+                            <button type="submit" class="btn btn-success w-100 fw-bold shadow-sm" id="btn-resolve-{{ incident.id }}">
+                                <i class="fas fa-check-double"></i> Registrar Llamada y Finalizar
+                            </button>
+                        </form>
+                    </div>
+
+                </div>
+            </div>
+        </div>
+        {% empty %}
+        <div class="col-12 text-center mt-5">
+            <div class="p-5 bg-light rounded shadow-sm">
+                <i class="fas fa-shield-alt fa-4x text-success mb-3"></i>
+                <h4 class="text-muted fw-bold">Todo en orden</h4>
+                <p class="text-muted">No hay alertas GPS pendientes de resolución.</p>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+
+<script>
+    function getCookie(name) {
+        let cookieValue = null;
+        if (document.cookie && document.cookie !== '') {
+            const cookies = document.cookie.split(';');
+            for (let i = 0; i < cookies.length; i++) {
+                const cookie = cookies[i].trim();
+                if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                    cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                    break;
+                }
+            }
+        }
+        return cookieValue;
+    }
+
+    // PASO 1: Tomar el caso
+    async function takeCase(incidentId) {
+        const btn = document.getElementById(`btn-take-${incidentId}`);
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Registrando...';
+        btn.disabled = true;
+
+        try {
+            const response = await fetch(`/gps/acknowledge/${incidentId}/`, {
+                method: 'POST',
+                headers: { 'X-CSRFToken': getCookie('csrftoken') }
+            });
+            const data = await response.json();
+            
+            if (data.success) {
+                // Ocultar botón Tomar y mostrar Formulario
+                document.getElementById(`take-case-div-${incidentId}`).classList.add('d-none');
+                document.getElementById(`resolve-form-div-${incidentId}`).classList.remove('d-none');
+            }
+        } catch (error) {
+            alert("Error de conexión.");
+            btn.innerHTML = '<i class="fas fa-hand-paper"></i> TOMAR ESTE CASO';
+            btn.disabled = false;
+        }
+    }
+
+    // PASO 2: Resolver
+    async function resolveIncident(event, incidentId) {
+        event.preventDefault();
+        const btn = document.getElementById(`btn-resolve-${incidentId}`);
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Enviando Correo...';
+        btn.disabled = true;
+
+        try {
+            const response = await fetch(`/gps/resolve/${incidentId}/`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCookie('csrftoken') },
+                body: JSON.stringify({
+                    who_answered: document.getElementById(`who-${incidentId}`).value,
+                    operator_notes: document.getElementById(`notes-${incidentId}`).value
+                })
+            });
+
+            const data = await response.json();
+            if (data.success) {
+                const card = document.getElementById(`incident-card-${incidentId}`);
+                card.style.transition = "all 0.5s ease-out";
+                card.style.opacity = "0";
+                setTimeout(() => {
+                    card.remove();
+                    if(document.querySelectorAll('.incident-card').length === 0) location.reload();
+                }, 500);
+            }
+        } catch (error) {
+            alert("Error al resolver.");
+            btn.innerHTML = 'Registrar Llamada y Finalizar';
+            btn.disabled = false;
+        }
+    }
+</script>
+{% endblock %}

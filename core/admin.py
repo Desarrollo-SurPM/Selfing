@@ -7,8 +7,10 @@ from .models import (
     Company, Installation, OperatorProfile, ShiftType, OperatorShift,
     ChecklistItem, ChecklistLog, VirtualRoundLog, UpdateLog, Email, EmergencyContact,
     TurnReport, MonitoredService, ServiceStatusLog, TraceabilityLog, ShiftNote,
-    Vehicle, VehiclePosition, VehicleAlert, VehicleRoute
+    Vehicle, VehiclePosition, VehicleAlert, VehicleRoute, GPSNotificationSettings
 )
+
+from .models import Sector, SectorContact, GPSIncident
 
 # --- INLINES ---
 class OperatorProfileInline(admin.StackedInline):
@@ -177,3 +179,48 @@ admin.site.register(MonitoredService)
 admin.site.register(ServiceStatusLog)
 admin.site.register(ShiftNote)
 admin.site.register(OperatorProfile)
+
+@admin.register(Sector)
+class SectorAdmin(admin.ModelAdmin):
+    list_display = ('name', 'company')
+    search_fields = ('name',)
+    list_filter = ('company',)
+
+@admin.register(SectorContact)
+class SectorContactAdmin(admin.ModelAdmin):
+    list_display = ('name', 'sector', 'phone', 'is_active')
+    search_fields = ('name', 'phone', 'email')
+    list_filter = ('is_active', 'sector')
+
+@admin.register(GPSIncident)
+class GPSIncidentAdmin(admin.ModelAdmin):
+    list_display = ('alert_type', 'license_plate', 'sector_assigned', 'status', 'incident_timestamp', 'response_time_seconds')
+    list_filter = ('status', 'alert_type', 'sector_assigned')
+    search_fields = ('license_plate', 'driver_name', 'location_text', 'unit_id')
+    readonly_fields = ('received_at', 'response_time_seconds')
+    date_hierarchy = 'incident_timestamp'
+    
+    fieldsets = (
+        ('Datos Extraídos del Correo', {
+            'fields': ('alert_type', 'unit_id', 'license_plate', 'driver_name', 'location_text', 'incident_timestamp')
+        }),
+        ('Asignación Automática', {
+            'fields': ('sector_assigned',)
+        }),
+        ('Resolución de Operador (Triage)', {
+            'fields': ('status', 'operator', 'who_answered', 'operator_notes', 'resolved_at')
+        }),
+        ('Métricas del Sistema', {
+            'fields': ('received_at', 'response_time_seconds')
+        }),
+    )
+
+@admin.register(GPSNotificationSettings)
+class GPSNotificationSettingsAdmin(admin.ModelAdmin):
+    list_display = ('__str__', 'instant_emails', 'monthly_emails')
+    
+    # Bloquear agregar nuevos registros si ya existe uno (Patrón Singleton)
+    def has_add_permission(self, request):
+        if self.model.objects.exists():
+            return False
+        return super().has_add_permission(request)

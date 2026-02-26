@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <style>
+        body { font-family: Arial, sans-serif; color: #333; line-height: 1.6; }
+        .container { width: 80%; margin: 0 auto; border: 1px solid #ddd; border-radius: 8px; overflow: hidden; }
+        .header { background-color: #dc3545; color: white; padding: 15px; text-align: center; }
+        .content { padding: 20px; }
+        .table { width: 100%; border-collapse: collapse; margin-top: 15px; }
+        .table th, .table td { border: 1px solid #ddd; padding: 10px; text-align: left; }
+        .table th { background-color: #f8f9fa; width: 35%; }
+        .footer { background-color: #f1f1f1; padding: 10px; text-align: center; font-size: 12px; color: #666; }
+        .badge { background-color: #198754; color: white; padding: 5px 10px; border-radius: 4px; font-weight: bold; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h2 style="margin: 0;">Reporte de Resolución - Alerta GPS</h2>
+        </div>
+        
+        <div class="content">
+            <p>Estimados,</p>
+            <p>Se informa que la alerta GPS detectada en el sistema ha sido <strong>gestionada y resuelta</strong> por la Torre de Control.</p>
+            
+            <table class="table">
+                <tr>
+                    <th><span class="badge">ESTADO</span></th>
+                    <td><strong>RESUELTO</strong></td>
+                </tr>
+                <tr>
+                    <th>Tipo de Alarma</th>
+                    <td>{{ incident.alert_type }}</td>
+                </tr>
+                <tr>
+                    <th>Fecha y Hora del Evento</th>
+                    <td>{{ incident.incident_timestamp|date:"d/m/Y H:i:s" }}</td>
+                </tr>
+                <tr>
+                    <th>N° ENAP / Patente</th>
+                    <td>{{ incident.license_plate }} (SN: {{ incident.unit_id }})</td>
+                </tr>
+                <tr>
+                    <th>Conductor</th>
+                    <td>{{ incident.driver_name }}</td>
+                </tr>
+                <tr>
+                    <th>Ubicación</th>
+                    <td>
+                        {{ incident.location_text }}
+                        {% if incident.maps_url %}
+                            <br><a href="{{ incident.maps_url }}">Ver en Google Maps</a>
+                        {% endif %}
+                    </td>
+                </tr>
+            </table>
+
+            <h3 style="margin-top: 25px; border-bottom: 2px solid #dc3545; padding-bottom: 5px;">Detalles de la Gestión (Torre de Control)</h3>
+            <table class="table">
+                <tr>
+                    <th>Sector Asignado</th>
+                    <td>{{ incident.sector_assigned.name|default:"No detectado" }}</td>
+                </tr>
+                <tr>
+                    <th>Operador Torre de Control (Selfing)</th>
+                    <td>{{ incident.operator.get_full_name|default:incident.operator.username }}</td>
+                </tr>
+                <tr>
+                    <th>Operador Sala de Control (Contactado)</th>
+                    <td>{{ incident.who_answered }}</td>
+                </tr>
+                <tr>
+                    <th>Observaciones del Evento</th>
+                    <td>{{ incident.operator_notes }}</td>
+                </tr>
+                <tr>
+                    <th>Tiempo de Respuesta</th>
+                    <td>{{ incident.response_time_seconds }} segundos</td>
+                </tr>
+            </table>
+        </div>
+        
+        <div class="footer">
+            Generado automáticamente por la Plataforma de Monitoreo Selfing.
+        </div>
+    </div>
+</body>
+</html>

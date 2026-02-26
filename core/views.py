@@ -7,8 +7,11 @@ from django.utils import timezone
 from django.http import JsonResponse, HttpResponse
 from django.template.loader import get_template
 from xhtml2pdf import pisa
+from django.views.decorators.http import require_POST
 from .utils import link_callback
 from django.core.mail import send_mail
+from .models import GPSIncident
+import csv
 from django.template.loader import render_to_string
 from django.db.models import (
     Q, Min, Max, Count, TimeField, Case, When, DateTimeField, F, Value, ExpressionWrapper, DateField, Avg
@@ -26,18 +29,22 @@ from collections import defaultdict
 from django.contrib.auth import logout
 from collections import OrderedDict
 import json
+from .forms import GPSNotificationSettingsForm
 from django.views.decorators.csrf import csrf_exempt 
 import re # Importar el módulo de expresiones regulares
 from django.db.models.functions import Coalesce, Cast
 from django.db.models import TimeField
 from django.core.mail import EmailMultiAlternatives # <--- Importante
 import mimetypes # <--- Importante para detectar si es png/jpg/pdf
+from django.utils.html import strip_tags
+from django.conf import settings
+from .models import GPSIncident
 
 from .models import (
     Company, Installation, OperatorProfile, ShiftType, OperatorShift,
     ChecklistItem, ChecklistLog, VirtualRoundLog, UpdateLog, Email, EmergencyContact,
     TurnReport, MonitoredService, ServiceStatusLog, TraceabilityLog, ShiftNote,
-    Vehicle, VehiclePosition, VehicleAlert, VehicleRoute
+    Vehicle, VehiclePosition, VehicleAlert, VehicleRoute, GPSNotificationSettings
 )
 from .forms import (
     UpdateLogForm, OperatorCreationForm, ShiftNoteForm,
@@ -2710,3 +2717,128 @@ def api_save_shift_batch(request):
             return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
     
     return JsonResponse({'status': 'error'}, status=405)
+
+
+# Vista para cargar la página del Dashboard
+# ==========================================
+# MÓDULO GPS: TRIAGE Y RESOLUCIÓN
+# ==========================================
+
+@login_required
+def gps_triage_dashboard(request):
+    # Ahora traemos los que están pendientes Y los que están en progreso
+    incidents = GPSIncident.objects.filter(status__in=['pending', 'in_progress']).order_by('-incident_timestamp')
+    return render(request, 'gps_triage_dashboard.html', {'incidents': incidents})
+
+def check_new_gps_alerts(request):
+    pending_count = GPSIncident.objects.filter(status='pending').count()
+    latest_alert = GPSIncident.objects.filter(status='pending').order_by('-incident_timestamp').first()
+    
+    latest_info = None
+    if latest_alert:
+        latest_info = {
+            'type': latest_alert.alert_type,
+            'plate': latest_alert.license_plate,
+            'id': latest_alert.id
+        }
+    return JsonResponse({'pending_count': pending_count, 'latest_alert': latest_info})
+
+@require_POST
+def acknowledge_gps_incident(request, incident_id):
+    """Fija la hora exacta en que el operador toma el caso (Para el Excel)"""
+    try:
+        incident = GPSIncident.objects.get(id=incident_id)
+        incident.status = 'in_progress'
+        incident.operator = request.user
+        incident.acknowledged_at = timezone.now()
+        incident.save()
+        return JsonResponse({'success': True})
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)}, status=400)
+
+@require_POST
+def resolve_gps_incident(request, incident_id):
+    """Finaliza el incidente y envía el correo (Control Interno)"""
+    try:
+        data = json.loads(request.body)
+        incident = GPSIncident.objects.get(id=incident_id)
+        
+        incident.status = 'resolved'
+        incident.who_answered = data.get('who_answered', 'No especificado')
+        incident.operator_notes = data.get('operator_notes', '')
+        incident.resolved_at = timezone.now() # Tiempo interno de cierre
+        incident.save()
+
+        enviar_correo_resolucion_gps(incident)
+        return JsonResponse({'success': True})
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)}, status=400)
+
+def enviar_correo_resolucion_gps(incident):
+    subject = f"RESOLUCIÓN ALERTA GPS: {incident.alert_type} - Unidad {incident.license_plate}"
+    context = {'incident': incident}
+    html_message = render_to_string('emails/gps_resolution.html', context)
+    plain_message = strip_tags(html_message)
+    
+    config, _ = GPSNotificationSettings.objects.get_or_create(id=1)
+    destinatarios = config.get_instant_emails_list() if config.get_instant_emails_list() else ['soporte@selfing.cl']
+    
+    send_mail(
+        subject=subject,
+        message=plain_message,
+        from_email=settings.DEFAULT_FROM_EMAIL,
+        recipient_list=destinatarios,
+        html_message=html_message,
+        fail_silently=False,
+    )
+
+# ==========================================
+# MÓDULO GPS: ADMINISTRACIÓN Y REPORTES
+# ==========================================
+
+@login_required
+@user_passes_test(is_supervisor)
+def manage_gps_settings(request):
+    """Vista amigable para que el admin cambie los correos desde su panel."""
+    config, _ = GPSNotificationSettings.objects.get_or_create(id=1)
+    
+    if request.method == 'POST':
+        config.instant_emails = request.POST.get('instant_emails', '')
+        config.monthly_emails = request.POST.get('monthly_emails', '')
+        config.save()
+        messages.success(request, "Configuración de correos GPS actualizada correctamente.")
+        return redirect('admin_dashboard')
+        
+    return render(request, 'gps_settings_form.html', {'config': config})
+
+@login_required
+@user_passes_test(is_supervisor)
+def gps_admin_reports(request):
+    incidents = GPSIncident.objects.all().order_by('-incident_timestamp')
+    return render(request, 'gps_admin_reports.html', {'incidents': incidents})
+
+@login_required
+@user_passes_test(is_supervisor)
+def export_gps_excel(request):
+    incidents = GPSIncident.objects.filter(status='resolved').order_by('incident_timestamp')
+    response = HttpResponse(content_type='text/csv; charset=utf-8-sig')
+    response['Content-Disposition'] = 'attachment; filename="Registro_Alarmas_GPS.csv"'
+    writer = csv.writer(response, delimiter=';')
+    
+    writer.writerow(['TIPO DE ALARMA', 'FECHA', 'HORA', 'NOMBRE DE CONDUCTOR', 'PATENTE o N°ENAP', 'COORDENADAS', 'SALA DE CONTROL', 'OPERADOR SALA DE CONTROL (ENAP)', 'HORA AVISO SALA DE CONTROL', 'OPERADOR TORRE DE CONTROL (SELFING)', 'OBSERVACIONES'])
+
+    for inc in incidents:
+        fecha = inc.incident_timestamp.strftime('%Y-%m-%d') if inc.incident_timestamp else 'S/I'
+        hora = inc.incident_timestamp.strftime('%H:%M:%S') if inc.incident_timestamp else 'S/I'
+        
+        # 👇 EL EXCEL AHORA MUESTRA EL TIEMPO EN EL QUE EL OPERADOR TOMÓ EL CASO 👇
+        hora_aviso = inc.acknowledged_at.strftime('%H:%M:%S') if inc.acknowledged_at else 'S/I'
+        
+        coords = f"{inc.latitude}, {inc.longitude}" if inc.latitude and inc.longitude else 'Sin coordenadas'
+        sector = inc.sector_assigned.name if inc.sector_assigned else 'No Asignado'
+        op_selfing = inc.operator.get_full_name() or inc.operator.username if inc.operator else 'Desconocido'
+        notas = inc.operator_notes.replace('\n', ' ').replace('\r', '') if inc.operator_notes else ''
+
+        writer.writerow([inc.alert_type, fecha, hora, inc.driver_name or 'S/Info', f"{inc.license_plate} {inc.unit_id or ''}".strip(), coords, sector, inc.who_answered or 'N/A', hora_aviso, op_selfing, notas])
+
+    return response

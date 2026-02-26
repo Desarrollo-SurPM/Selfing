@@ -46,6 +46,25 @@
         
         {% if active_shift.actual_start_time %}
             {# --- ESTADO 1: El turno ya está iniciado, mostrar el panel de control --- #}
+            
+            {# 👇 NUEVO BOTÓN GIGANTE ACCESO A GPS 👇 #}
+            <div class="row mb-4">
+                <div class="col-12">
+                    <div class="card bg-dark text-white shadow-sm border-danger border-2">
+                        <div class="card-body d-flex justify-content-between align-items-center flex-wrap gap-3 py-4">
+                            <div>
+                                <h4 class="mb-1 text-danger fw-bold"><i class="fas fa-satellite-dish me-2"></i> Centro de Monitoreo GPS</h4>
+                                <span class="text-light">Atención de Alertas, Ralentí y Botones de Pánico en tiempo real.</span>
+                            </div>
+                            <a href="{% url 'gps_triage_dashboard' %}" class="btn btn-danger btn-lg fw-bold shadow">
+                                Entrar a Sala de Triage <i class="fas fa-arrow-right ms-2"></i>
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {# 👆 FIN BOTON GIGANTE 👆 #}
+
             <div class="row g-4">
                 <div class="col-lg-8">
                     <div class="card shadow-sm mb-4">
@@ -368,11 +387,20 @@ document.addEventListener('DOMContentLoaded', function() {
     // =================================================================
     document.body.addEventListener('click', function() {
         const alarmSound = document.getElementById('task-alarm-sound');
+        const gpsAlarmSound = document.getElementById('gps-alarm-sound');
+        
         if (alarmSound) {
-            // Reproducimos y pausamos inmediatamente para que el navegador "confíe"
             alarmSound.play().then(() => {
                 alarmSound.pause();
                 alarmSound.currentTime = 0;
+            }).catch(() => {});
+        }
+        
+        // 👇 También desbloqueamos silenciosamente el audio del GPS
+        if (gpsAlarmSound) {
+            gpsAlarmSound.play().then(() => {
+                gpsAlarmSound.pause();
+                gpsAlarmSound.currentTime = 0;
             }).catch(() => {});
         }
     }, { once: true });
@@ -472,7 +500,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
     let lastCheckedMinute = new Date().getMinutes();
     let roundCompletedThisCycle = timerData.roundCompletedThisCycle;
-    let isRoundActive = timerData.isRoundActive; // VARIABLE AÑADIDA PARA CONTROLAR EL ESTADO
+    let isRoundActive = timerData.isRoundActive; 
 
     function mainTimerLoop() {
         const now = new Date();

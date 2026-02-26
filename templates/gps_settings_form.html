@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+
+{% block title %}Configuración de Correos GPS{% endblock %}
+
+{% block content %}
+<div class="container mt-5">
+    <div class="row justify-content-center">
+        <div class="col-md-8">
+            <div class="card shadow-sm border-0">
+                <div class="card-header bg-dark text-white pt-3 pb-2">
+                    <h4 class="mb-0"><i class="fas fa-envelope-open-text me-2"></i> Configuración de Correos GPS</h4>
+                </div>
+                <div class="card-body p-4">
+                    <p class="text-muted mb-4">Ingresa los correos electrónicos que recibirán las notificaciones del sistema. Puedes poner varios correos separados por comas (,).</p>
+                    
+                    <form method="post">
+                        {% csrf_token %}
+                        
+                        <div class="mb-4">
+                            <label class="form-label fw-bold text-danger"><i class="fas fa-bolt"></i> Correos para Alertas Instantáneas (Jefatura en Vivo)</label>
+                            <textarea name="instant_emails" class="form-control" rows="3" placeholder="ejemplo@enap.cl, supervisor@selfing.cl">{{ config.instant_emails }}</textarea>
+                            <div class="form-text">Estos correos recibirán la notificación en el mismo segundo en que el operador de la torre de control atienda y resuelva una alerta.</div>
+                        </div>
+
+                        <div class="mb-4">
+                            <label class="form-label fw-bold text-success"><i class="fas fa-file-excel"></i> Correos para Reporte Mensual (Excel Consolidado)</label>
+                            <textarea name="monthly_emails" class="form-control" rows="3" placeholder="gerencia@enap.cl, admin@selfing.cl">{{ config.monthly_emails }}</textarea>
+                            <div class="form-text">Estos correos se usarán cuando se envíe el archivo Excel a fin de mes.</div>
+                        </div>
+
+                        <div class="d-flex justify-content-end mt-4">
+                            <a href="{% url 'admin_dashboard' %}" class="btn btn-outline-secondary me-2">Cancelar</a>
+                            <button type="submit" class="btn btn-primary"><i class="fas fa-save me-1"></i> Guardar Cambios</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
