@@ -39,6 +39,7 @@ import mimetypes # <--- Importante para detectar si es png/jpg/pdf
 from django.utils.html import strip_tags
 from django.conf import settings
 from .models import GPSIncident
+from django.core.mail import get_connection
 
 from .models import (
     Company, Installation, OperatorProfile, ShiftType, OperatorShift,
@@ -2769,9 +2770,14 @@ def resolve_gps_incident(request, incident_id):
         incident.resolved_at = timezone.now() # Tiempo interno de cierre
         incident.save()
 
+        # 2. ENVIAR EL CORREO AUTOMÁTICO
         enviar_correo_resolucion_gps(incident)
+        
         return JsonResponse({'success': True})
+        
     except Exception as e:
+        # Esto imprimirá el error exacto en los logs de Railway
+        print(f"❌ ERROR AL RESOLVER INCIDENTE O ENVIAR CORREO: {str(e)}") 
         return JsonResponse({'success': False, 'error': str(e)}, status=400)
 
 def enviar_correo_resolucion_gps(incident):
@@ -2783,15 +2789,25 @@ def enviar_correo_resolucion_gps(incident):
     config, _ = GPSNotificationSettings.objects.get_or_create(id=1)
     destinatarios = config.get_instant_emails_list() if config.get_instant_emails_list() else ['soporte@selfing.cl']
     
+    # 👇 NUEVO: CREAMOS UNA CONEXIÓN EXCLUSIVA PARA OPERADOR1 👇
+    connection = get_connection(
+        host=settings.EMAIL_HOST,
+        port=settings.EMAIL_PORT,
+        username=settings.GPS_EMAIL_HOST_USER,      # operador1@selfing.cl
+        password=settings.GPS_EMAIL_HOST_PASSWORD,  # Su contraseña
+        use_ssl=settings.EMAIL_USE_SSL,
+        use_tls=settings.EMAIL_USE_TLS,
+    )
+    
     send_mail(
         subject=subject,
         message=plain_message,
-        from_email=settings.DEFAULT_FROM_EMAIL,
+        from_email=settings.GPS_EMAIL_HOST_USER,    # El remitente será operador1
         recipient_list=destinatarios,
         html_message=html_message,
+        connection=connection,                      # Forzamos usar esta conexión
         fail_silently=False,
     )
-
 # ==========================================
 # MÓDULO GPS: ADMINISTRACIÓN Y REPORTES
 # ==========================================
