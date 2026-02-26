@@ -77,7 +77,8 @@
                             </td>
                             <td>{{ inc.sector_assigned.name|default:"No Detectado" }}</td>
                             <td>{{ inc.who_answered|default:"-" }}</td>
-                            <td class="text-center">{{ inc.resolved_at|date:"H:i:s"|default:"-" }}</td>
+                            
+                            <td class="text-center fw-bold text-primary">{{ inc.taken_at|date:"H:i:s"|default:"-" }}</td>
                             
                             <td class="text-center">
                                 {% if inc.operator %}
