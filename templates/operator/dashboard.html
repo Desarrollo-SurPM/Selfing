@@ -410,65 +410,69 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
+   // =================================================================
+    // TEMPORIZADOR REAL A 60 MINUTOS (PRODUCCIÓN)
     // =================================================================
-    // TEMPORIZADOR DE PRUEBAS A 30 SEGUNDOS (VISUAL)
-    // =================================================================
-    // Verificamos si estamos en medio de una ronda
     const isRoundActive = {% if active_round_id %}true{% else %}false{% endif %};
     const countdownEl = document.getElementById('dashboard-round-countdown');
     
-    // Obtenemos el modal de base.html
     const roundModalEl = document.getElementById('roundAlarmModal');
     let roundModal = null;
     if (roundModalEl) roundModal = new bootstrap.Modal(roundModalEl);
 
-    let lastAlertedSecond = -1;
+    // Obtener la fecha límite real desde el backend (calculada a 1 hora)
+    const nextDueString = "{{ next_round_due_time|default_if_none:'' }}";
+    const nextDue = nextDueString ? new Date(nextDueString).getTime() : null;
+    let alarmTriggered = false;
 
-    function timer30sTestLoop() {
-        const now = new Date();
-        const s = now.getSeconds();
-        
-        // Disparador EXACTO a los 0 y 30 segundos
-        if (!isRoundActive && (s === 0 || s === 30) && lastAlertedSecond !== s) {
-            lastAlertedSecond = s;
-            
-            // Disparar Alarma Visual y Sonora
-            if (roundModal) roundModal.show();
-            const alarmSound = document.getElementById('task-alarm-sound');
-            if (alarmSound) {
-                alarmSound.currentTime = 0;
-                alarmSound.play().catch(e => console.log("Audio bloqueado"));
-            }
-        }
-
-        // Si no hay ronda activa, calcular cuenta regresiva
-        if (!isRoundActive && countdownEl) {
-            const nextDue = new Date(now);
-            if (s >= 30) {
-                nextDue.setMinutes(now.getMinutes() + 1, 0, 0); // Próximo minuto top
-            } else {
-                nextDue.setSeconds(30, 0); // Segundo 30
-            }
-            
-            const diffMs = nextDue - now;
-            const diffSecs = Math.floor(diffMs / 1000);
-            
-            countdownEl.textContent = `00:${String(diffSecs).padStart(2, '0')}`;
-            
-            // Efecto de urgencia cuando quedan 5 segundos
-            if (diffSecs <= 5) countdownEl.classList.add('text-danger');
-            else countdownEl.classList.remove('text-danger');
-        } else if (isRoundActive && countdownEl) {
+    function realTimerLoop() {
+        if (isRoundActive && countdownEl) {
             countdownEl.textContent = "EN CURSO";
             countdownEl.classList.replace('text-primary', 'text-warning');
+            return;
+        }
+
+        if (!isRoundActive && countdownEl && nextDue) {
+            const now = new Date().getTime();
+            const diffMs = nextDue - now;
+            
+            if (diffMs <= 0) {
+                // El tiempo llegó a cero
+                countdownEl.textContent = "00:00";
+                countdownEl.classList.add('text-danger');
+                
+                if (!alarmTriggered) {
+                    alarmTriggered = true;
+                    // Disparar Alarma Visual y Sonora
+                    if (roundModal) roundModal.show();
+                    const alarmSound = document.getElementById('task-alarm-sound');
+                    if (alarmSound) {
+                        alarmSound.currentTime = 0;
+                        alarmSound.play().catch(e => console.log("Audio bloqueado"));
+                    }
+                }
+            } else {
+                // Matemáticas de cuenta regresiva real
+                const diffSecs = Math.floor(diffMs / 1000);
+                const mins = String(Math.floor(diffSecs / 60)).padStart(2, '0');
+                const secs = String(diffSecs % 60).padStart(2, '0');
+                
+                countdownEl.textContent = `${mins}:${secs}`;
+                
+                // Efecto de urgencia cuando quedan 5 minutos (300 segundos)
+                if (diffSecs <= 300) {
+                    countdownEl.classList.add('text-danger');
+                } else {
+                    countdownEl.classList.remove('text-danger');
+                }
+            }
         }
     }
 
     {% if active_shift and active_shift.actual_start_time %}
-        setInterval(timer30sTestLoop, 1000);
-        timer30sTestLoop(); // Primera ejecución
+        setInterval(realTimerLoop, 1000);
+        realTimerLoop(); // Primera ejecución
     {% endif %}
-
     // =================================================================
     // PÁNICO Y SERVICIOS 
     // =================================================================
