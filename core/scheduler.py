@@ -13,15 +13,12 @@ def check_services_job():
         print(f"Scheduler: Error al ejecutar check_services: {e}")
 
 # 👇 NUEVA TAREA AUTOMÁTICA PARA EL GPS 👇
-def fetch_gps_alerts_job():
-    """
-    Función que revisa el correo en busca de nuevas alarmas GPS de MITTA.
-    """
-    try:
-        print("Scheduler: Buscando nuevos correos de alertas GPS...")
-        call_command('fetch_gps_alerts')
-    except Exception as e:
-        print(f"Scheduler: Error al ejecutar fetch_gps_alerts: {e}")
+#def fetch_gps_alerts_job():
+#    try:
+#        print("Scheduler: Buscando nuevos correos de alertas GPS...")
+#        call_command('fetch_gps_alerts')
+#    except Exception as e:
+#        print(f"Scheduler: Error al ejecutar fetch_gps_alerts: {e}")
 
 def start():
     """
@@ -33,7 +30,7 @@ def start():
     scheduler.add_job(check_services_job, 'interval', minutes=5)
     
     # 2. Tarea de GPS (Cada 30 segundos para respuesta casi en tiempo real)
-    scheduler.add_job(fetch_gps_alerts_job, 'interval', seconds=30)
+   # scheduler.add_job(fetch_gps_alerts_job, 'interval', seconds=30)
     
     scheduler.start()
     print("Planificador de tareas iniciado. Chequeo de servicios (5 min) y Radar GPS (30 seg) activos.")
