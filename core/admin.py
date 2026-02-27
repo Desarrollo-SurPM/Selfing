@@ -7,10 +7,10 @@ from .models import (
     Company, Installation, OperatorProfile, ShiftType, OperatorShift,
     ChecklistItem, ChecklistLog, VirtualRoundLog, UpdateLog, Email, EmergencyContact,
     TurnReport, MonitoredService, ServiceStatusLog, TraceabilityLog, ShiftNote,
-    Vehicle, VehiclePosition, VehicleAlert, VehicleRoute, GPSNotificationSettings
+    Vehicle, VehiclePosition, VehicleAlert, VehicleRoute, GPSNotificationSettings,
+    Sector, SectorContact, GPSIncident,
+    OperatorDocument, RoundInstallationLog # <-- Nuevos modelos importados
 )
-
-from .models import Sector, SectorContact, GPSIncident
 
 # --- INLINES ---
 class OperatorProfileInline(admin.StackedInline):
@@ -24,9 +24,7 @@ class InstallationInline(admin.TabularInline):
     fields = ('name', 'address')
     show_change_link = True
 
-
 # --- MODEL ADMINS ---
-
 admin.site.unregister(User)
 @admin.register(User)
 class UserAdmin(BaseUserAdmin):
@@ -55,7 +53,7 @@ class InstallationAdmin(admin.ModelAdmin):
 @admin.register(ShiftType)
 class ShiftTypeAdmin(admin.ModelAdmin):
     list_display = ('name', 'start_time', 'end_time', 'duration_hours')
-    search_fields = ('name',) # Requerido por OperatorShiftAdmin
+    search_fields = ('name',)
 
 @admin.register(OperatorShift)
 class OperatorShiftAdmin(admin.ModelAdmin):
@@ -69,58 +67,75 @@ class OperatorShiftAdmin(admin.ModelAdmin):
     def is_active_now(self, obj):
         return obj.actual_start_time is not None and obj.actual_end_time is None
 
-# --- VISTAS CORREGIDAS PARA EDICIÓN EN LÍNEA ---
-
 @admin.register(UpdateLog)
 class UpdateLogAdmin(admin.ModelAdmin):
-    list_display = ('created_at', 'installation', 'message_snippet', 'is_sent', 'operator_shift') # <-- 'operator_shift' está en la lista
+    list_display = ('created_at', 'installation', 'message_snippet', 'is_sent', 'operator_shift')
     list_filter = ('operator_shift__operator', 'installation__company', 'is_sent')
     search_fields = ('message', 'operator_shift__operator__username', 'installation__name')
     date_hierarchy = 'created_at'
-    list_editable = ('operator_shift',) # <-- ¡CAMBIO CLAVE! Esto lo hace editable
-    autocomplete_fields = ('operator_shift', 'installation') # Necesario para 'list_editable'
+    list_editable = ('operator_shift',)
+    autocomplete_fields = ('operator_shift', 'installation')
 
     @admin.display(description='Novedad')
     def message_snippet(self, obj):
         return obj.message[:50] + '...' if len(obj.message) > 50 else obj.message
 
+# --- CHECKLIST ACTUALIZADO CON JERARQUÍA Y TIEMPOS ---
+@admin.register(ChecklistItem)
+class ChecklistItemAdmin(admin.ModelAdmin):
+    list_display = ('description', 'phase', 'parent', 'company', 'installation', 'order', 'alarm_trigger_delay', 'requires_legal_check')
+    list_filter = ('phase', 'company', 'requires_legal_check', 'is_sequential')
+    search_fields = ('description',)
+    list_editable = ('order',)
+    ordering = ('phase', 'order')
+
 @admin.register(ChecklistLog)
 class ChecklistLogAdmin(admin.ModelAdmin):
-    list_display = ('completed_at', 'get_item_description', 'observacion', 'operator_shift') # <-- 'operator_shift' está en la lista
-    list_filter = ('operator_shift__operator', 'item__phase')
+    list_display = ('completed_at', 'get_item_description', 'started_at', 'get_duration_display', 'legal_agreement', 'operator_shift')
+    list_filter = ('operator_shift__operator', 'item__phase', 'legal_agreement')
     search_fields = ('item__description', 'operator_shift__operator__username', 'observacion')
     date_hierarchy = 'completed_at'
-    list_editable = ('operator_shift',) # <-- ¡CAMBIO CLAVE!
+    list_editable = ('operator_shift',)
     autocomplete_fields = ('operator_shift', 'item')
 
     @admin.display(description='Tarea', ordering='item__description')
     def get_item_description(self, obj):
         return obj.item.description
 
+# --- RONDAS VIRTUALES CON TIEMPOS ---
 @admin.register(VirtualRoundLog)
 class VirtualRoundLogAdmin(admin.ModelAdmin):
-    # La columna 'OPERADOR' se reemplaza por el campo editable 'operator_shift'
-    list_display = ('start_time', 'end_time', 'get_duration_display', 'operator_shift') # <-- 'operator_shift' está en la lista
+    list_display = ('start_time', 'end_time', 'get_duration_display', 'operator_shift')
     list_filter = ('operator_shift__operator',)
     search_fields = ('operator_shift__operator__username',)
     date_hierarchy = 'start_time'
-    list_editable = ('operator_shift',) # <-- ¡CAMBIO CLAVE!
-    autocomplete_fields = ('operator_shift',) # Necesario para 'list_editable'
+    list_editable = ('operator_shift',)
+    autocomplete_fields = ('operator_shift',)
 
     @admin.display(description='Duración', ordering='duration_seconds')
     def get_duration_display(self, obj):
         return obj.get_duration_display()
 
-# --- (El resto del archivo sigue igual) ---
+@admin.register(RoundInstallationLog)
+class RoundInstallationLogAdmin(admin.ModelAdmin):
+    list_display = ('virtual_round', 'installation', 'start_time', 'end_time', 'get_duration_display')
+    list_filter = ('installation',)
+    search_fields = ('virtual_round__operator_shift__operator__username', 'installation__name')
 
-@admin.register(ChecklistItem)
-class ChecklistItemAdmin(admin.ModelAdmin):
-    list_display = ('description', 'phase', 'order', 'alarm_trigger_delay')
-    list_filter = ('phase',)
-    search_fields = ('description',)
-    list_editable = ('order',)
-    ordering = ('phase', 'order')
+# --- PERFIL LEGAL Y DOCUMENTOS (NUEVOS) ---
+@admin.register(OperatorProfile)
+class OperatorProfileAdmin(admin.ModelAdmin):
+    list_display = ('user', 'rut', 'phone', 'terms_accepted', 'terms_accepted_at')
+    search_fields = ('user__username', 'rut')
+    list_filter = ('terms_accepted',)
 
+@admin.register(OperatorDocument)
+class OperatorDocumentAdmin(admin.ModelAdmin):
+    list_display = ('operator', 'document_type', 'uploaded_at')
+    list_filter = ('document_type',)
+    search_fields = ('operator__username',)
+
+# --- RESTO DE MODELOS INTACtos ---
 @admin.register(EmergencyContact)
 class EmergencyContactAdmin(admin.ModelAdmin):
     list_display = ('name', 'phone_number', 'company', 'installation')
@@ -173,13 +188,6 @@ class VehicleRouteAdmin(admin.ModelAdmin):
     search_fields = ('vehicle__license_plate',)
     date_hierarchy = 'start_time'
 
-# Registrar los modelos restantes que no necesitan configuración especial
-admin.site.register(Email)
-admin.site.register(MonitoredService)
-admin.site.register(ServiceStatusLog)
-admin.site.register(ShiftNote)
-admin.site.register(OperatorProfile)
-
 @admin.register(Sector)
 class SectorAdmin(admin.ModelAdmin):
     list_display = ('name', 'company')
@@ -218,9 +226,11 @@ class GPSIncidentAdmin(admin.ModelAdmin):
 @admin.register(GPSNotificationSettings)
 class GPSNotificationSettingsAdmin(admin.ModelAdmin):
     list_display = ('__str__', 'instant_emails', 'monthly_emails')
-    
-    # Bloquear agregar nuevos registros si ya existe uno (Patrón Singleton)
     def has_add_permission(self, request):
-        if self.model.objects.exists():
-            return False
+        if self.model.objects.exists(): return False
         return super().has_add_permission(request)
+
+admin.site.register(Email)
+admin.site.register(MonitoredService)
+admin.site.register(ServiceStatusLog)
+admin.site.register(ShiftNote)

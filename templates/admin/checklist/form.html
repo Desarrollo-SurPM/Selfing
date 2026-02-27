@@ -1,0 +1,80 @@
+{% extends 'base.html' %}
+{% load crispy_forms_tags %}
+
+{% block title %}
+    {% if object %}Editar Tarea de Checklist{% else %}Agregar Tarea de Checklist{% endif %}
+{% endblock %}
+
+{% block content %}
+<div class="container mt-4 mb-5">
+    <div class="card shadow-sm">
+        <div class="card-header bg-primary text-white">
+            <h2 class="h4 mb-0">
+                {% if object %}
+                    <i class="fas fa-edit me-2"></i>Editar Tarea de Checklist
+                {% else %}
+                    <i class="fas fa-plus-circle me-2"></i>Agregar Tarea de Checklist
+                {% endif %}
+            </h2>
+        </div>
+        <div class="card-body">
+            <form method="post">
+                {% csrf_token %}
+                
+                <div class="row">
+                    <div class="col-md-6 border-end">
+                        <h5 class="text-primary mb-3"><i class="fas fa-info-circle me-2"></i>Información General</h5>
+                        {{ form.parent|as_crispy_field }}
+                        {{ form.description|as_crispy_field }}
+                        
+                        <div class="row">
+                            <div class="col-6">{{ form.phase|as_crispy_field }}</div>
+                            <div class="col-6">{{ form.order|as_crispy_field }}</div>
+                        </div>
+
+                        <h5 class="text-primary mt-4 mb-3"><i class="fas fa-building me-2"></i>Asignación Específica</h5>
+                        <div class="alert alert-light border small">
+                            Si dejas Empresa/Instalación en blanco, la tarea aplicará de forma general.
+                        </div>
+                        {{ form.company|as_crispy_field }}
+                        {{ form.installation|as_crispy_field }}
+                    </div>
+
+                    <div class="col-md-6">
+                        <h5 class="text-primary mb-3"><i class="fas fa-balance-scale me-2"></i>Reglas y Legalidad</h5>
+                        <div class="d-flex gap-3 mb-3">
+                            <div class="form-check form-switch fs-5">
+                                {{ form.is_sequential }}
+                                <label class="form-check-label fs-6" for="{{ form.is_sequential.id_for_label }}">Secuencial</label>
+                            </div>
+                            <div class="form-check form-switch fs-5">
+                                {{ form.requires_legal_check }}
+                                <label class="form-check-label fs-6" for="{{ form.requires_legal_check.id_for_label }}">Exigir DDJJ</label>
+                            </div>
+                        </div>
+                        
+                        <div class="row">
+                            <div class="col-6">{{ form.unlock_delay|as_crispy_field }}</div>
+                            <div class="col-6">{{ form.alarm_trigger_delay|as_crispy_field }}</div>
+                        </div>
+
+                        <h5 class="text-primary mt-4 mb-3"><i class="fas fa-calendar-alt me-2"></i>Condiciones de Activación</h5>
+                        {{ form.turnos_aplicables|as_crispy_field }}
+                        {{ form.dias_aplicables|as_crispy_field }}
+                    </div>
+                </div>
+
+                <hr class="mt-4 mb-4">
+                <div class="d-flex justify-content-end">
+                    <a href="{% url 'manage_checklist_items' %}" class="btn btn-secondary me-2">
+                        <i class="fas fa-times me-2"></i>Cancelar
+                    </a>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-save me-2"></i>Guardar Tarea
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}

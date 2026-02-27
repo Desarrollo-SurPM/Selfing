@@ -1,0 +1,419 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Checklist Cronometrado{% endblock %}
+
+{% block content %}
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+<style>
+    .checklist-container { font-family: 'Inter', sans-serif; background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%); min-height: 100vh; }
+    .task-item { transition: all 0.3s ease; }
+    .locked-task { opacity: 0.5; pointer-events: none; filter: grayscale(100%); }
+    .timer-display { font-variant-numeric: tabular-nums; }
+</style>
+
+<div class="container mx-auto p-4 sm:p-6 lg:p-8 max-w-7xl checklist-container">
+    {% csrf_token %} 
+    <div class="flex justify-between items-center mb-6 bg-white p-4 rounded-xl shadow-sm">
+        <h1 class="text-2xl font-bold text-gray-800">
+            <i class="fas fa-clipboard-check me-2 text-blue-600"></i>Checklist Interactivo
+        </h1>
+        <a href="{% url 'operator_dashboard' %}" class="btn btn-outline-secondary">
+            <i class="fas fa-arrow-left me-2"></i>Volver
+        </a>
+    </div>
+
+    <div class="mb-6 bg-white p-4 rounded-xl shadow-sm">
+        <div class="flex justify-between mb-2">
+            <span class="text-sm font-bold text-gray-700 uppercase tracking-wider">Avance del Turno</span>
+            <span class="text-sm font-bold text-blue-600" id="progress-text">0%</span>
+        </div>
+        <div class="w-full bg-gray-200 rounded-full h-3">
+            <div class="bg-blue-600 h-3 rounded-full transition-all duration-500 ease-out" id="progress-bar" style="width: 0%"></div>
+        </div>
+    </div>
+
+    <div class="bg-white rounded-xl shadow-md overflow-hidden p-4 sm:p-6">
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <div class="phase-column">
+                <div class="bg-green-50 border-l-4 border-green-500 p-3 mb-4 rounded-md shadow-sm">
+                    <h3 class="font-bold text-green-800"><i class="fas fa-play me-2"></i>Inicio de Turno</h3>
+                </div>
+                <div class="task-list" id="list-start"></div>
+            </div>
+
+            <div class="phase-column">
+                <div class="bg-blue-50 border-l-4 border-blue-500 p-3 mb-4 rounded-md shadow-sm">
+                    <h3 class="font-bold text-blue-800"><i class="fas fa-clock me-2"></i>Durante el Turno</h3>
+                </div>
+                <div class="task-list" id="list-during"></div>
+            </div>
+
+            <div class="phase-column">
+                <div class="bg-red-50 border-l-4 border-red-500 p-3 mb-4 rounded-md shadow-sm">
+                    <h3 class="font-bold text-red-800"><i class="fas fa-stop me-2"></i>Finalización</h3>
+                </div>
+                <div class="task-list" id="list-end"></div>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal fade" id="finishTaskModal" data-bs-backdrop="static" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content border-0 shadow-xl">
+                <div class="modal-header bg-danger text-white">
+                    <h5 class="modal-title font-bold"><i class="fas fa-gavel me-2"></i>Certificar Tarea</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body p-4 bg-gray-50">
+                    <h6 class="font-bold text-gray-800 mb-3" id="modalTaskName">Nombre de la tarea</h6>
+                    
+                    <form id="finishTaskForm" enctype="multipart/form-data">
+                        <div class="mb-4 bg-white p-3 rounded border">
+                            <label class="block text-sm font-medium text-gray-700 mb-2">
+                                <i class="fas fa-image text-blue-500 me-1"></i> Evidencia Fotográfica / Captura (Opcional)
+                            </label>
+                            <input type="file" id="taskPhoto" name="attachment" accept="image/*" class="form-control text-sm">
+                        </div>
+
+                        <div class="mb-4">
+                            <label class="block text-sm font-medium text-gray-700 mb-2">Observaciones (Opcional)</label>
+                            <textarea id="taskObservation" name="observacion" rows="2" class="form-control rounded-md border-gray-300"></textarea>
+                        </div>
+
+                        <div class="bg-red-50 p-3 rounded border border-red-200 mt-4">
+                            <div class="form-check">
+                                <input class="form-check-input border-red-400" type="checkbox" id="legalCheck" name="legal_agreement" value="true" style="width: 1.5em; height: 1.5em;">
+                                <label class="form-check-label ms-2 text-sm text-gray-800 text-justify" for="legalCheck">
+                                    <strong>Declaro bajo juramento</strong> haber realizado personalmente esta tarea. Comprendo que la falsedad de este registro constituye una falta gravísima.
+                                </label>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer bg-white flex justify-content-between">
+                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="button" class="btn btn-danger font-bold" id="submitFinishBtn" disabled>
+                        <i class="fas fa-file-signature me-1"></i> Firmar y Finalizar
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+{{ tasks_for_js|json_script:"tasks-data" }}
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
+    let currentTaskId = null;
+    let timers = {}; 
+    const finishModal = new bootstrap.Modal(document.getElementById('finishTaskModal'));
+    const legalCheck = document.getElementById('legalCheck');
+    const submitFinishBtn = document.getElementById('submitFinishBtn');
+    
+    // DATOS DESDE DJANGO
+    const tasksFromServer = JSON.parse(document.getElementById('tasks-data').textContent);
+
+    legalCheck.addEventListener('change', (e) => {
+        submitFinishBtn.disabled = !e.target.checked;
+    });
+
+    // 1. BARRA DE PROGRESO
+    function updateProgress() {
+        if (tasksFromServer.length === 0) return;
+        const completedCount = tasksFromServer.filter(t => t.completed).length;
+        const percentage = Math.round((completedCount / tasksFromServer.length) * 100);
+        
+        document.getElementById('progress-bar').style.width = percentage + '%';
+        document.getElementById('progress-text').innerText = percentage + '%';
+    }
+
+    // 2. CRONÓMETRO VISUAL 
+    function startVisualTimer(taskId, initialSeconds = 0) {
+        if (!timers[taskId]) timers[taskId] = {};
+        timers[taskId].seconds = initialSeconds;
+        
+        if(timers[taskId].interval) clearInterval(timers[taskId].interval);
+
+        timers[taskId].interval = setInterval(() => {
+            timers[taskId].seconds++;
+            const s = timers[taskId].seconds;
+            const mins = String(Math.floor(s / 60)).padStart(2, '0');
+            const secs = String(s % 60).padStart(2, '0');
+            const timerEl = document.getElementById(`timer-${taskId}`);
+            if (timerEl) timerEl.textContent = `${mins}:${secs}`;
+        }, 1000);
+    }
+
+    // 3. ACCIONES DE TAREA
+    async function startTask(taskId) {
+        try {
+            const response = await fetch(`/checklist/start_task/${taskId}/`, {
+                method: 'POST',
+                headers: { 'X-CSRFToken': csrfToken }
+            });
+            const data = await response.json();
+            
+            if(data.status === 'success') {
+                const card = document.getElementById(`task-card-${taskId}`);
+                card.dataset.status = 'in_progress';
+                card.classList.add('border-blue-400', 'bg-blue-50');
+                
+                document.getElementById(`btn-start-${taskId}`).classList.add('hidden');
+                document.getElementById(`btn-pause-${taskId}`).classList.remove('hidden');
+                document.getElementById(`btn-finish-${taskId}`).classList.remove('hidden');
+                
+                const taskObj = tasksFromServer.find(t => t.id === taskId);
+                taskObj.status = 'in_progress';
+                startVisualTimer(taskId, taskObj.accumulated || 0);
+                evaluateSequentialLocks();
+            }
+        } catch(error) { console.error(error); }
+    }
+
+    async function pauseTask(taskId) {
+        try {
+            const response = await fetch(`/checklist/pause_task/${taskId}/`, {
+                method: 'POST',
+                headers: { 'X-CSRFToken': csrfToken }
+            });
+            const data = await response.json();
+            
+            if(data.status === 'success') {
+                const card = document.getElementById(`task-card-${taskId}`);
+                card.dataset.status = 'paused';
+                card.classList.remove('border-blue-400', 'bg-blue-50');
+                card.classList.add('border-yellow-400', 'bg-yellow-50');
+                
+                const startBtn = document.getElementById(`btn-start-${taskId}`);
+                startBtn.innerHTML = '<i class="fas fa-play me-1"></i> Reanudar';
+                startBtn.classList.remove('hidden');
+                startBtn.classList.replace('bg-blue-600', 'bg-yellow-600');
+                document.getElementById(`btn-pause-${taskId}`).classList.add('hidden');
+                
+                const taskObj = tasksFromServer.find(t => t.id === taskId);
+                taskObj.status = 'paused';
+                if(timers[taskId]) clearInterval(timers[taskId].interval);
+            }
+        } catch(error) { console.error(error); }
+    }
+
+    function prepareFinishTask(taskId, taskName) {
+        currentTaskId = taskId;
+        document.getElementById('modalTaskName').textContent = taskName;
+        document.getElementById('finishTaskForm').reset();
+        legalCheck.checked = false;
+        submitFinishBtn.disabled = true;
+        finishModal.show();
+    }
+
+    submitFinishBtn.addEventListener('click', async () => {
+        if (!currentTaskId) return;
+        const formData = new FormData(document.getElementById('finishTaskForm'));
+        
+        try {
+            submitFinishBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Firmando...';
+            const response = await fetch(`/checklist/finish_task/${currentTaskId}/`, {
+                method: 'POST',
+                headers: { 'X-CSRFToken': csrfToken },
+                body: formData
+            });
+            const data = await response.json();
+            
+            if(data.status === 'success') {
+                if(timers[currentTaskId]) clearInterval(timers[currentTaskId].interval);
+                
+                const card = document.getElementById(`task-card-${currentTaskId}`);
+                card.dataset.status = 'completed';
+                card.className = "task-item p-4 mb-3 rounded-lg border-2 border-green-500 bg-green-50 shadow-sm transition-all";
+                
+                // Marcar como completado localmente y actualizar barra
+                const taskObj = tasksFromServer.find(t => t.id === currentTaskId);
+                taskObj.completed = true;
+                taskObj.status = 'completed';
+                updateProgress();
+
+                document.getElementById(`timer-${currentTaskId}`).textContent = data.duration;
+                document.getElementById(`controls-${currentTaskId}`).innerHTML = `
+                    <div class="text-green-700 font-bold flex items-center w-full">
+                        <i class="fas fa-check-circle fa-lg me-2"></i> 
+                        <span>Completado en ${data.duration}</span>
+                    </div>
+                `;
+                
+                finishModal.hide();
+                evaluateSequentialLocks();
+            } else { alert(data.message); }
+        } catch(error) { console.error(error); } 
+        finally { submitFinishBtn.innerHTML = '<i class="fas fa-file-signature me-1"></i> Firmar y Finalizar'; }
+    });
+
+    // 4. LÓGICA DE BLOQUEOS (SECUENCIAL Y POR TIEMPO)
+    function evaluateLocks() {
+        const now = new Date();
+        let blockNext = false; // Bandera para la secuencialidad
+
+        // Recorremos las tareas en el orden exacto que llegaron del servidor
+        tasksFromServer.forEach(task => {
+            const card = document.getElementById(`task-card-${task.id}`);
+            if (!card) return;
+
+            const btnStart = card.querySelector('.btn-start');
+            let isLocked = false;
+            let lockReason = '';
+
+            // A. Evaluación Secuencial (Si la tarea anterior no está terminada y esta es secuencial)
+            if (task.is_sequential && blockNext && task.status === 'pending') {
+                isLocked = true;
+                lockReason = 'Requiere tarea anterior';
+            }
+
+            // B. Evaluación por Tiempo (Sobrescribe la secuencial si aún no es la hora)
+            if (task.unlock_time && task.status === 'pending') {
+                const unlockTime = new Date(task.unlock_time);
+                if (now < unlockTime) {
+                    isLocked = true;
+                    // Calculamos cuánto falta para mostrarlo en el botón
+                    const diffMs = unlockTime - now;
+                    const diffMins = Math.ceil(diffMs / 60000);
+                    
+                    if (diffMins > 60) {
+                        const hours = Math.floor(diffMins / 60);
+                        const mins = diffMins % 60;
+                        lockReason = `Disponible en ${hours}h ${mins}m`;
+                    } else {
+                        lockReason = `Disponible en ${diffMins} min`;
+                    }
+                }
+            }
+
+            // Aplicar los estilos visuales del bloqueo
+            if (isLocked) {
+                card.classList.add('locked-task');
+                if (btnStart) {
+                    btnStart.disabled = true;
+                    btnStart.innerHTML = `<i class="fas fa-lock me-1"></i> ${lockReason}`;
+                    btnStart.classList.replace('bg-blue-600', 'bg-gray-500');
+                    btnStart.classList.replace('hover:bg-blue-700', 'hover:bg-gray-600');
+                }
+            } else {
+                card.classList.remove('locked-task');
+                // Solo restauramos el botón "Iniciar" si la tarea está pendiente (no pausada ni en progreso)
+                if (btnStart && task.status === 'pending') {
+                    btnStart.disabled = false;
+                    btnStart.innerHTML = `<i class="fas fa-play me-1"></i> Iniciar`;
+                    btnStart.classList.replace('bg-gray-500', 'bg-blue-600');
+                    btnStart.classList.replace('hover:bg-gray-600', 'hover:bg-blue-700');
+                }
+            }
+
+            // Si detectamos una tarea que NO está completada, activamos la bandera 
+            // para bloquear las siguientes tareas (que sean secuenciales)
+            if (task.status !== 'completed') {
+                blockNext = true;
+            }
+        });
+    }
+
+    // Ejecutamos la evaluación de bloqueos cada 5 segundos para que los botones 
+    // se actualicen automáticamente sin tener que recargar la página.
+    setInterval(evaluateLocks, 5000);
+
+    // 5. RENDERIZADO (MANEJA SUBTAREAS)
+    function generateCardHTML(task, isChild) {
+        const isCompleted = task.status === 'completed';
+        const inProgress = task.status === 'in_progress';
+        
+        // Estilos para sub-checklists
+        const indentClass = isChild ? 'ms-8 border-s-4 border-s-indigo-500 border-y border-e shadow-sm' : 'border border-gray-300 shadow-sm';
+        const iconChild = isChild ? '<i class="fas fa-level-up-alt fa-rotate-90 me-2 text-indigo-400"></i>' : '';
+        
+        // Estilo según estado
+        let bgClass = "bg-white";
+        if(isCompleted) bgClass = "bg-green-50 border-2 border-green-500";
+        else if(inProgress) bgClass = "bg-blue-50 border-blue-400";
+        else if(task.status === 'paused') bgClass = "bg-yellow-50 border-yellow-400";
+
+        return `
+            <div class="task-item p-4 mb-3 rounded-lg ${indentClass} ${bgClass} transition-all" id="task-card-${task.id}" data-status="${task.status}">
+                <div class="flex justify-between items-start mb-3">
+                    <h5 class="text-md font-bold text-gray-800 ${isCompleted ? 'text-gray-400 line-through' : ''}">
+                        ${iconChild}${task.description}
+                    </h5>
+                    <div class="timer-display bg-gray-100 text-gray-700 px-2 py-1 rounded text-sm font-mono border">
+                        <i class="fas fa-stopwatch text-gray-500"></i> <span id="timer-${task.id}">${task.duration}</span>
+                    </div>
+                </div>
+                
+                <div id="controls-${task.id}" class="flex gap-2">
+                    ${isCompleted ? `
+                        <div class="text-green-700 font-bold flex items-center w-full">
+                            <i class="fas fa-check-circle fa-lg me-2"></i> 
+                            <span>Completado en ${task.duration}</span>
+                        </div>
+                    ` : `
+                        <button id="btn-start-${task.id}" onclick="startTask(${task.id})" class="${inProgress ? 'hidden' : ''} btn-start flex-1 bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 rounded text-sm transition">
+                            <i class="fas fa-play me-1"></i> ${task.status === 'paused' ? 'Reanudar' : 'Iniciar'}
+                        </button>
+                        <button id="btn-pause-${task.id}" onclick="pauseTask(${task.id})" class="${inProgress ? '' : 'hidden'} flex-1 bg-gray-500 hover:bg-gray-600 text-white font-medium py-2 rounded text-sm transition">
+                            <i class="fas fa-pause me-1"></i> Pausa
+                        </button>
+                        <button id="btn-finish-${task.id}" onclick="prepareFinishTask(${task.id}, '${task.description.replace(/'/g, "\\'")}')" class="${inProgress ? '' : 'hidden'} flex-1 bg-green-600 hover:bg-green-700 text-white font-medium py-2 rounded text-sm transition">
+                            <i class="fas fa-check me-1"></i> Finalizar
+                        </button>
+                    `}
+                </div>
+            </div>
+        `;
+    }
+
+    function renderTaskCards() {
+        // Separamos Padres de Hijos
+        const rootTasks = tasksFromServer.filter(t => !t.parent_id);
+        const childTasks = tasksFromServer.filter(t => t.parent_id);
+        
+        const phases = ['start', 'during', 'end'];
+        phases.forEach(phase => {
+            const phaseContainer = document.getElementById(`list-${phase}`);
+            if (!phaseContainer) return;
+
+            // Primero pintamos la tarea padre
+            const phaseRoots = rootTasks.filter(t => t.phase === phase);
+            phaseRoots.forEach(rootTask => {
+                phaseContainer.innerHTML += generateCardHTML(rootTask, false);
+                
+                // Inmediatamente debajo, pintamos sus sub-tareas (hijos)
+                const children = childTasks.filter(c => c.parent_id === rootTask.id);
+                children.forEach(child => {
+                    phaseContainer.innerHTML += generateCardHTML(child, true);
+                });
+            });
+        });
+
+        // REANUDAR CRONÓMETROS QUE QUEDARON ANDANDO (Si se recarga la página)
+        tasksFromServer.forEach(task => {
+            if (task.status === 'in_progress') {
+                let initialSeconds = task.accumulated || 0;
+                if (task.started_at) {
+                    const startTime = new Date(task.started_at).getTime();
+                    const now = new Date().getTime();
+                    initialSeconds += Math.floor((now - startTime) / 1000);
+                }
+                startVisualTimer(task.id, initialSeconds);
+            }
+        });
+
+        evaluateSequentialLocks();
+        updateProgress();
+    }
+
+    document.addEventListener("DOMContentLoaded", renderTaskCards);
+</script>
+{% endblock %}

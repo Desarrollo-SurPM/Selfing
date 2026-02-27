@@ -1,0 +1,86 @@
+{% extends 'base.html' %}
+{% load crispy_forms_tags %}
+
+{% block title %}
+    {% if form.instance.pk %}Editar Operador{% else %}Añadir Operador{% endif %} - SELFING
+{% endblock %}
+
+{% block content %}
+<div class="container mt-4 mb-5">
+    <div class="card shadow-sm">
+        <div class="card-header bg-primary text-white">
+            <h2 class="h5 mb-0">
+                {% if form.instance.pk %}
+                    <i class="fas fa-user-edit me-2"></i>Editar Operador: {{ form.instance.username }}
+                {% else %}
+                    <i class="fas fa-user-plus me-2"></i>Añadir Nuevo Operador
+                {% endif %}
+            </h2>
+        </div>
+        <div class="card-body">
+            <form method="post">
+                {% csrf_token %}
+                
+                <div class="row">
+                    <div class="col-md-6 border-end">
+                        <h5 class="text-primary mb-3"><i class="fas fa-user-circle me-2"></i>Datos de Acceso</h5>
+                        {{ form.username|as_crispy_field }}
+                        
+                        <div class="row">
+                            <div class="col-6">{{ form.first_name|as_crispy_field }}</div>
+                            <div class="col-6">{{ form.last_name|as_crispy_field }}</div>
+                        </div>
+                        
+                        {{ form.email|as_crispy_field }}
+                        
+                        {% if 'is_active' in form.fields %}
+                            <div class="form-check form-switch mt-3 fs-5">
+                                {{ form.is_active }}
+                                <label class="form-check-label fs-6" for="{{ form.is_active.id_for_label }}">Cuenta Activa (Permite Iniciar Sesión)</label>
+                            </div>
+                        {% endif %}
+                    </div>
+
+                    <div class="col-md-6">
+                        <h5 class="text-primary mb-3"><i class="fas fa-id-card me-2"></i>Perfil Legal y Documentación</h5>
+                        {{ form.rut|as_crispy_field }}
+                        {{ form.phone|as_crispy_field }}
+                        {{ form.address|as_crispy_field }}
+                        
+                        <div class="mt-4 p-3 bg-light border rounded">
+                            <h6 class="mb-3 text-dark"><i class="fas fa-file-contract text-secondary me-2"></i>Licencia de Uso del Software</h6>
+                            
+                            <div class="form-check form-switch fs-5 mb-2">
+                                {{ form.terms_accepted }}
+                                <label class="form-check-label fs-6 fw-bold" for="{{ form.terms_accepted.id_for_label }}">
+                                    Marcar Licencia como Aceptada
+                                </label>
+                            </div>
+                            
+                            {% if form.instance.pk and form.instance.profile.terms_accepted %}
+                                <div class="text-success small mt-2">
+                                    <i class="fas fa-check-circle me-1"></i>Aceptada el: {{ form.instance.profile.terms_accepted_at|date:"d/m/Y H:i" }}
+                                </div>
+                            {% else %}
+                                <div class="text-muted small mt-2">
+                                    <i class="fas fa-info-circle me-1"></i>Si no se marca, el operador deberá aceptarla en pantalla.
+                                </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+
+                <hr class="mt-4 mb-4">
+                <div class="d-flex justify-content-end">
+                    <a href="{% url 'manage_operators' %}" class="btn btn-secondary me-2">
+                        <i class="fas fa-times me-2"></i>Cancelar
+                    </a>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-save me-2"></i>Guardar Operador
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,535 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Dashboard Administrador - SELFING{% endblock %}
+
+{% block extra_css %}
+    <link rel="stylesheet" href="{% static 'css/dashboard.css' %}">
+    <link rel="stylesheet" href="{% static 'css/color_theme.css' %}">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        /* --- FONDO GLOBAL DEL DASHBOARD --- */
+        body {
+            background-color: #f3f6fd !important;
+            background-image: radial-gradient(circle at 10% 20%, rgba(78, 115, 223, 0.05) 0%, transparent 20%),
+                              radial-gradient(circle at 90% 80%, rgba(28, 200, 138, 0.05) 0%, transparent 20%);
+            background-attachment: fixed;
+            font-family: 'Inter', sans-serif;
+        }
+
+        /* --- TARJETAS PREMIUM --- */
+        .premium-card {
+            background: #ffffff;
+            border: 1px solid rgba(0,0,0,0.04);
+            border-radius: 1.25rem;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.03);
+            transition: all 0.3s ease;
+            overflow: hidden;
+            height: 100%;
+        }
+        .premium-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 15px 35px rgba(0,0,0,0.06);
+        }
+
+        /* --- TARJETAS DE KPIS SUPERIORES --- */
+        .kpi-card {
+            position: relative;
+            padding: 1.5rem;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            z-index: 1;
+        }
+        .kpi-card::before {
+            content: '';
+            position: absolute;
+            top: 0; left: 0; width: 6px; height: 100%;
+            border-radius: 1.25rem 0 0 1.25rem;
+        }
+        .kpi-primary::before { background: linear-gradient(180deg, #4e73df, #224abe); }
+        .kpi-warning::before { background: linear-gradient(180deg, #f6c23e, #dda20a); }
+        .kpi-info::before { background: linear-gradient(180deg, #36b9cc, #258391); }
+        .kpi-success::before { background: linear-gradient(180deg, #1cc88a, #13855c); }
+
+        .kpi-icon-box {
+            width: 55px; height: 55px;
+            border-radius: 1rem;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 1.5rem;
+        }
+        .kpi-primary .kpi-icon-box { background: rgba(78, 115, 223, 0.1); color: #4e73df; }
+        .kpi-warning .kpi-icon-box { background: rgba(246, 194, 62, 0.1); color: #f6c23e; }
+        .kpi-info .kpi-icon-box { background: rgba(54, 185, 204, 0.1); color: #36b9cc; }
+        .kpi-success .kpi-icon-box { background: rgba(28, 200, 138, 0.1); color: #1cc88a; }
+
+        /* --- BOTONES DE MÓDULOS --- */
+        .module-btn {
+            display: flex;
+            align-items: center;
+            padding: 0.8rem 1rem;
+            background: #ffffff;
+            border: 1px solid #e2e8f0;
+            border-radius: 0.75rem;
+            color: #334155;
+            text-decoration: none;
+            font-weight: 600;
+            font-size: 0.9rem;
+            transition: all 0.2s ease;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.02);
+            margin-bottom: 0.75rem;
+        }
+        .module-btn i {
+            font-size: 1.2rem;
+            margin-right: 12px;
+            width: 30px;
+            height: 30px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 0.5rem;
+        }
+        .module-btn:hover {
+            color: #ffffff;
+            border-color: transparent;
+            transform: translateY(-2px);
+        }
+
+        /* Colores Hover Específicos */
+        .hover-primary:hover { background: linear-gradient(135deg, #4e73df 0%, #224abe 100%); box-shadow: 0 8px 20px rgba(78, 115, 223, 0.3); }
+        .hover-primary i { background: rgba(78, 115, 223, 0.1); color: #4e73df; }
+        .hover-primary:hover i { background: rgba(255,255,255,0.2); color: white; }
+
+        .hover-success:hover { background: linear-gradient(135deg, #1cc88a 0%, #13855c 100%); box-shadow: 0 8px 20px rgba(28, 200, 138, 0.3); }
+        .hover-success i { background: rgba(28, 200, 138, 0.1); color: #1cc88a; }
+        .hover-success:hover i { background: rgba(255,255,255,0.2); color: white; }
+
+        .hover-info:hover { background: linear-gradient(135deg, #36b9cc 0%, #258391 100%); box-shadow: 0 8px 20px rgba(54, 185, 204, 0.3); }
+        .hover-info i { background: rgba(54, 185, 204, 0.1); color: #36b9cc; }
+        .hover-info:hover i { background: rgba(255,255,255,0.2); color: white; }
+
+        .hover-danger:hover { background: linear-gradient(135deg, #e74a3b 0%, #be2617 100%); box-shadow: 0 8px 20px rgba(231, 74, 59, 0.3); }
+        .hover-danger i { background: rgba(231, 74, 59, 0.1); color: #e74a3b; }
+        .hover-danger:hover i { background: rgba(255,255,255,0.2); color: white; }
+
+        /* Módulo GPS Dark Theme */
+        .gps-card {
+            background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+            border: none;
+            color: white;
+            position: relative;
+        }
+        .gps-btn {
+            background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); color: #e2e8f0;
+        }
+        .gps-btn i { background: rgba(255,255,255,0.1); color: #94a3b8; }
+        .gps-btn:hover { background: rgba(255,255,255,0.15); color: #ffffff; border-color: rgba(255,255,255,0.3); }
+        .gps-btn:hover i { color: #ffffff; }
+
+        /* --- TABS Y GRÁFICOS --- */
+        .chart-container { position: relative; height: 280px; width: 100%; padding: 1rem; }
+        .chart-container-small { position: relative; height: 220px; width: 100%; padding: 1rem; }
+        
+        .nav-tabs-custom { border: none; background: #f1f5f9; padding: 0.25rem; border-radius: 2rem; display: inline-flex; }
+        .nav-tabs-custom .nav-link { 
+            border: none; border-radius: 2rem; color: #64748b; font-weight: 600; font-size: 0.8rem; padding: 0.4rem 1rem; margin: 0 0.1rem; cursor: pointer;
+        }
+        .nav-tabs-custom .nav-link.active { background: #ffffff; color: #4e73df; box-shadow: 0 2px 10px rgba(0,0,0,0.05); }
+
+        /* --- TABLAS --- */
+        .table-custom th { text-transform: uppercase; font-size: 0.75rem; letter-spacing: 0.5px; color: #64748b; font-weight: 700; border-bottom: 2px solid #f1f5f9; padding: 1rem; }
+        .table-custom td { padding: 1rem; vertical-align: middle; color: #334155; font-size: 0.9rem; border-bottom: 1px solid #f1f5f9; }
+        
+        .section-title { font-size: 1.1rem; font-weight: 800; color: #1e293b; display: flex; align-items: center; }
+        .section-title i { font-size: 1.25rem; margin-right: 0.75rem; }
+    </style>
+{% endblock %}
+
+{% block content %}
+    <div class="d-flex justify-content-between align-items-center mb-5 pb-3 border-bottom border-light flex-wrap gap-3">
+        <div>
+            <h2 class="h3 fw-bold text-dark mb-1"><i class="fas fa-chess-knight text-primary me-2"></i> Centro de Comando</h2>
+            <p class="text-muted mb-0 fw-medium">Visión global y administración del sistema SELFING</p>
+        </div>
+        <div class="bg-white px-4 py-2 rounded-pill shadow-sm border border-light d-flex align-items-center">
+            <div class="spinner-grow spinner-grow-sm text-primary me-2" role="status" style="width: 1rem; height: 1rem;"></div>
+            <span class="text-muted fw-bold small">Sincronizado: {% now "H:i" %} hrs</span>
+        </div>
+    </div>
+
+    <div class="row g-4 mb-5">
+        <div class="col-xl-3 col-md-6">
+            <div class="premium-card kpi-card kpi-primary">
+                <div>
+                    <h6 class="text-uppercase text-muted fw-bold mb-1" style="font-size: 0.75rem; letter-spacing: 1px;">Novedades (Hoy)</h6>
+                    <h2 class="mb-0 fw-bolder text-dark">{{ novedades_hoy|default:"0" }}</h2>
+                </div>
+                <div class="kpi-icon-box"><i class="fas fa-book-open"></i></div>
+            </div>
+        </div>
+        <div class="col-xl-3 col-md-6">
+            <div class="premium-card kpi-card kpi-warning">
+                <div>
+                    <h6 class="text-uppercase text-muted fw-bold mb-1" style="font-size: 0.75rem; letter-spacing: 1px;">Turnos Finalizados</h6>
+                    <h2 class="mb-0 fw-bolder text-dark">{{ reportes_finalizados_count|default:"0" }}</h2>
+                </div>
+                <div class="kpi-icon-box"><i class="fas fa-check-double"></i></div>
+            </div>
+        </div>
+        <div class="col-xl-3 col-md-6">
+            <div class="premium-card kpi-card kpi-info">
+                <div>
+                    <h6 class="text-uppercase text-muted fw-bold mb-1" style="font-size: 0.75rem; letter-spacing: 1px;">Operadores Activos</h6>
+                    <h2 class="mb-0 fw-bolder text-dark">{{ operadores_en_turno|default:"0" }}</h2>
+                </div>
+                <div class="kpi-icon-box"><i class="fas fa-users-cog"></i></div>
+            </div>
+        </div>
+        <div class="col-xl-3 col-md-6">
+            <div class="premium-card kpi-card kpi-success">
+                <div>
+                    <h6 class="text-uppercase text-muted fw-bold mb-1" style="font-size: 0.75rem; letter-spacing: 1px;">Servicios Estables</h6>
+                    <h2 class="mb-0 fw-bolder text-dark">{{ servicios_monitoreados_activos|default:"0" }}</h2>
+                </div>
+                <div class="kpi-icon-box"><i class="fas fa-server"></i></div>
+            </div>
+        </div>
+    </div>
+
+    <div class="d-flex align-items-center mb-4">
+        <h4 class="section-title mb-0"><i class="fas fa-layer-group text-primary"></i> Módulos Operativos</h4>
+    </div>
+    
+    <div class="row g-4 mb-5">
+        <div class="col-lg-3 col-md-6">
+            <div class="premium-card">
+                <div class="p-4 border-bottom border-light bg-light bg-opacity-50">
+                    <h6 class="fw-bold text-dark m-0"><i class="fas fa-bolt text-info me-2 fs-5"></i> Operación Activa</h6>
+                </div>
+                <div class="p-4">
+                    <a href="{% url 'current_logbook' %}" class="module-btn hover-info"><i class="fas fa-book-reader"></i> Bitácoras en Curso</a>
+                    <a href="{% url 'review_and_send_novedades' %}" class="module-btn hover-info"><i class="fas fa-paper-plane"></i> Despacho Novedades</a>
+                    <a href="{% url 'view_turn_reports' %}" class="module-btn hover-info"><i class="fas fa-file-signature"></i> Archivo Reportes</a>
+                    <a href="{% url 'manage_emergency_contacts' %}" class="module-btn hover-danger"><i class="fas fa-life-ring"></i> Emergencias</a>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-3 col-md-6">
+            <div class="premium-card">
+                <div class="p-4 border-bottom border-light bg-light bg-opacity-50">
+                    <h6 class="fw-bold text-dark m-0"><i class="fas fa-calendar-alt text-success me-2 fs-5"></i> Planificación</h6>
+                </div>
+                <div class="p-4">
+                    <a href="{% url 'manage_shifts' %}" class="module-btn hover-success"><i class="fas fa-user-clock"></i> Asignar Turnos</a>
+                    <a href="{% url 'shift_calendar' %}" class="module-btn hover-success"><i class="fas fa-calendar-week"></i> Calendario Visual</a>
+                    <a href="{% url 'manage_shift_types' %}" class="module-btn hover-warning"><i class="fas fa-business-time"></i> Tipos de Horario</a>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-3 col-md-6">
+            <div class="premium-card">
+                <div class="p-4 border-bottom border-light bg-light bg-opacity-50">
+                    <h6 class="fw-bold text-dark m-0"><i class="fas fa-database text-primary me-2 fs-5"></i> Data Maestra</h6>
+                </div>
+                <div class="p-4">
+                    <a href="{% url 'manage_operators' %}" class="module-btn hover-primary"><i class="fas fa-id-badge"></i> Gestor Personal</a>
+                    <a href="{% url 'manage_companies' %}" class="module-btn hover-primary"><i class="fas fa-building"></i> Clientes / Sedes</a>
+                    <a href="{% url 'manage_checklist_items' %}" class="module-btn hover-primary"><i class="fas fa-list-check"></i> Checklist Tareas</a>
+                    <a href="{% url 'manage_monitored_services' %}" class="module-btn hover-primary"><i class="fas fa-network-wired"></i> Monitoreo IPs</a>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-3 col-md-6">
+            <div class="premium-card gps-card overflow-visible">
+                <i class="fas fa-satellite-dish position-absolute text-white opacity-10" style="font-size: 8rem; right: -20px; top: -10px; z-index: 0;"></i>
+                
+                <div class="p-4 border-bottom border-secondary position-relative z-1">
+                    <h6 class="fw-bold text-white m-0"><i class="fas fa-crosshairs text-danger me-2 fs-5"></i> Flota y Satélite</h6>
+                </div>
+                <div class="p-4 position-relative z-1">
+                    <a href="{% url 'gps_triage_dashboard' %}" class="module-btn gps-btn mb-3"><i class="fas fa-exclamation-triangle"></i> Triage en Vivo</a>
+                    <a href="{% url 'vehicle_security_dashboard' %}" class="module-btn gps-btn mb-3"><i class="fas fa-truck"></i> Mapa Vehicular</a>
+                    <a href="{% url 'gps_admin_reports' %}" class="module-btn gps-btn mb-3"><i class="fas fa-file-excel"></i> Auditoría a Excel</a>
+                    <a href="{% url 'manage_gps_settings' %}" class="module-btn gps-btn"><i class="fas fa-envelope-open-text"></i> Rutas de Correo</a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="d-flex align-items-center justify-content-between mb-4 mt-5">
+        <h4 class="section-title mb-0"><i class="fas fa-chart-area text-primary"></i> Inteligencia de Negocios</h4>
+        <span class="badge bg-primary bg-opacity-10 text-primary px-3 py-2 rounded-pill border border-primary border-opacity-25">Performance Tracker (Últimos 30 días)</span>
+    </div>
+    
+    <div class="row g-3 mb-4">
+        <div class="col-md-4">
+            <div class="card premium-card bg-white border-0 text-center py-3 shadow-sm">
+                <h6 class="text-muted fw-bold text-uppercase" style="font-size: 0.75rem;">Promedio Global Rondas</h6>
+                <h3 class="fw-bolder text-success mb-0">{{ global_round_avg }} <small class="fs-6 text-muted fw-normal">min</small></h3>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card premium-card bg-white border-0 text-center py-3 shadow-sm">
+                <h6 class="text-muted fw-bold text-uppercase" style="font-size: 0.75rem;">Tiempo Reacción GPS</h6>
+                <h3 class="fw-bolder text-danger mb-0">{{ avg_gps_response }} <small class="fs-6 text-muted fw-normal">min</small></h3>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card premium-card bg-white border-0 text-center py-3 shadow-sm" id="service-status-panel">
+                <h6 class="text-muted fw-bold text-uppercase" style="font-size: 0.75rem;">Salud Servidores</h6>
+                <h3 class="fw-bolder text-info mb-0"><i class="fas fa-spinner fa-spin fs-5"></i></h3>
+            </div>
+        </div>
+    </div>
+
+    <div class="row g-4 mb-5">
+        <div class="col-lg-8">
+            <div class="premium-card">
+                <div class="p-4 border-bottom border-light d-flex justify-content-between align-items-center flex-wrap">
+                    <div>
+                        <h6 class="fw-bold text-dark m-0">Densidad Operativa</h6>
+                        <small class="text-muted">Frecuencia de ingreso de novedades por hora</small>
+                    </div>
+                    <ul class="nav nav-tabs-custom mt-2 mt-sm-0" id="rhythmTabs">
+                        <li class="nav-item"><a class="nav-link active" onclick="updateChart('today')">Hoy</a></li>
+                        <li class="nav-item"><a class="nav-link" onclick="updateChart('week')">7D</a></li>
+                        <li class="nav-item"><a class="nav-link" onclick="updateChart('month')">30D</a></li>
+                    </ul>
+                </div>
+                <div class="chart-container">
+                    <canvas id="rhythmChart"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-4">
+            <div class="premium-card">
+                <div class="p-4 border-bottom border-light">
+                    <h6 class="fw-bold text-dark m-0">Performance en Rondas</h6>
+                    <small class="text-muted">Tiempo promedio x operador</small>
+                </div>
+                <div class="chart-container">
+                    <canvas id="roundsChart"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-8">
+            <div class="premium-card">
+                <div class="p-4 border-bottom border-light">
+                    <h6 class="fw-bold text-dark m-0">Eficiencia en Checklist</h6>
+                    <small class="text-muted">Tiempo de resolución promedio por fase de turno</small>
+                </div>
+                <div class="chart-container">
+                    <canvas id="checklistChart"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-4">
+            <div class="premium-card">
+                <div class="p-4 border-bottom border-light">
+                    <h6 class="fw-bold text-dark m-0">Demanda por Cliente</h6>
+                    <small class="text-muted">Distribución de novedades (30 Días)</small>
+                </div>
+                <div class="chart-container-small mt-3">
+                    <canvas id="companiesChart"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="d-flex align-items-center mb-4 mt-5">
+        <h4 class="section-title mb-0"><i class="fas fa-broadcast-tower text-warning"></i> Monitoreo en Vivo</h4>
+    </div>
+    
+    <div class="row g-4 mb-5">
+        <div class="col-lg-8">
+            <div class="premium-card overflow-hidden">
+                <div class="p-4 border-bottom border-light bg-light bg-opacity-50">
+                    <h6 class="fw-bold text-dark m-0">Feed de Novedades</h6>
+                </div>
+                <div class="table-responsive">
+                    <table class="table table-custom table-hover align-middle mb-0">
+                        <thead><tr><th>Hora</th><th>Operador</th><th>Instalación</th><th>Resumen</th></tr></thead>
+                        <tbody>
+                        {% for report in reports|slice:":6" %}
+                            <tr>
+                                <td style="width: 80px;"><span class="badge bg-light text-secondary border px-2 py-1">{{ report.created_at|date:"H:i" }}</span></td>
+                                <td><div class="fw-bold text-dark">{{ report.operator_shift.operator.username }}</div></td>
+                                <td>
+                                    <div class="text-primary fw-bold" style="font-size: 0.85rem;">{{ report.installation.company.name }}</div>
+                                    <div class="text-muted" style="font-size: 0.75rem;">{{ report.installation.name }}</div>
+                                </td>
+                                <td class="text-muted">
+                                    {{ report.message|truncatechars:50 }}
+                                    {% if report.attachment %} <i class="fas fa-paperclip ms-1 text-primary" title="Tiene adjunto"></i> {% endif %}
+                                </td>
+                            </tr>
+                        {% empty %}
+                            <tr><td colspan="4" class="text-center py-5 text-muted"><i class="fas fa-inbox fa-2x mb-2 opacity-25"></i><br>Bandeja vacía en este turno.</td></tr>
+                        {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-4">
+            <div class="premium-card">
+                <div class="p-4 border-bottom border-light bg-light bg-opacity-50 d-flex justify-content-between align-items-center">
+                    <h6 class="fw-bold text-dark m-0">Trazabilidad</h6>
+                    <span class="badge bg-danger rounded-pill pulse-badge">En vivo</span>
+                </div>
+                <div class="p-4 overflow-auto" style="max-height: 400px;">
+                    <div class="timeline-container ps-3 border-start border-2 border-primary border-opacity-25 ms-2">
+                        {% for log in traceability_logs %}
+                            <div class="position-relative mb-4 pb-2">
+                                <div class="position-absolute bg-white border border-2 border-primary rounded-circle" style="width: 14px; height: 14px; left: -24px; top: 2px;"></div>
+                                <div class="text-primary fw-bold" style="font-size: 0.75rem; letter-spacing: 0.5px;">{{ log.timestamp|timesince }} atrás</div>
+                                <div class="text-dark fw-bold mt-1" style="font-size: 0.85rem;">{{ log.user.username }}</div>
+                                <div class="text-muted" style="font-size: 0.85rem; line-height: 1.4;">{{ log.action }}</div>
+                            </div>
+                        {% empty %}
+                            <div class="text-center text-muted">Sin actividad registrada</div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <br><br>
+{% endblock %}
+
+{% block extra_js %}
+    {{ block.super }}
+    <script>
+    // --- DATOS INYECTADOS DESDE DJANGO ---
+    const rhythmData = {
+        today: { label: 'Hoy', data: {{ chart_rhythm_today|safe }} },
+        week: { label: 'Últimos 7 Días', data: {{ chart_rhythm_week|safe }} },
+        month: { label: 'Últimos 30 Días', data: {{ chart_rhythm_month|safe }} }
+    };
+
+    let rhythmChartInstance = null;
+
+    // Configuración Global Chart.js
+    Chart.defaults.font.family = "'Inter', sans-serif";
+    Chart.defaults.color = '#64748b';
+
+    function initRhythmChart() {
+        const ctx = document.getElementById('rhythmChart').getContext('2d');
+        let gradient = ctx.createLinearGradient(0, 0, 0, 300);
+        gradient.addColorStop(0, 'rgba(78, 115, 223, 0.4)');
+        gradient.addColorStop(1, 'rgba(78, 115, 223, 0.0)');
+
+        rhythmChartInstance = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: {{ chart_rhythm_labels|safe }},
+                datasets: [{
+                    label: rhythmData.today.label,
+                    data: rhythmData.today.data,
+                    borderColor: '#4e73df',
+                    backgroundColor: gradient,
+                    borderWidth: 3, tension: 0.4, fill: true,
+                    pointBackgroundColor: '#fff', pointBorderColor: '#4e73df', pointBorderWidth: 2, pointRadius: 3, pointHoverRadius: 6
+                }]
+            },
+            options: {
+                responsive: true, maintainAspectRatio: false,
+                plugins: { legend: { display: false }, tooltip: { backgroundColor: '#1e293b', padding: 12, titleFont: {size: 13}, bodyFont: {size: 14, weight: 'bold'}, displayColors: false } },
+                scales: { y: { beginAtZero: true, border: {display: false}, grid: { color: '#f1f5f9' } }, x: { border: {display: false}, grid: { display: false }, ticks: {maxTicksLimit: 12} } }
+            }
+        });
+    }
+
+    window.updateChart = function(period) {
+        rhythmChartInstance.data.datasets[0].data = rhythmData[period].data;
+        rhythmChartInstance.data.datasets[0].label = rhythmData[period].label;
+        rhythmChartInstance.update();
+
+        document.querySelectorAll('#rhythmTabs .nav-link').forEach(l => l.classList.remove('active'));
+        event.target.classList.add('active');
+    };
+
+    document.addEventListener('DOMContentLoaded', function() {
+        initRhythmChart();
+
+        // --- Gráfico de Rondas (MINUTOS) ---
+        new Chart(document.getElementById('roundsChart'), {
+            type: 'bar',
+            data: {
+                labels: {{ chart_rounds_labels|safe }},
+                datasets: [{
+                    label: 'Minutos Promedio', data: {{ chart_rounds_data|safe }},
+                    backgroundColor: '#1cc88a', hoverBackgroundColor: '#13855c', borderRadius: 6, maxBarThickness: 35
+                }]
+            },
+            options: {
+                responsive: true, maintainAspectRatio: false,
+                plugins: { legend: { display: false }, tooltip: { backgroundColor: '#1e293b', padding: 12, displayColors: false } },
+                scales: { y: { beginAtZero: true, border: {display: false}, grid: { color: '#f1f5f9' } }, x: { border: {display: false}, grid: { display: false } } }
+            }
+        });
+
+        // --- Gráfico de Checklist (MINUTOS POR FASE) ---
+        new Chart(document.getElementById('checklistChart'), {
+            type: 'bar',
+            data: {
+                labels: {{ chart_chk_labels|safe }},
+                datasets: [{
+                    label: 'Minutos por Fase', data: {{ chart_chk_data|safe }},
+                    backgroundColor: '#f6c23e', hoverBackgroundColor: '#dda20a', borderRadius: 6, maxBarThickness: 45
+                }]
+            },
+            options: {
+                indexAxis: 'y', // Gráfico Horizontal
+                responsive: true, maintainAspectRatio: false,
+                plugins: { legend: { display: false }, tooltip: { backgroundColor: '#1e293b', padding: 12, displayColors: false } },
+                scales: { x: { beginAtZero: true, border: {display: false}, grid: { color: '#f1f5f9' } }, y: { border: {display: false}, grid: { display: false } } }
+            }
+        });
+
+        // --- Gráfico de Empresas (Doughnut) ---
+        new Chart(document.getElementById('companiesChart'), {
+            type: 'doughnut',
+            data: {
+                labels: {{ chart_comp_labels|safe }},
+                datasets: [{
+                    data: {{ chart_comp_data|safe }},
+                    backgroundColor: ['#4e73df', '#1cc88a', '#36b9cc', '#f6c23e', '#e74a3b'],
+                    borderWidth: 2, borderColor: '#ffffff', hoverOffset: 5
+                }]
+            },
+            options: {
+                responsive: true, maintainAspectRatio: false, cutout: '75%',
+                plugins: { legend: { position: 'right', labels: { usePointStyle: true, boxWidth: 8, font: { size: 12 } } }, tooltip: { backgroundColor: '#1e293b', padding: 12 } }
+            }
+        });
+
+        // --- Actualización de Servicios ---
+        function updateServiceStatus() {
+            const url = `{% url 'ajax_get_service_status' %}?timestamp=${new Date().getTime()}`;
+            fetch(url).then(r => r.text()).then(html => {
+                const panel = document.getElementById('service-status-panel');
+                if (panel) {
+                    // Actualizamos con un indicador verde minimalista si responde bien
+                    panel.innerHTML = `
+                        <h6 class="text-muted fw-bold text-uppercase" style="font-size: 0.75rem;">Salud Servidores</h6>
+                        <h3 class="fw-bolder text-info mb-0 d-flex align-items-center justify-content-center">
+                            <span class="spinner-grow spinner-grow-sm text-success me-2" style="width: 12px; height: 12px;"></span>
+                            ACTIVOS
+                        </h3>
+                    `;
+                }
+            }).catch(e => console.error(e));
+        }
+        updateServiceStatus();
+        setInterval(updateServiceStatus, 15000);
+    });
+    </script>
+{% endblock %}

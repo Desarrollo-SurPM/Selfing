@@ -1,0 +1,131 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Gestionar Checklist - SELFING{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'css/manage_pages.css' %}">
+<link rel="stylesheet" href="{% static 'css/color_theme.css' %}">
+<style>
+    /* Estilos visuales para jerarquía */
+    .parent-row { background-color: #f8f9fc; font-weight: 600; border-top: 2px solid #e3e6f0; }
+    .child-row td { background-color: #ffffff; border-bottom: 1px dashed #eaecf4; }
+    .child-indicator { color: #b7b9cc; font-size: 1.2rem; margin-right: 5px; margin-left: 15px; }
+    
+    .phase-badge { padding: 0.2em 0.6em; border-radius: 4px; font-size: 0.75rem; text-transform: uppercase; }
+    .phase-badge.start { background-color: rgba(28, 200, 138, 0.1); color: #1cc88a; }
+    .phase-badge.during { background-color: rgba(78, 115, 223, 0.1); color: #4e73df; }
+    .phase-badge.end { background-color: rgba(231, 74, 59, 0.1); color: #e74a3b; }
+    
+    .rule-icon { font-size: 0.85rem; margin-right: 4px; color: #858796; }
+    .rule-icon.active { color: #e74a3b; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div class="d-flex justify-content-between align-items-center">
+        <div>
+            <h2><i class="fas fa-list-check"></i>Gestión de Checklist</h2>
+            <p>Estructura jerárquica de tareas: Crea categorías principales y asigles subtareas.</p>
+        </div>
+        <a href="{% url 'create_checklist_item' %}" class="btn btn-add">
+            <i class="fas fa-plus-circle"></i> Añadir Tarea
+        </a>
+    </div>
+</div>
+
+<div class="table-container">
+    <table class="table align-middle" id="checklistTable">
+        <thead>
+            <tr>
+                <th style="width: 40px;">Orden</th>
+                <th>Descripción de la Tarea</th>
+                <th>Fase</th>
+                <th>Alcance (Empresa/Inst)</th>
+                <th>Reglas y Legalidad</th>
+                <th class="text-center">Acciones</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for item in items %}
+                {# Solo renderizamos desde la raíz (padres) #}
+                {% if not item.parent %}
+                <tr class="parent-row" data-id="{{ item.id }}" data-phase="{{ item.phase }}">
+                    <td class="text-center text-muted">{{ item.order }}</td>
+                    <td>
+                        <i class="fas fa-folder text-primary me-2"></i>{{ item.description }}
+                        {% if item.alarm_trigger_delay %}
+                            <br><small class="text-warning"><i class="fas fa-bell"></i> Alarma: {{ item.alarm_trigger_delay }}</small>
+                        {% endif %}
+                    </td>
+                    <td><span class="phase-badge {{ item.phase }}">{{ item.get_phase_display }}</span></td>
+                    <td>
+                        {% if item.company %}
+                            <span class="badge bg-secondary">{{ item.company.name }}</span>
+                        {% else %}
+                            <span class="text-muted small">Global</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        <i class="fas fa-link rule-icon {% if item.is_sequential %}text-primary{% endif %}" title="Secuencial"></i>
+                        <i class="fas fa-balance-scale rule-icon {% if item.requires_legal_check %}active{% endif %}" title="Requiere DDJJ"></i>
+                    </td>
+                    <td class="text-center">
+                        <div class="action-buttons justify-content-center">
+                            <a href="{% url 'edit_checklist_item' item.id %}" class="btn-action btn-edit" title="Editar"><i class="fas fa-edit"></i></a>
+                            <a href="{% url 'delete_checklist_item' item.id %}" class="btn-action btn-delete" title="Eliminar"><i class="fas fa-trash"></i></a>
+                        </div>
+                    </td>
+                </tr>
+
+                {% for child in item.sub_items.all %}
+                <tr class="child-row" data-id="{{ child.id }}" data-parent="{{ item.id }}" data-phase="{{ child.phase }}">
+                    <td class="text-center text-muted"><small>{{ item.order }}.{{ child.order }}</small></td>
+                    <td>
+                        <span class="child-indicator">└─</span> 
+                        {{ child.description }}
+                    </td>
+                    <td><span class="phase-badge {{ child.phase }}">{{ child.get_phase_display }}</span></td>
+                    <td>
+                        {% if child.installation %}
+                            <span class="badge bg-info text-dark">{{ child.installation.name }}</span>
+                        {% elif child.company %}
+                            <span class="badge bg-secondary">{{ child.company.name }}</span>
+                        {% else %}
+                            <span class="text-muted small">Heredado</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        <i class="fas fa-link rule-icon {% if child.is_sequential %}text-primary{% endif %}" title="Secuencial"></i>
+                        <i class="fas fa-balance-scale rule-icon {% if child.requires_legal_check %}active{% endif %}" title="Requiere DDJJ"></i>
+                    </td>
+                    <td class="text-center">
+                        <div class="action-buttons justify-content-center">
+                            <a href="{% url 'edit_checklist_item' child.id %}" class="btn-action btn-edit" title="Editar"><i class="fas fa-edit"></i></a>
+                            <a href="{% url 'delete_checklist_item' child.id %}" class="btn-action btn-delete" title="Eliminar"><i class="fas fa-trash"></i></a>
+                        </div>
+                    </td>
+                </tr>
+                {% endfor %}
+
+                {% endif %}
+            {% empty %}
+            <tr>
+                <td colspan="6">
+                    <div class="empty-state">
+                        <i class="fas fa-clipboard-list"></i>
+                        <h4>No hay tareas definidas</h4>
+                        <a href="{% url 'create_checklist_item' %}" class="btn btn-add mt-3"><i class="fas fa-plus-circle"></i> Crear la Primera Tarea</a>
+                    </div>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<div class="mt-4">
+    <a href="{% url 'admin_dashboard' %}" class="btn btn-back"><i class="fas fa-arrow-left"></i> Volver al Dashboard</a>
+</div>
+{% endblock %}

@@ -74,19 +74,28 @@ WSGI_APPLICATION = 'seguridad_platform.wsgi.application'
 # Si la variable de entorno DATABASE_URL está presente (por ejemplo en Railway),
 # utilizamos esa conexión. En caso contrario, se usa SQLite para desarrollo local.
 
-DATABASE_URL = os.getenv(
-    "DATABASE_URL",
-    "postgresql://postgres:fXmqrCobAIItTbRXuGRLFqzIAqTdBCya@metro.proxy.rlwy.net:17664/railway",
-)
+# settings.py
 
-# Parseamos la URL de conexión usando dj_database_url
-DATABASES = {
-    "default": dj_database_url.parse(
-        DATABASE_URL, 
-        conn_max_age=600, 
-        ssl_require=True if "postgresql" in DATABASE_URL else False
-    )
-}
+# Intenta obtener la base de datos del archivo .env
+DATABASE_URL = os.getenv("DATABASE_URL")
+
+if DATABASE_URL:
+    # Si existe (como en Railway), usamos PostgreSQL
+    DATABASES = {
+        "default": dj_database_url.parse(
+            DATABASE_URL, 
+            conn_max_age=600, 
+            ssl_require=True if "postgresql" in DATABASE_URL else False
+        )
+    }
+else:
+    # Si NO existe (como en tu local ahora), usamos SQLite
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.sqlite3',
+            'NAME': BASE_DIR / 'db.sqlite3',
+        }
+    }
 
 # Password validation
 AUTH_PASSWORD_VALIDATORS = [
