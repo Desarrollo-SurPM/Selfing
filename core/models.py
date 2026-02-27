@@ -22,11 +22,47 @@ class Installation(models.Model):
     def __str__(self):
         return f"{self.name} ({self.company.name})"
 
+# =========================================================
+# PERFIL LEGAL DEL OPERADOR Y DOCUMENTACIÓN
+# =========================================================
 class OperatorProfile(models.Model):
-    user = models.OneToOneField(User, on_delete=models.CASCADE)
+    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='profile')
+    
+    # --- Datos Personales (Exigencia Legal Chile) ---
+    rut = models.CharField(max_length=12, blank=True, null=True, verbose_name="RUT", help_text="Formato: 12345678-9")
+    phone = models.CharField(max_length=20, blank=True, null=True, verbose_name="Teléfono")
+    address = models.CharField(max_length=255, blank=True, null=True, verbose_name="Dirección")
+    
+    # --- Trazabilidad Legal de Licencia de Uso ---
+    terms_accepted = models.BooleanField(default=False, verbose_name="Aceptó Licencia de Uso")
+    terms_accepted_at = models.DateTimeField(null=True, blank=True, verbose_name="Fecha de Aceptación")
+    terms_accepted_ip = models.GenericIPAddressField(null=True, blank=True, verbose_name="IP de Aceptación")
+    
     def __str__(self):
         return self.user.username
+
+class OperatorDocument(models.Model):
+    """Repositorio de documentos legales firmados por o para el operador."""
+    DOCUMENT_TYPES = [
+        ('contrato', 'Contrato de Trabajo / Anexo'),
+        ('terminos', 'Licencia de Uso Firmada (PDF)'),
+        ('cert_antecedentes', 'Certificado de Antecedentes'),
+        ('acuerdo_confidencialidad', 'Acuerdo de Confidencialidad (NDA)'),
+        ('otro', 'Otro Documento')
+    ]
+    operator = models.ForeignKey(User, on_delete=models.CASCADE, related_name='documents')
+    document_type = models.CharField(max_length=50, choices=DOCUMENT_TYPES, default='otro', verbose_name="Tipo de Documento")
+    file = models.FileField(upload_to='operator_docs/%Y/%m/%d/', verbose_name="Archivo Adjunto")
+    uploaded_at = models.DateTimeField(auto_now_add=True, verbose_name="Fecha de Subida")
     
+    class Meta:
+        ordering = ['-uploaded_at']
+        verbose_name = "Documento de Operador"
+        verbose_name_plural = "Documentos de Operadores"
+        
+    def __str__(self):
+        return f"{self.get_document_type_display()} - {self.operator.username}"
+
 class ShiftType(models.Model):
     name = models.CharField(max_length=100, unique=True, help_text="Ej: Turno Mañana, Turno Noche")
     start_time = models.TimeField()
@@ -47,7 +83,6 @@ class OperatorShift(models.Model):
     actual_start_time = models.DateTimeField(null=True, blank=True)
     actual_end_time = models.DateTimeField(null=True, blank=True)
     
-    # --- NUEVO CAMPO ---
     monitored_companies = models.ManyToManyField(
         Company, 
         blank=True, 
@@ -55,7 +90,6 @@ class OperatorShift(models.Model):
         verbose_name="Empresas Específicas",
         help_text="Seleccione solo si el turno es restringido (ej: Mañana fin de semana). Deje vacío para monitorear TODAS."
     )
-    # -------------------
 
     class Meta:
         unique_together = ('operator', 'date')
@@ -63,57 +97,37 @@ class OperatorShift(models.Model):
     def __str__(self):
         return f"Turno de {self.operator.username} ({self.date})"
 
+# =========================================================
+# MÓDULO CHECKLIST E INTERACTIVIDAD LEGAL
+# =========================================================
 class ChecklistItem(models.Model):
-    """
-    Representa una tarea individual dentro de la lista de verificación de un operador.
-    """
-    # --- Campos de Identificación de la Tarea ---
-    description = models.CharField(
-        max_length=255,
-        verbose_name="Descripción de la Tarea"
-    )
+    """Representa una tarea individual dentro de la lista de verificación de un operador."""
+    description = models.CharField(max_length=255, verbose_name="Descripción de la Tarea")
     phase = models.CharField(
         max_length=20,
-        choices=[
-            ('start', 'Inicio de Turno'),
-            ('during', 'Durante el Turno'),
-            ('end', 'Finalización de Turno')
-        ],
+        choices=[('start', 'Inicio de Turno'), ('during', 'Durante el Turno'), ('end', 'Finalización de Turno')],
         default='during',
         verbose_name="Fase del Turno"
     )
-    order = models.PositiveIntegerField(
-        default=0,
-        verbose_name="Orden de Visualización",
-        help_text="Un número más bajo se muestra primero."
+    order = models.PositiveIntegerField(default=0, verbose_name="Orden de Visualización", help_text="Un número más bajo se muestra primero.")
+    unlock_delay = models.DurationField(
+        null=True, blank=True, 
+        verbose_name="Bloqueo por Tiempo", 
+        help_text="Tiempo desde el inicio del turno para que se habilite (ej: '02:00:00' para 2 horas). Déjalo en blanco para que esté disponible de inmediato."
     )
+    DIAS_SEMANA = [(0, 'Lunes'), (1, 'Martes'), (2, 'Miércoles'), (3, 'Jueves'), (4, 'Viernes'), (5, 'Sábado'), (6, 'Domingo')]
+    dias_aplicables = models.CharField(max_length=50, blank=True, null=True, verbose_name="Días de la Semana Aplicables", help_text="Marcar los días en que aplica. Dejar todos sin marcar para que aplique siempre.")
+    turnos_aplicables = models.ManyToManyField('ShiftType', blank=True, verbose_name="Tipos de Turno Aplicables", help_text="Marcar los turnos en que aplica. Dejar sin marcar para que aplique a todos.")
+    alarm_trigger_delay = models.DurationField(null=True, blank=True, verbose_name="Alarma de Tarea Pendiente", help_text="Establecer un tiempo para la alarma (ej: '1:30' para 1 hora y 30 mins) si la tarea no se completa. Se calcula desde el inicio del turno.")
 
-    # --- Campos de Programación y Aplicabilidad ---
-    DIAS_SEMANA = [
-        (0, 'Lunes'), (1, 'Martes'), (2, 'Miércoles'), (3, 'Jueves'),
-        (4, 'Viernes'), (5, 'Sábado'), (6, 'Domingo')
-    ]
-    dias_aplicables = models.CharField(
-        max_length=50,
-        blank=True,
-        null=True,
-        verbose_name="Días de la Semana Aplicables",
-        help_text="Marcar los días en que aplica. Dejar todos sin marcar para que aplique siempre."
-    )
-    turnos_aplicables = models.ManyToManyField(
-        'ShiftType', # Usa el string para evitar importaciones circulares
-        blank=True,
-        verbose_name="Tipos de Turno Aplicables",
-        help_text="Marcar los turnos en que aplica. Dejar sin marcar para que aplique a todos."
-    )
-
-    # --- Funcionalidad de Alarma ---
-    alarm_trigger_delay = models.DurationField(
-        null=True,
-        blank=True,
-        verbose_name="Alarma de Tarea Pendiente",
-        help_text="Establecer un tiempo para la alarma (ej: '1:30' para 1 hora y 30 mins) si la tarea no se completa. Se calcula desde el inicio del turno."
-    )
+    # --- CAMPOS: JERARQUÍA Y LEGAL ---
+    parent = models.ForeignKey('self', on_delete=models.CASCADE, null=True, blank=True, related_name='sub_items', verbose_name="Tarea Principal (Sub-checklist)")
+    is_sequential = models.BooleanField(default=True, verbose_name="Desbloqueo Secuencial", help_text="Si está marcado, el operador no podrá hacer esta tarea hasta completar la anterior.")
+    requires_legal_check = models.BooleanField(default=True, verbose_name="Requiere Declaración Jurada", help_text="Exige que el operador marque una casilla legal asumiendo la responsabilidad.")
+    
+    # --- CAMPOS: CRUCE DINÁMICO ---
+    company = models.ForeignKey(Company, on_delete=models.CASCADE, null=True, blank=True, verbose_name="Empresa Asociada", help_text="Dejar en blanco para tareas generales. Si se selecciona, aplica solo a turnos con esta empresa.")
+    installation = models.ForeignKey(Installation, on_delete=models.CASCADE, null=True, blank=True, verbose_name="Instalación Asociada", help_text="Seleccione si la tarea es específica para una sucursal/instalación particular.")
 
     class Meta:
         ordering = ['phase', 'order']
@@ -121,26 +135,51 @@ class ChecklistItem(models.Model):
         verbose_name_plural = "Ítems de Checklist"
 
     def __str__(self):
+        if self.parent:
+            return f"  └─ [{self.get_phase_display()}] {self.description}"
         return f"[{self.get_phase_display()}] {self.description}"
 
-
-# core/models.py
-
 class ChecklistLog(models.Model):
+    STATUS_CHOICES = [
+        ('pending', 'Pendiente'),
+        ('in_progress', 'En Progreso'),
+        ('paused', 'Pausada'),
+        ('completed', 'Completada')
+    ]
     operator_shift = models.ForeignKey(OperatorShift, on_delete=models.CASCADE, related_name='checklist_logs')
     item = models.ForeignKey(ChecklistItem, on_delete=models.CASCADE)
-    completed_at = models.DateTimeField(auto_now_add=True)
+    
+    # --- CONTROL DE ESTADO ---
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending', null=True, blank=True, verbose_name="Estado")
 
-    # --- 👇 CAMPO NUEVO AÑADIDO 👇 ---
+    # --- TIEMPOS Y PAUSAS ---
+    started_at = models.DateTimeField(null=True, blank=True, verbose_name="Hora de inicio o reanudación")
+    completed_at = models.DateTimeField(null=True, blank=True, verbose_name="Hora de finalización")
+    accumulated_seconds = models.PositiveIntegerField(default=0, null=True, blank=True, verbose_name="Segundos acumulados (Pausas)")
+    duration_seconds = models.PositiveIntegerField(null=True, blank=True, verbose_name="Duración total final")
+
+    # --- EVIDENCIA ---
     observacion = models.TextField(blank=True, null=True, verbose_name="Observación")
-    # --- 👆 FIN DEL CAMPO NUEVO 👆 ---
+    attachment = models.FileField(upload_to='checklist_photos/%Y/%m/%d/', blank=True, null=True, verbose_name="Evidencia Fotográfica")
+
+    # --- LEGAL ---
+    legal_agreement = models.BooleanField(default=False, null=True, blank=True, verbose_name="Aceptó Declaración Jurada")
+    
+    # ELIMINADO: ip_address = models.GenericIPAddressField(...)
 
     class Meta:
         unique_together = ('operator_shift', 'item')
 
-# --- 👇 CAMBIO #2 👇 ---
+    def get_duration_display(self):
+        total_seconds = self.duration_seconds if self.duration_seconds is not None else self.accumulated_seconds
+        if not total_seconds:
+            return "N/A"
+        minutes, seconds = divmod(total_seconds, 60)
+        return f"{minutes} min {seconds} seg"
+# =========================================================
+# MÓDULO DE RONDAS VIRTUALES CRONOMETRADAS
+# =========================================================
 class VirtualRoundLog(models.Model):
-    # Se asocia a un turno específico.
     operator_shift = models.ForeignKey(OperatorShift, on_delete=models.CASCADE, related_name='round_logs')
     start_time = models.DateTimeField()
     end_time = models.DateTimeField(null=True, blank=True)
@@ -150,7 +189,6 @@ class VirtualRoundLog(models.Model):
     def get_duration_display(self):
         if self.duration_seconds is None:
             return "N/A"
-        
         seconds = self.duration_seconds
         if seconds < 60:
             return f"{seconds} seg"
@@ -162,60 +200,69 @@ class VirtualRoundLog(models.Model):
             hours = seconds // 3600
             rem_minutes = (seconds % 3600) // 60
             return f"{hours}h {rem_minutes} min"
-    # --- 👆 FIN DE LA FUNCIÓN AÑADIDA 👆 ---
+
     def __str__(self):
         return f"Ronda de {self.operator_shift.operator.username} - iniciada a las {self.start_time.strftime('%H:%M')}"
 
+class RoundInstallationLog(models.Model):
+    """Registra el tiempo y evidencia de CADA instalación revisada dentro de una ronda virtual."""
+    STATUS_CHOICES = [
+        ('pending', 'Pendiente'),
+        ('in_progress', 'En Progreso'),
+        ('paused', 'Pausada'),
+        ('completed', 'Completada')
+    ]
+    virtual_round = models.ForeignKey(VirtualRoundLog, on_delete=models.CASCADE, related_name='installation_logs')
+    installation = models.ForeignKey(Installation, on_delete=models.CASCADE)
+    
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending', verbose_name="Estado")
+    
+    start_time = models.DateTimeField(null=True, blank=True, verbose_name="Inicio de revisión")
+    end_time = models.DateTimeField(null=True, blank=True, verbose_name="Fin de revisión")
+    
+    accumulated_seconds = models.PositiveIntegerField(default=0, verbose_name="Segundos acumulados (Pausas)")
+    duration_seconds = models.PositiveIntegerField(null=True, blank=True, verbose_name="Duración Total")
+    
+    observacion = models.TextField(blank=True, null=True, verbose_name="Observaciones")
+    attachment = models.FileField(upload_to='round_photos/%Y/%m/%d/', blank=True, null=True, verbose_name="Captura de Pantalla/Foto")
+
+    class Meta:
+        ordering = ['start_time']
+        verbose_name = "Revisión de Instalación"
+        verbose_name_plural = "Revisiones de Instalaciones"
+
+    def get_duration_display(self):
+        total = self.duration_seconds if self.duration_seconds is not None else self.accumulated_seconds
+        if not total:
+            return "00:00"
+        minutes, seconds = divmod(total, 60)
+        return f"{minutes:02d}:{seconds:02d}"
+# =========================================================
+# OTROS MÓDULOS (BITÁCORA, CORREOS, MONITOREO)
+# =========================================================
 class UpdateLog(models.Model):
     operator_shift = models.ForeignKey(OperatorShift, on_delete=models.CASCADE, related_name='update_logs')
     installation = models.ForeignKey(Installation, on_delete=models.CASCADE)
     message = models.TextField()
     created_at = models.DateTimeField(auto_now_add=True)
     
-    # Campo existente
     is_sent = models.BooleanField(default=False, verbose_name="¿Enviado en reporte?")
-
-    # Campos existentes del Sprint 1
-    manual_timestamp = models.TimeField(
-        null=True, 
-        blank=True, 
-        verbose_name="Hora Manual del Evento"
-    )
-    is_edited = models.BooleanField(
-        default=False, 
-        verbose_name="¿Ha sido editado?"
-    )
-    original_message = models.TextField(
-        blank=True, 
-        null=True, 
-        verbose_name="Mensaje Original"
-    )
-    edited_at = models.DateTimeField(
-        null=True, 
-        blank=True, 
-        verbose_name="Fecha de Edición"
-    )
-
-    # --- 👇 NUEVO CAMPO PARA ADJUNTOS 👇 ---
-    attachment = models.FileField(
-        upload_to='novedades/%Y/%m/%d/',
-        blank=True,
-        null=True,
-        verbose_name="Adjunto (Foto/Video)",
-        help_text="Formatos sugeridos: JPG, PNG, MP4"
-    )
-    # --- 👆 FIN DE NUEVO CAMPO 👆 ---
+    manual_timestamp = models.TimeField(null=True, blank=True, verbose_name="Hora Manual del Evento")
+    is_edited = models.BooleanField(default=False, verbose_name="¿Ha sido editado?")
+    original_message = models.TextField(blank=True, null=True, verbose_name="Mensaje Original")
+    edited_at = models.DateTimeField(null=True, blank=True, verbose_name="Fecha de Edición")
+    
+    attachment = models.FileField(upload_to='novedades/%Y/%m/%d/', blank=True, null=True, verbose_name="Adjunto (Foto/Video)", help_text="Formatos sugeridos: JPG, PNG, MP4")
 
     def __str__(self):
         return f"Novedad para {self.installation.name} por {self.operator_shift.operator.username}"
 
-    # --- 👇 NUEVO MÉTODO HELPER 👇 ---
     def is_image(self):
         if not self.attachment:
             return False
         name = self.attachment.name.lower()
         return name.endswith(('.png', '.jpg', '.jpeg', '.gif', '.webp'))
-    # --- 👆 FIN MÉTODO HELPER 👆 ---
+
 class Email(models.Model):
     operator = models.ForeignKey(User, on_delete=models.CASCADE, related_name='emails_sent')
     company = models.ForeignKey(Company, on_delete=models.CASCADE, related_name='emails_received')
@@ -225,6 +272,7 @@ class Email(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     def __str__(self):
         return f"Correo para {self.company.name} - {self.status}"
+
 class TraceabilityLog(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE)
     action = models.CharField(max_length=255)
@@ -249,14 +297,7 @@ class ServiceStatusLog(models.Model):
         return f"{self.service.name} - {status} a las {self.timestamp.strftime('%Y-%m-%d %H:%M:%S')}"
 
 class TurnReport(models.Model):
-    # --- CAMBIO AQUÍ: AÑADIR null=True ---
-    operator_shift = models.OneToOneField(
-        OperatorShift,
-        on_delete=models.CASCADE,
-        related_name='turn_report',
-        null=True  # Permite que el campo esté vacío temporalmente
-    )
-    # --- FIN DEL CAMBIO ---
+    operator_shift = models.OneToOneField(OperatorShift, on_delete=models.CASCADE, related_name='turn_report', null=True)
     operator = models.ForeignKey(User, on_delete=models.CASCADE, related_name='turn_reports')
     start_time = models.DateTimeField()
     end_time = models.DateTimeField(auto_now_add=True)
@@ -269,23 +310,8 @@ class TurnReport(models.Model):
 class EmergencyContact(models.Model):
     name = models.CharField(max_length=100, verbose_name="Nombre del Contacto (Ej: Ambulancia, Bomberos, Supervisor)")
     phone_number = models.CharField(max_length=20, verbose_name="Número de Teléfono")
-    
-    company = models.ForeignKey(
-        Company, 
-        on_delete=models.CASCADE, 
-        related_name='emergency_contacts',
-        null=True, 
-        blank=True,
-        help_text="Dejar en blanco si es un contacto general (Ej: Ambulancia)."
-    )
-    installation = models.ForeignKey(
-        Installation, 
-        on_delete=models.CASCADE, 
-        related_name='emergency_contacts',
-        null=True, 
-        blank=True,
-        help_text="Opcional: especificar si este contacto es solo para una instalación."
-    )
+    company = models.ForeignKey(Company, on_delete=models.CASCADE, related_name='emergency_contacts', null=True, blank=True, help_text="Dejar en blanco si es un contacto general (Ej: Ambulancia).")
+    installation = models.ForeignKey(Installation, on_delete=models.CASCADE, related_name='emergency_contacts', null=True, blank=True, help_text="Opcional: especificar si este contacto es solo para una instalación.")
 
     class Meta:
         ordering = ['company__name', 'installation__name', 'name']
@@ -313,7 +339,9 @@ class ShiftNote(models.Model):
     def __str__(self):
         return f"Nota de {self.created_by.username} el {self.created_at.strftime('%d/%m/%Y')}"
 
-# Modelos para Seguridad Vehicular
+# =========================================================
+# MÓDULOS DE VEHÍCULOS
+# =========================================================
 class Vehicle(models.Model):
     license_plate = models.CharField(max_length=20, unique=True, verbose_name="Patente")
     driver_name = models.CharField(max_length=100, verbose_name="Conductor")
@@ -401,12 +429,10 @@ class VehicleRoute(models.Model):
     def __str__(self):
         return f"{self.vehicle.license_plate} - {self.start_time.strftime('%d/%m/%Y %H:%M')}"
 
-
-## nuevo modelo ##
+# =========================================================
+# MÓDULOS DE ALERTAS GPS Y SECTORES
+# =========================================================
 class Sector(models.Model):
-    """
-    Representa una zona geográfica o sector operativo para cruzar con la ubicación del correo.
-    """
     name = models.CharField(max_length=150, unique=True, verbose_name="Nombre del Sector")
     geofence_polygon = models.JSONField(
         blank=True, 
@@ -416,7 +442,6 @@ class Sector(models.Model):
     )
     description = models.TextField(blank=True, null=True, verbose_name="Descripción o Referencias")
     
-    # Opcional: Vincularlo a una empresa si Selfing maneja multitenencia estricta en la vista del operador
     company = models.ForeignKey(
         'Company', 
         on_delete=models.CASCADE, 
@@ -434,11 +459,7 @@ class Sector(models.Model):
     def __str__(self):
         return self.name
 
-
 class SectorContact(models.Model):
-    """
-    Encargados asociados a cada sector que serán contactados durante una alerta.
-    """
     sector = models.ForeignKey(Sector, on_delete=models.CASCADE, related_name='contacts', verbose_name="Sector")
     name = models.CharField(max_length=150, verbose_name="Nombre del Encargado")
     phone = models.CharField(max_length=50, verbose_name="Teléfono")
@@ -453,18 +474,13 @@ class SectorContact(models.Model):
     def __str__(self):
         return f"{self.name} - {self.sector.name}"
 
-
 class GPSIncident(models.Model):
-    """
-    Alerta GPS parseada automáticamente desde el correo electrónico. Totalmente independiente.
-    """
     STATUS_CHOICES = [
         ('pending', 'Pendiente'),
         ('resolved', 'Resuelto'),
         ('ignored', 'Ignorado (Falso Positivo)')
     ]
 
-    # Datos extraídos exclusivamente del correo electrónico (texto plano)
     alert_type = models.CharField(max_length=100, verbose_name="Tipo de Alerta", help_text="Ej: Botón de Pánico, Ralentí, Colisión")
     unit_id = models.CharField(max_length=100, blank=True, null=True, verbose_name="ID de Unidad")
     license_plate = models.CharField(max_length=20, verbose_name="Codigo Enap")
@@ -475,20 +491,16 @@ class GPSIncident(models.Model):
     longitude = models.FloatField(blank=True, null=True, verbose_name="Longitud")
     maps_url = models.URLField(max_length=1000, blank=True, null=True, verbose_name="Enlace de Google Maps")
     
-    # Metadatos del sistema
     taken_at = models.DateTimeField(blank=True, null=True, verbose_name="Hora de toma del caso")
     received_at = models.DateTimeField(auto_now_add=True, verbose_name="Fecha de Recepción (Sistema)")
     
-    # Relaciones calculadas por el Service Layer
     sector_assigned = models.ForeignKey(Sector, on_delete=models.SET_NULL, null=True, blank=True, related_name='incidents', verbose_name="Sector Asignado")
 
-    # Gestión de Resolución (Triage por el Operador)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending', verbose_name="Estado")
     operator = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='managed_incidents', verbose_name="Operador que resolvió")
     who_answered = models.CharField(max_length=150, blank=True, null=True, verbose_name="¿Quién contestó la llamada?")
     operator_notes = models.TextField(blank=True, null=True, verbose_name="Notas de Resolución")
     
-    # Métricas para el Excel mensual
     resolved_at = models.DateTimeField(null=True, blank=True, verbose_name="Fecha y Hora de Resolución")
     response_time_seconds = models.PositiveIntegerField(null=True, blank=True, verbose_name="Tiempo de Respuesta (Segundos)", help_text="Calculado automáticamente al resolver.")
 
@@ -501,17 +513,11 @@ class GPSIncident(models.Model):
         return f"{self.alert_type} - {self.license_plate} ({self.get_status_display()})"
     
     def calculate_response_time(self):
-        """Calcula el tiempo de respuesta en segundos al guardar la resolución"""
         if self.resolved_at and self.received_at:
             delta = self.resolved_at - self.received_at
             self.response_time_seconds = int(delta.total_seconds())
 
-
 class GPSNotificationSettings(models.Model):
-    """
-    Configuración global para los destinatarios de correos del módulo GPS.
-    Actúa como un Singleton (solo debe existir un registro).
-    """
     instant_emails = models.TextField(
         verbose_name="Correos para Alertas Instantáneas (Triage)",
         help_text="Separados por coma (,). Ej: jefe_turno@enap.cl, supervisor@selfing.cl",
@@ -531,9 +537,7 @@ class GPSNotificationSettings(models.Model):
         return "Gestión de Destinatarios GPS"
 
     def get_instant_emails_list(self):
-        """Convierte el texto separado por comas en una lista de Python."""
         return [email.strip() for email in self.instant_emails.split(',') if email.strip()]
 
     def get_monthly_emails_list(self):
-        """Convierte el texto separado por comas en una lista de Python."""
         return [email.strip() for email in self.monthly_emails.split(',') if email.strip()]

@@ -1,13 +1,111 @@
 {% extends 'base.html' %}
-{% load crispy_forms_tags %}
-{% block title %}{{ title }}{% endblock %}
+
+{% block title %}
+    {% if form.instance.pk %}Editar Servicio{% else %}Añadir Servicio{% endif %} - SELFING
+{% endblock %}
+
 {% block content %}
-<h2>{{ title }}</h2>
-<hr>
-<form method="post">
-    {% csrf_token %}
-    {{ form|crispy }}
-    <button type="submit" class="btn btn-primary mt-3">Guardar</button>
-    <a href="{% url 'manage_monitored_services' %}" class="btn btn-secondary mt-3">Cancelar</a>
-</form>
+<div class="container mt-5 mb-5">
+    <div class="row justify-content-center">
+        <div class="col-lg-8">
+            <div class="card shadow border-0 rounded-lg">
+                <div class="card-header bg-dark text-white d-flex align-items-center p-4">
+                    <div class="bg-primary rounded-circle d-flex align-items-center justify-content-center me-3 shadow-sm" style="width: 55px; height: 55px;">
+                        <i class="fas fa-network-wired fa-lg text-white"></i>
+                    </div>
+                    <div>
+                        <h2 class="h4 mb-0 fw-bold">
+                            {% if form.instance.pk %}Editar Servicio Monitoreado{% else %}Nuevo Objetivo de Monitoreo{% endif %}
+                        </h2>
+                        <p class="mb-0 text-light small opacity-75 mt-1">Configura la IP o dominio para trackear su disponibilidad en tiempo real.</p>
+                    </div>
+                </div>
+                
+                <div class="card-body p-5 bg-white">
+                    <form method="post">
+                        {% csrf_token %}
+                        
+                        <div class="row mb-4">
+                            <div class="col-md-12">
+                                <label class="form-label fw-bold text-secondary">Nombre de Referencia del Servicio</label>
+                                <div class="input-group input-group-lg shadow-sm">
+                                    <span class="input-group-text bg-light text-muted border-end-0"><i class="fas fa-server"></i></span>
+                                    {{ form.name }}
+                                </div>
+                                <div class="form-text mt-2 ms-1"><i class="fas fa-info-circle text-primary me-1"></i>Ej: Router Pta. Arenas, Servidor Cámaras CCTV</div>
+                            </div>
+                        </div>
+
+                        <div class="row mb-5">
+                            <div class="col-md-12">
+                                <label class="form-label fw-bold text-secondary">Dirección IP o Dominio</label>
+                                <div class="input-group input-group-lg shadow-sm">
+                                    <span class="input-group-text bg-light text-primary border-end-0"><i class="fas fa-globe"></i></span>
+                                    {{ form.ip_address }}
+                                </div>
+                                <div class="form-text mt-2 ms-1">Ingresa una IP (ej: <code>192.168.1.100</code>) o un dominio (ej: <code>selfing.cl</code>).</div>
+                            </div>
+                        </div>
+
+                        <div class="p-4 bg-light rounded-3 mb-4 border border-2 border-light">
+                            <div class="d-flex align-items-center justify-content-between">
+                                <div>
+                                    <h5 class="mb-1 text-dark fw-bold"><i class="fas fa-satellite-dish text-success me-2"></i>Estado del Monitoreo</h5>
+                                    <p class="mb-0 text-muted small">Al apagar esta opción, el sistema dejará de hacer ping al objetivo para evitar falsas alarmas.</p>
+                                </div>
+                                <div class="form-check form-switch form-switch-lg fs-2 m-0">
+                                    {{ form.is_active }}
+                                </div>
+                            </div>
+                        </div>
+
+                        <hr class="my-4 text-muted opacity-25">
+                        
+                        <div class="d-flex justify-content-end gap-3">
+                            <a href="{% url 'manage_monitored_services' %}" class="btn btn-light btn-lg border px-4 shadow-sm text-secondary">
+                                <i class="fas fa-arrow-left me-2"></i>Volver
+                            </a>
+                            <button type="submit" class="btn btn-primary btn-lg px-5 shadow-sm">
+                                <i class="fas fa-save me-2"></i>{% if form.instance.pk %}Actualizar{% else %}Guardar{% endif %} Objetivo
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+    /* Estilos personalizados para mejorar el UX de los inputs */
+    .input-group-lg .form-control {
+        border-left: 0;
+        padding-left: 0;
+        font-size: 1.1rem;
+    }
+    .input-group-lg .form-control:focus {
+        box-shadow: none;
+        border-color: #dee2e6;
+    }
+    .input-group-lg:focus-within {
+        box-shadow: 0 0 0 0.25rem rgba(13, 110, 253, 0.25);
+        border-radius: 0.5rem;
+    }
+    .input-group-lg:focus-within .input-group-text,
+    .input-group-lg:focus-within .form-control {
+        border-color: #86b7fe;
+    }
+    
+    /* Hacer el Switch más grande e intuitivo */
+    .form-switch-lg .form-check-input {
+        width: 2.5em;
+        height: 1.25em;
+        cursor: pointer;
+        transition: background-color 0.2s ease-in-out;
+    }
+    .form-switch-lg .form-check-input:checked {
+        background-color: #198754; /* Verde de Success al activar */
+        border-color: #198754;
+    }
+</style>
 {% endblock %}

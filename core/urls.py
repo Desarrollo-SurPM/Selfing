@@ -1,10 +1,14 @@
 from django.urls import path
+from django.views.generic import RedirectView
 from . import views
 
 urlpatterns = [
     path('', views.home, name='home'),
+    path('favicon.ico', RedirectView.as_view(url='/static/images/favicon.png', permanent=True)),
 
-    # --- Rutas de Administrador ---
+    # ==========================================
+    # --- RUTAS DE ADMINISTRADOR ---
+    # ==========================================
     path('dashboard/admin/', views.admin_dashboard, name='admin_dashboard'),
     
     # Gestión de Operadores
@@ -23,9 +27,8 @@ urlpatterns = [
     path('dashboard/installations/edit/<int:installation_id>/', views.edit_installation, name='edit_installation'),
     path('dashboard/installations/delete/<int:installation_id>/', views.delete_installation, name='delete_installation'),
 
-    # Gestión de Checklist
+    # Gestión de Checklist (Configuración)
     path('dashboard/checklist-items/', views.manage_checklist_items, name='manage_checklist_items'),
-    path('checklist/', views.checklist_view, name='checklist_view'),
     path('checklist/update_order/', views.update_checklist_order, name='update_checklist_order'),
     path('dashboard/checklist-items/add/', views.create_checklist_item, name='create_checklist_item'),
     path('dashboard/checklist-items/edit/<int:item_id>/', views.edit_checklist_item, name='edit_checklist_item'),
@@ -38,13 +41,10 @@ urlpatterns = [
     path('dashboard/monitored-services/delete/<int:service_id>/', views.delete_monitored_service, name='delete_monitored_service'),
 
     # Gestión de Reportes y Correos
-    #path('email/review/<int:email_id>/', views.review_and_approve_email, name='review_email'),
     path('dashboard/turn-reports/', views.view_turn_reports, name='view_turn_reports'),
     
     # --- Rutas de Gestión de Turnos (Fase 1) ---
     path('dashboard/shifts/matrix/', views.shift_matrix_view, name='shift_matrix_view'),
-    path('api/shifts/update/', views.api_update_shift, name='api_update_shift'),
-    path('api/shifts/batch-save/', views.api_save_shift_batch, name='api_save_shift_batch'),
     path('dashboard/shift-types/', views.manage_shift_types, name='manage_shift_types'),
     path('dashboard/shift-types/add/', views.create_shift_type, name='create_shift_type'),
     path('dashboard/shift-types/edit/<int:type_id>/', views.edit_shift_type, name='edit_shift_type'),
@@ -55,57 +55,82 @@ urlpatterns = [
     path('dashboard/shifts/edit/<int:shift_id>/', views.edit_assigned_shift, name='edit_assigned_shift'),
     path('dashboard/shifts/delete/<int:shift_id>/', views.delete_assigned_shift, name='delete_assigned_shift'),
 
-    # --- Rutas de Operador ---
-    path('dashboard/review-and-send/', views.review_and_send_novedades, name='review_and_send_novedades'),
-    path('dashboard/operator/', views.operator_dashboard, name='operator_dashboard'),
-    path('checklist/', views.checklist_view, name='checklist'),
-    path('update-log/', views.update_log_view, name='update_log'),
-    path('update-log/edit/<int:log_id>/', views.edit_update_log, name='edit_update_log'),
-    path('update-log/delete/<int:log_id>/', views.delete_update_log, name='delete_update_log'),
-    #path('email/new/', views.email_form_view, name='email_form'),
-    path('turn/end/', views.end_turn_preview, name='end_turn_preview'),
-    path('turn/sign/<int:report_id>/', views.sign_turn_report, name='sign_turn_report'),
-
-    path('shift/start/', views.start_shift, name='start_shift'),
-
-     # --- Ruta para el operador ---
-    path('panic-button/', views.panic_button_view, name='panic_button'),
-
-    # Dentro de urlpatterns, junto a las otras rutas de gestión de turnos:
-    path('dashboard/shift-calendar/', views.shift_calendar_view, name='shift_calendar'),
-    # Rondas Virtuales
-    path('round/start/', views.start_virtual_round, name='start_virtual_round'),
-    path('round/finish/<int:round_id>/', views.finish_virtual_round, name='finish_virtual_round'),
-    path('round/finish/', views.finish_virtual_round, name='finish_virtual_round'),
-
-     # --- 👇 NUEVAS RUTAS PARA RELEVO DE TURNO 👇 ---
-    path('bitacora-24h/', views.full_logbook_view, name='full_logbook_view'),
-    path('notas-turno/descartar/<int:note_id>/', views.dismiss_shift_note, name='dismiss_shift_note'),
-    path('notas-turno/crear/', views.create_shift_note_modal, name='create_shift_note_modal'),
-
- # --- 👇 NUEVAS RUTAS PARA CONTACTOS DE EMERGENCIA 👇 ---
+    # --- Gestión de Contactos de Emergencia ---
     path('dashboard/emergency-contacts/', views.manage_emergency_contacts, name='manage_emergency_contacts'),
     path('dashboard/emergency-contacts/add/', views.create_emergency_contact, name='create_emergency_contact'),
     path('dashboard/emergency-contacts/edit/<int:contact_id>/', views.edit_emergency_contact, name='edit_emergency_contact'),
     path('dashboard/emergency-contacts/delete/<int:contact_id>/', views.delete_emergency_contact, name='delete_emergency_contact'),
-    # Alarma
-    path('api/check_alarms/', views.check_pending_alarms, name='check_pending_alarms'),
 
-    # Mi Bitacora
+    path('dashboard/shift-calendar/', views.shift_calendar_view, name='shift_calendar'),
+
+    # ==========================================
+    # --- RUTAS DE OPERADOR ---
+    # ==========================================
+    path('dashboard/operator/', views.operator_dashboard, name='operator_dashboard'),
+    path('shift/start/', views.start_shift, name='start_shift'),
+    path('turn/end/', views.end_turn_preview, name='end_turn_preview'),
+    path('turn/sign/<int:report_id>/', views.sign_turn_report, name='sign_turn_report'),
+    
+    path('panic-button/', views.panic_button_view, name='panic_button'),
+
+    # --- Relevo de Turno y Novedades ---
+    path('dashboard/review-and-send/', views.review_and_send_novedades, name='review_and_send_novedades'),
+    path('update-log/', views.update_log_view, name='update_log'),
+    path('update-log/edit/<int:log_id>/', views.edit_update_log, name='edit_update_log'),
+    path('update-log/delete/<int:log_id>/', views.delete_update_log, name='delete_update_log'),
+    
+    path('bitacora-24h/', views.full_logbook_view, name='full_logbook_view'),
+    path('notas-turno/descartar/<int:note_id>/', views.dismiss_shift_note, name='dismiss_shift_note'),
+    path('notas-turno/crear/', views.create_shift_note_modal, name='create_shift_note_modal'),
+    
+    # Mi Bitácora
     path('mi-bitacora/', views.my_logbook_view, name='my_logbook'),
     path('current_logbook/', views.current_logbook_view, name='current_logbook'),
-    # --- Rutas AJAX ---
 
+    # ==========================================
+    # --- RUTAS INTERACTIVAS: CHECKLIST Y RONDAS ---
+    # ==========================================
+    path('checklist/', views.checklist_view, name='checklist'),
+    path('checklist_view/', views.checklist_view, name='checklist_view'), # Mantengo el alias por compatibilidad
+    
+    # 👇 NUEVAS RUTAS: Acciones del Cronómetro del Checklist 👇
+    path('checklist/start_task/<int:item_id>/', views.start_checklist_task, name='start_task'),
+    path('checklist/pause_task/<int:item_id>/', views.pause_checklist_task, name='pause_task'),
+    path('checklist/finish_task/<int:item_id>/', views.finish_checklist_task, name='finish_task'),
+    
+
+    # 👇 RUTAS ACTUALIZADAS: Rondas Virtuales 👇
+   # Rutas para la Ronda Virtual
+    path('start_virtual_round/', views.start_virtual_round, name='start_virtual_round'),
+    path('round/view/', views.virtual_round_view, name='virtual_round_view'),
+    path('round/close/<int:round_id>/', views.close_virtual_round, name='close_virtual_round'),
+    
+    # Rutas AJAX para el paso a paso de las instalaciones en la ronda
+    path('start_round_installation/<int:round_id>/<int:inst_id>/', views.start_round_installation, name='start_round_installation'),
+    path('pause_round_installation/<int:round_id>/<int:inst_id>/', views.pause_round_installation, name='pause_round_installation'),
+    path('finish_round_installation/<int:round_id>/<int:inst_id>/', views.finish_round_installation, name='finish_round_installation'),
+
+
+    # ==========================================
+    # --- RUTAS AJAX (APIs) ---
+    # ==========================================
+    path('api/shifts/update/', views.api_update_shift, name='api_update_shift'),
+    path('api/shifts/batch-save/', views.api_save_shift_batch, name='api_save_shift_batch'),
+    path('api/check_alarms/', views.check_pending_alarms, name='check_pending_alarms'),
+    
     path('ajax/get-updates/<int:company_id>/', views.get_updates_for_company, name='ajax_get_updates'),
     path('ajax/get-installations/<int:company_id>/', views.ajax_get_installations_for_company, name='ajax_get_installations_for_company'),
     path('ajax/get-service-status/', views.get_service_status, name='ajax_get_service_status'),
     path('ajax/shifts/', views.get_shifts_for_calendar, name='ajax_get_shifts_for_calendar'),
     path('ajax/check-first-round-started/', views.check_first_round_started, name='ajax_check_first_round_started'),
     
-    # Rutas para Seguridad Vehicular
+    # ==========================================
+    # --- MÓDULOS GPS Y VEHÍCULOS ---
+    # ==========================================
     path('dashboard/vehicle-security/', views.vehicle_security_dashboard, name='vehicle_security_dashboard'),
     path('dashboard/vehicle-activity/', views.vehicle_activity_log, name='vehicle_activity_log'),
     path('dashboard/vehicle-route/<int:activity_id>/', views.vehicle_route_detail, name='vehicle_route_detail'),
+    
     path('api/weather/', views.get_weather_data, name='get_weather_data'),
     path('api/weather/cities/', views.get_multiple_cities_weather, name='get_multiple_cities_weather'),
 

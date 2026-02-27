@@ -1,0 +1,330 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Ronda Virtual Activa{% endblock %}
+
+{% block content %}
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+<style>
+    .round-container { font-family: 'Inter', sans-serif; background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%); min-height: 100vh; }
+    .timer-display { font-variant-numeric: tabular-nums; }
+</style>
+
+<div class="container mx-auto p-4 sm:p-6 lg:p-8 max-w-4xl round-container">
+    {% csrf_token %}
+    
+    <div class="flex justify-between items-center mb-6 bg-white p-4 rounded-xl shadow-sm border-l-4 border-indigo-500">
+        <div>
+            <h1 class="text-2xl font-bold text-gray-800">
+                <i class="fas fa-satellite-dish me-2 text-indigo-600"></i>Ronda Virtual en Progreso
+            </h1>
+            <p class="text-sm text-gray-500 mt-1">Revisa cada instalación. El tiempo se registrará automáticamente.</p>
+        </div>
+        <a href="{% url 'operator_dashboard' %}" class="btn btn-outline-secondary">
+            <i class="fas fa-arrow-left me-2"></i>Volver
+        </a>
+    </div>
+
+    <div class="mb-6 bg-white p-4 rounded-xl shadow-sm">
+        <div class="flex justify-between mb-2">
+            <span class="text-sm font-bold text-gray-700 uppercase tracking-wider">Avance de la Ronda</span>
+            <span class="text-sm font-bold text-indigo-600" id="progress-text">0%</span>
+        </div>
+        <div class="w-full bg-gray-200 rounded-full h-3">
+            <div class="bg-indigo-600 h-3 rounded-full transition-all duration-500 ease-out" id="progress-bar" style="width: 0%"></div>
+        </div>
+    </div>
+
+    <div id="round-content-area" class="space-y-6 mb-8">
+        </div>
+
+    <div class="bg-white p-4 rounded-xl shadow-sm text-center">
+        <p class="text-gray-500 mb-3 text-sm" id="close-round-msg">Debes revisar todas las instalaciones para finalizar la ronda.</p>
+        <button id="btn-close-round" class="btn btn-secondary btn-lg w-full font-bold shadow-sm" disabled>
+            <i class="fas fa-flag-checkered me-2"></i>Cerrar Ronda Completa
+        </button>
+    </div>
+
+    <div class="modal fade" id="finishInstModal" data-bs-backdrop="static" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content border-0 shadow-xl">
+                <div class="modal-header bg-indigo-600 text-white">
+                    <h5 class="modal-title font-bold"><i class="fas fa-camera me-2"></i>Registrar Revisión</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body p-4 bg-gray-50">
+                    <h6 class="font-bold text-gray-800 mb-3 text-lg" id="modalInstName">Nombre Instalación</h6>
+                    <form id="finishInstForm" enctype="multipart/form-data">
+                        <div class="mb-4 bg-white p-3 rounded border">
+                            <label class="block text-sm font-medium text-gray-700 mb-2">
+                                <i class="fas fa-image text-indigo-500 me-1"></i> Captura de Pantalla (Opcional)
+                            </label>
+                            <input type="file" id="instPhoto" name="attachment" accept="image/*" class="form-control text-sm">
+                        </div>
+                        <div class="mb-2">
+                            <label class="block text-sm font-medium text-gray-700 mb-2">Observaciones / Novedades</label>
+                            <textarea id="instObservation" name="observacion" rows="3" class="form-control rounded-md border-gray-300" placeholder="Todo en orden..."></textarea>
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer bg-white flex justify-content-between">
+                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="button" class="btn btn-indigo font-bold text-white bg-indigo-600 hover:bg-indigo-700 px-4 py-2 rounded" id="submitFinishInstBtn">
+                        <i class="fas fa-save me-1"></i> Guardar Revisión
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+{{ round_data|json_script:"round-data-json" }}
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
+    const roundData = JSON.parse(document.getElementById('round-data-json').textContent);
+    const roundId = roundData.round_id;
+    
+    let currentInstId = null;
+    let timers = {};
+    const finishModal = new bootstrap.Modal(document.getElementById('finishInstModal'));
+    const submitBtn = document.getElementById('submitFinishInstBtn');
+    const closeRoundBtn = document.getElementById('btn-close-round');
+
+    let totalInstallations = 0;
+    roundData.companies.forEach(c => totalInstallations += c.installations.length);
+
+    function updateProgress() {
+        if (totalInstallations === 0) return;
+        let completedCount = 0;
+        roundData.companies.forEach(c => {
+            completedCount += c.installations.filter(i => i.status === 'completed').length;
+        });
+
+        const percentage = Math.round((completedCount / totalInstallations) * 100);
+        document.getElementById('progress-bar').style.width = percentage + '%';
+        document.getElementById('progress-text').innerText = percentage + '%';
+
+        if (completedCount === totalInstallations && totalInstallations > 0) {
+            closeRoundBtn.disabled = false;
+            closeRoundBtn.classList.replace('btn-secondary', 'btn-success');
+            document.getElementById('close-round-msg').innerText = "¡Excelente! Todas las instalaciones fueron revisadas.";
+        }
+    }
+
+    function startVisualTimer(instId, initialSeconds = 0) {
+        if (!timers[instId]) timers[instId] = {};
+        timers[instId].seconds = initialSeconds;
+        
+        if(timers[instId].interval) clearInterval(timers[instId].interval);
+
+        timers[instId].interval = setInterval(() => {
+            timers[instId].seconds++;
+            const s = timers[instId].seconds;
+            const mins = String(Math.floor(s / 60)).padStart(2, '0');
+            const secs = String(s % 60).padStart(2, '0');
+            const timerEl = document.getElementById(`timer-${instId}`);
+            if (timerEl) timerEl.textContent = `${mins}:${secs}`;
+        }, 1000);
+    }
+
+    async function startReview(instId) {
+        try {
+            const response = await fetch(`/start_round_installation/${roundId}/${instId}/`, {
+                method: 'POST', headers: { 'X-CSRFToken': csrfToken }
+            });
+            const data = await response.json();
+            
+            if(data.status === 'success') {
+                const card = document.getElementById(`inst-card-${instId}`);
+                card.dataset.status = 'in_progress';
+                card.classList.remove('bg-white', 'bg-yellow-50', 'border-gray-200', 'border-yellow-400', 'hover:border-indigo-300');
+                card.classList.add('bg-blue-50', 'border-blue-400');
+                
+                document.getElementById(`btn-start-${instId}`).classList.add('hidden');
+                document.getElementById(`btn-pause-${instId}`).classList.remove('hidden');
+                document.getElementById(`btn-finish-${instId}`).classList.remove('hidden');
+                
+                let accumulated = 0;
+                roundData.companies.forEach(c => {
+                    const inst = c.installations.find(i => i.id === instId);
+                    if(inst) { inst.status = 'in_progress'; inst.started_at = data.start_time; accumulated = inst.accumulated || 0; }
+                });
+                
+                startVisualTimer(instId, accumulated);
+            }
+        } catch(error) { console.error(error); }
+    }
+
+    async function pauseReview(instId) {
+        try {
+            const response = await fetch(`/pause_round_installation/${roundId}/${instId}/`, {
+                method: 'POST', headers: { 'X-CSRFToken': csrfToken }
+            });
+            const data = await response.json();
+            
+            if(data.status === 'success') {
+                const card = document.getElementById(`inst-card-${instId}`);
+                card.dataset.status = 'paused';
+                card.classList.remove('bg-blue-50', 'border-blue-400');
+                card.classList.add('bg-yellow-50', 'border-yellow-400');
+                
+                const startBtn = document.getElementById(`btn-start-${instId}`);
+                startBtn.innerHTML = '<i class="fas fa-play me-1"></i> Reanudar';
+                startBtn.classList.remove('hidden', 'text-indigo-600', 'border-indigo-200');
+                startBtn.classList.add('bg-yellow-600', 'text-white', 'hover:bg-yellow-700', 'border-yellow-600');
+                
+                document.getElementById(`btn-pause-${instId}`).classList.add('hidden');
+                
+                roundData.companies.forEach(c => {
+                    const inst = c.installations.find(i => i.id === instId);
+                    if(inst) inst.status = 'paused';
+                });
+                
+                if(timers[instId]) clearInterval(timers[instId].interval);
+            }
+        } catch(error) { console.error(error); }
+    }
+
+    function prepareFinish(instId, instName) {
+        currentInstId = instId;
+        document.getElementById('modalInstName').textContent = instName;
+        document.getElementById('finishInstForm').reset();
+        finishModal.show();
+    }
+
+    submitBtn.addEventListener('click', async () => {
+        if (!currentInstId) return;
+        const formData = new FormData(document.getElementById('finishInstForm'));
+        
+        try {
+            submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Guardando...';
+            const response = await fetch(`/finish_round_installation/${roundId}/${currentInstId}/`, {
+                method: 'POST', headers: { 'X-CSRFToken': csrfToken }, body: formData
+            });
+            const data = await response.json();
+            
+            if(data.status === 'success') {
+                if(timers[currentInstId]) clearInterval(timers[currentInstId].interval);
+                
+                const card = document.getElementById(`inst-card-${currentInstId}`);
+                card.dataset.status = 'completed';
+                card.className = "p-4 border-2 border-green-500 bg-green-50 rounded-lg shadow-sm transition-all flex flex-col sm:flex-row justify-between items-center gap-3";
+                
+                document.getElementById(`timer-${currentInstId}`).textContent = data.duration;
+                document.getElementById(`controls-${currentInstId}`).innerHTML = `
+                    <div class="text-green-700 font-bold text-sm">
+                        <i class="fas fa-check-circle me-1"></i> Revisado en ${data.duration}
+                    </div>
+                `;
+                
+                roundData.companies.forEach(c => {
+                    const inst = c.installations.find(i => i.id === currentInstId);
+                    if(inst) { inst.status = 'completed'; inst.duration = data.duration; }
+                });
+                
+                finishModal.hide();
+                updateProgress();
+            } else { alert(data.message); }
+        } catch(error) { console.error(error); } 
+        finally { submitBtn.innerHTML = '<i class="fas fa-save me-1"></i> Guardar Revisión'; }
+    });
+
+    closeRoundBtn.addEventListener('click', async () => {
+        try {
+            closeRoundBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Finalizando Ronda...';
+            const response = await fetch(`/round/close/${roundId}/`, {
+                method: 'POST', headers: { 'X-CSRFToken': csrfToken }
+            });
+            const data = await response.json();
+            if(data.status === 'success') {
+                window.location.href = "{% url 'operator_dashboard' %}";
+            }
+        } catch (error) { console.error(error); }
+    });
+
+    function renderUI() {
+        const container = document.getElementById('round-content-area');
+        container.innerHTML = '';
+
+        roundData.companies.forEach(company => {
+            let html = `
+                <div class="bg-white rounded-xl shadow-md overflow-hidden">
+                    <div class="bg-gray-800 text-white p-3 px-5 flex items-center">
+                        <i class="fas fa-building me-3"></i><h3 class="font-bold text-lg m-0">${company.name}</h3>
+                    </div>
+                    <div class="p-4 space-y-3">
+            `;
+
+            company.installations.forEach(inst => {
+                const isCompleted = inst.status === 'completed';
+                const inProgress = inst.status === 'in_progress';
+                const isPaused = inst.status === 'paused';
+                
+                let bgClass = "bg-white border border-gray-200 hover:border-indigo-300";
+                if(isCompleted) bgClass = "bg-green-50 border-2 border-green-500";
+                else if(inProgress) bgClass = "bg-blue-50 border border-blue-400";
+                else if(isPaused) bgClass = "bg-yellow-50 border border-yellow-400";
+
+                html += `
+                    <div class="${bgClass} p-4 rounded-lg shadow-sm transition-all flex flex-col sm:flex-row justify-between items-center gap-3" id="inst-card-${inst.id}" data-status="${inst.status}">
+                        <div class="flex items-center w-full sm:w-auto">
+                            <i class="fas fa-map-marker-alt text-gray-400 me-3 text-xl"></i>
+                            <div>
+                                <h5 class="font-bold text-gray-800 m-0 ${isCompleted ? 'text-gray-500 line-through' : ''}">${inst.name}</h5>
+                                <div class="text-xs text-gray-500 mt-1 font-mono">
+                                    <i class="fas fa-stopwatch me-1"></i> T: <span id="timer-${inst.id}">${inst.duration}</span>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div id="controls-${inst.id}" class="w-full sm:w-auto flex justify-end gap-2">
+                            ${isCompleted ? `
+                                <div class="text-green-700 font-bold text-sm"><i class="fas fa-check-circle me-1"></i> Revisado en ${inst.duration}</div>
+                            ` : `
+                                <button id="btn-start-${inst.id}" onclick="startReview(${inst.id})" class="${inProgress ? 'hidden' : ''} ${isPaused ? 'bg-yellow-600 text-white hover:bg-yellow-700 border-yellow-600' : 'bg-white text-indigo-600 hover:bg-indigo-50 border border-indigo-200'} font-bold py-2 px-4 rounded text-sm w-full sm:w-auto">
+                                    <i class="fas fa-play me-1"></i> ${isPaused ? 'Reanudar' : 'Iniciar'}
+                                </button>
+                                <button id="btn-pause-${inst.id}" onclick="pauseReview(${inst.id})" class="${inProgress ? '' : 'hidden'} bg-gray-500 hover:bg-gray-600 text-white font-bold py-2 px-4 rounded text-sm w-full sm:w-auto shadow-sm">
+                                    <i class="fas fa-pause me-1"></i> Pausa
+                                </button>
+                                <button id="btn-finish-${inst.id}" onclick="prepareFinish(${inst.id}, '${inst.name}')" class="${inProgress || isPaused ? '' : 'hidden'} bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded text-sm w-full sm:w-auto shadow-sm animate__animated animate__pulse animate__infinite">
+                                    <i class="fas fa-camera me-1"></i> Registrar
+                                </button>
+                            `}
+                        </div>
+                    </div>
+                `;
+            });
+
+            html += `</div></div>`;
+            container.innerHTML += html;
+        });
+
+        // Reanudar cronómetros
+        roundData.companies.forEach(c => {
+            c.installations.forEach(inst => {
+                if (inst.status === 'in_progress') {
+                    let initialSeconds = inst.accumulated || 0;
+                    if (inst.started_at) {
+                        const startTime = new Date(inst.started_at).getTime();
+                        const now = new Date().getTime();
+                        initialSeconds += Math.floor((now - startTime) / 1000);
+                    }
+                    startVisualTimer(inst.id, initialSeconds);
+                }
+            });
+        });
+
+        updateProgress();
+    }
+
+    document.addEventListener("DOMContentLoaded", renderUI);
+</script>
+{% endblock %}

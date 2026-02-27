@@ -3,6 +3,8 @@ from django import forms
 from .models import GPSNotificationSettings
 from django.core.exceptions import ValidationError
 from django.utils import timezone
+from django.db import transaction
+from .models import OperatorProfile
 from datetime import timedelta
 from django.contrib.auth.forms import UserCreationForm
 from django.contrib.auth.models import User
@@ -236,16 +238,104 @@ class VirtualRoundCompletionForm(forms.ModelForm):
             self.fields['checked_installations'].queryset = installations_queryset
         else:
             self.fields['checked_installations'].queryset = Installation.objects.all()
+
+
 class OperatorCreationForm(UserCreationForm):
+    rut = forms.CharField(max_length=12, required=False, label="RUT", help_text="Formato: 12345678-9")
+    phone = forms.CharField(max_length=20, required=False, label="Teléfono")
+    address = forms.CharField(max_length=255, required=False, label="Dirección")
+    terms_accepted = forms.BooleanField(required=False, label="Licencia de Uso Aceptada", help_text="Marcar si el operador ya firmó físicamente.")
+
     class Meta(UserCreationForm.Meta):
         model = User
         fields = ('username', 'first_name', 'last_name', 'email')
 
+    @transaction.atomic
+    def save(self, commit=True):
+        user = super().save(commit=False)
+        if commit:
+            user.save()
+            profile, created = OperatorProfile.objects.get_or_create(user=user)
+            profile.rut = self.cleaned_data.get('rut')
+            profile.phone = self.cleaned_data.get('phone')
+            profile.address = self.cleaned_data.get('address')
+            
+            # Guardar el estado de la licencia
+            is_accepted = self.cleaned_data.get('terms_accepted')
+            profile.terms_accepted = is_accepted
+            if is_accepted:
+                profile.terms_accepted_at = timezone.now()
+            
+            profile.save()
+        return user
+
 class OperatorChangeForm(forms.ModelForm):
+    rut = forms.CharField(max_length=12, required=False, label="RUT", help_text="Formato: 12345678-9")
+    phone = forms.CharField(max_length=20, required=False, label="Teléfono")
+    address = forms.CharField(max_length=255, required=False, label="Dirección")
+    terms_accepted = forms.BooleanField(required=False, label="Licencia de Uso Aceptada")
+
     class Meta:
         model = User
         fields = ('username', 'first_name', 'last_name', 'email', 'is_active')
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        if self.instance and hasattr(self.instance, 'profile'):
+            self.fields['rut'].initial = self.instance.profile.rut
+            self.fields['phone'].initial = self.instance.profile.phone
+            self.fields['address'].initial = self.instance.profile.address
+            self.fields['terms_accepted'].initial = self.instance.profile.terms_accepted
+
+    @transaction.atomic
+    def save(self, commit=True):
+        user = super().save(commit=False)
+        if commit:
+            user.save()
+            profile, created = OperatorProfile.objects.get_or_create(user=user)
+            profile.rut = self.cleaned_data.get('rut')
+            profile.phone = self.cleaned_data.get('phone')
+            profile.address = self.cleaned_data.get('address')
+            
+            # Lógica para la licencia
+            was_accepted = profile.terms_accepted
+            is_accepted = self.cleaned_data.get('terms_accepted')
+            profile.terms_accepted = is_accepted
+            
+            if is_accepted and not was_accepted:
+                profile.terms_accepted_at = timezone.now()
+            elif not is_accepted:
+                profile.terms_accepted_at = None
+                
+            profile.save()
+        return user
+    rut = forms.CharField(max_length=12, required=False, label="RUT", help_text="Formato: 12345678-9")
+    phone = forms.CharField(max_length=20, required=False, label="Teléfono")
+    address = forms.CharField(max_length=255, required=False, label="Dirección")
+
+    class Meta:
+        model = User
+        fields = ('username', 'first_name', 'last_name', 'email', 'is_active')
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Pre-poblar los campos del perfil si el usuario ya existe y tiene perfil
+        if self.instance and hasattr(self.instance, 'profile'):
+            self.fields['rut'].initial = self.instance.profile.rut
+            self.fields['phone'].initial = self.instance.profile.phone
+            self.fields['address'].initial = self.instance.profile.address
+
+    @transaction.atomic
+    def save(self, commit=True):
+        user = super().save(commit=False)
+        if commit:
+            user.save()
+            profile, created = OperatorProfile.objects.get_or_create(user=user)
+            profile.rut = self.cleaned_data.get('rut')
+            profile.phone = self.cleaned_data.get('phone')
+            profile.address = self.cleaned_data.get('address')
+            profile.save()
+        return user
 class CompanyForm(forms.ModelForm):
     class Meta:
         model = Company
@@ -257,69 +347,69 @@ class InstallationForm(forms.ModelForm):
         fields = ['company', 'name', 'address']
 
 class ChecklistItemForm(forms.ModelForm):
-    """
-    Formulario para crear y editar ítems del checklist, con widgets
-    personalizados para una mejor experiencia de usuario.
-    """
-    # Usamos MultipleChoiceField con checkboxes para seleccionar los días.
     dias_aplicables = forms.MultipleChoiceField(
         choices=ChecklistItem.DIAS_SEMANA,
         widget=forms.CheckboxSelectMultiple,
         required=False,
-        label="Días de la Semana Aplicables",
-        help_text="Marcar los días en que aplica. Dejar todos sin marcar para que aplique siempre."
+        label="Días Aplicables",
+        help_text="Marcar los días en que aplica. Dejar sin marcar para que aplique siempre."
     )
 
-    # Usamos ModelMultipleChoiceField con checkboxes para los tipos de turno.
     turnos_aplicables = forms.ModelMultipleChoiceField(
         queryset=ShiftType.objects.all(),
         widget=forms.CheckboxSelectMultiple,
         required=False,
-        label="Tipos de Turno Aplicables",
-        help_text="Marcar los turnos en que aplica. Dejar sin marcar para que aplique a todos."
+        label="Turnos Aplicables",
+        help_text="Marcar los turnos en que aplica. Dejar sin marcar para aplicar a todos."
     )
 
     class Meta:
         model = ChecklistItem
-        # Lista de campos que se mostrarán en el formulario, en el orden deseado.
         fields = [
-            'description',
-            'phase',
-            'dias_aplicables',
-            'turnos_aplicables',
-            'alarm_trigger_delay', # <-- Aquí está el campo de la alarma
-            'order',
+            'parent', 'description', 'phase', 'order',
+            'company', 'installation',
+            'dias_aplicables', 'turnos_aplicables',
+            'unlock_delay', 'alarm_trigger_delay',
+            'is_sequential', 'requires_legal_check'
         ]
-        # Añadimos ayuda contextual para el campo de la alarma.
-        help_texts = {
-            'alarm_trigger_delay': "Formato: HH:MM:SS. Por ejemplo, para 1 hora y 30 minutos, ingrese '01:30:00'.",
+        labels = {
+            'parent': 'Tarea Principal (Padre)',
+            'description': 'Descripción de la Tarea',
+            'phase': 'Fase del Turno',
+            'order': 'Orden',
+            'company': 'Empresa Específica',
+            'installation': 'Instalación Específica',
+            'unlock_delay': 'Tiempo de Bloqueo Inicial',
+            'alarm_trigger_delay': 'Tiempo para Alarma',
+            'is_sequential': 'Bloqueo Secuencial',
+            'requires_legal_check': 'Requiere Declaración Jurada (DDJJ)',
         }
-        # Añadimos un placeholder para guiar al usuario.
         widgets = {
-            'alarm_trigger_delay': forms.TextInput(attrs={'placeholder': 'HH:MM:SS'}),
+            'description': forms.TextInput(attrs={'placeholder': 'Ej: Realizar monitoreo de ICV'}),
+            'unlock_delay': forms.TextInput(attrs={'placeholder': 'HH:MM:SS (Opcional)'}),
+            'alarm_trigger_delay': forms.TextInput(attrs={'placeholder': 'HH:MM:SS (Opcional)'}),
         }
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        # Si estamos editando una instancia que ya existe, precargamos
-        # los días que estaban guardados como texto.
+        # Limitar las opciones de "parent" a tareas que no sean hijas (para evitar más de 1 nivel de anidación)
+        self.fields['parent'].queryset = ChecklistItem.objects.filter(parent__isnull=True)
+        self.fields['parent'].empty_label = "Ninguna (Esta es una tarea principal)"
+        
+        # Filtros de empresa/instalación predeterminados
+        self.fields['installation'].queryset = Installation.objects.all()
+
         if self.instance and self.instance.pk and self.instance.dias_aplicables:
             self.fields['dias_aplicables'].initial = self.instance.dias_aplicables.split(',')
 
     def save(self, commit=True):
-        # Obtenemos la instancia del formulario sin guardarla aún en la BD.
         instance = super().save(commit=False)
-        
-        # Procesamos los datos del campo de días para guardarlos como una cadena.
         selected_days = self.cleaned_data.get('dias_aplicables')
         instance.dias_aplicables = ",".join(selected_days) if selected_days else ""
         
-        # Si el formulario se guarda con commit=True (comportamiento por defecto),
-        # guardamos la instancia principal y luego sus relaciones ManyToMany.
         if commit:
             instance.save()
-            self.save_m2m() # Guarda la data de 'turnos_aplicables'
-            
+            self.save_m2m()
         return instance
 
 class OperatorObservationForm(forms.Form):
@@ -336,12 +426,11 @@ class MonitoredServiceForm(forms.ModelForm):
     class Meta:
         model = MonitoredService
         fields = ['name', 'ip_address', 'is_active']
-        labels = {
-            'name': 'Nombre del Servicio',
-            'ip_address': 'Dirección IP o Dominio',
-            'is_active': '¿Activar monitoreo para este servicio?'
+        widgets = {
+            'name': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Ej: Conexión a Internet Pta. Arenas'}),
+            'ip_address': forms.TextInput(attrs={'class': 'form-control', 'placeholder': '192.168.1.1 o dominio.com'}),
+            'is_active': forms.CheckboxInput(attrs={'class': 'form-check-input', 'role': 'switch'})
         }
-
 class ShiftTypeForm(forms.ModelForm):
     class Meta:
         model = ShiftType

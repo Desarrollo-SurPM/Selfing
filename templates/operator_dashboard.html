@@ -5,33 +5,88 @@
 
 {% block extra_css %}
     <link rel="stylesheet" href="{% static 'css/dashboard.css' %}">
+    <style>
+        /* --- ESTILOS MODERNOS UI/UX --- */
+        .glass-card {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(0,0,0,0.05);
+            border-radius: 20px;
+        }
+        .action-card {
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            border: none;
+            border-radius: 16px;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 1.5rem;
+            text-decoration: none !important;
+            height: 100%;
+        }
+        .action-card:hover {
+            transform: translateY(-8px);
+            box-shadow: 0 15px 30px rgba(0,0,0,0.1) !important;
+            filter: brightness(1.05);
+        }
+        .action-card i { transition: transform 0.3s ease; }
+        .action-card:hover i { transform: scale(1.15); }
+        
+        .timer-glow {
+            text-shadow: 0 0 20px rgba(13, 110, 253, 0.4);
+            font-variant-numeric: tabular-nums;
+            letter-spacing: 2px;
+        }
+        .progress-bar-animated-stripe {
+            background-image: linear-gradient(45deg,rgba(255,255,255,.15) 25%,transparent 25%,transparent 50%,rgba(255,255,255,.15) 50%,rgba(255,255,255,.15) 75%,transparent 75%,transparent);
+            background-size: 1rem 1rem;
+            animation: progress-bar-stripes 1s linear infinite;
+        }
+        .panic-btn-glow {
+            animation: panicPulse 1.5s infinite;
+        }
+        @keyframes panicPulse {
+            0% { box-shadow: 0 0 0 0 rgba(220, 53, 69, 0.7); }
+            70% { box-shadow: 0 0 0 20px rgba(220, 53, 69, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(220, 53, 69, 0); }
+        }
+    </style>
 {% endblock %}
 
 {% block content %}
 <div class="container-fluid py-4">
-
-    {# --- Encabezado --- #}
-    <div class="d-flex justify-content-between align-items-center mb-4 pb-3 border-bottom flex-wrap">
+    {% csrf_token %} {# --- ENCABEZADO --- #}
+    <div class="d-flex justify-content-between align-items-center mb-4 pb-3 border-bottom flex-wrap gap-3">
         <div>
-            <h2 class="h3 text-secondary">Bienvenido, {{ user.username }}</h2>
+            <h2 class="h3 text-dark fw-bold mb-1">Panel de Control <span class="text-primary">| {{ user.username }}</span></h2>
             {% if active_shift and active_shift.actual_start_time %}
-                <p class="text-muted mb-0">Turno Activo: <span class="badge bg-primary">{{ active_shift.shift_type.name }}</span> (Iniciado a las {{ active_shift.actual_start_time|date:"H:i" }} hrs)</p>
+                <p class="text-muted mb-0 fw-medium">
+                    <i class="fas fa-briefcase me-1 text-primary"></i> Turno Activo: 
+                    <span class="badge bg-primary px-2 py-1">{{ active_shift.shift_type.name }}</span> 
+                    <span class="ms-2"><i class="fas fa-clock me-1"></i> Iniciado: {{ active_shift.actual_start_time|date:"H:i" }} hrs</span>
+                </p>
             {% elif active_shift %}
-                <p class="text-info mb-0">Tienes un turno asignado para hoy: <span class="badge bg-info">{{ active_shift.shift_type.name }}</span>.</p>
+                <p class="text-info mb-0 fw-medium"><i class="fas fa-calendar-check me-1"></i> Turno asignado: <span class="badge bg-info">{{ active_shift.shift_type.name }}</span></p>
             {% else %}
-                <p class="text-danger mb-0">No tienes un turno activo asignado para hoy.</p>
+                <p class="text-danger mb-0 fw-medium"><i class="fas fa-times-circle me-1"></i> Sin turno asignado.</p>
             {% endif %}
         </div>
     </div>
 
+    {# --- NOTAS ACTIVAS --- #}
     {% if active_notes %}
-    <div class="mb-4">
-        <h4 class="h5 text-warning"><i class="fas fa-exclamation-circle me-2"></i> Notas </h4>
+    <div class="mb-4 animate__animated animate__fadeInDown">
+        <h4 class="h6 text-warning text-uppercase fw-bold tracking-wider mb-3"><i class="fas fa-bell me-2"></i> Notas de Relevo</h4>
         {% for note in active_notes %}
-        <div class="alert alert-warning alert-dismissible fade show" role="alert">
-            <strong>{{ note.created_by.username }} ({{ note.created_at|timesince }} atrás):</strong>
-            <p class="mb-0">{{ note.message|linebreaksbr }}</p>
-            <form action="{% url 'dismiss_shift_note' note.id %}" method="post" class="d-inline">
+        <div class="alert alert-warning border-0 shadow-sm alert-dismissible fade show d-flex align-items-start" role="alert">
+            <i class="fas fa-exclamation-circle fs-4 me-3 mt-1 text-warning"></i>
+            <div>
+                <strong class="d-block mb-1">{{ note.created_by.username }} <span class="text-muted fw-normal ms-2 text-sm">Hace {{ note.created_at|timesince }}</span></strong>
+                <p class="mb-0 text-dark">{{ note.message|linebreaksbr }}</p>
+            </div>
+            <form action="{% url 'dismiss_shift_note' note.id %}" method="post" class="ms-auto">
                 {% csrf_token %}
                 <button type="submit" class="btn-close" aria-label="Close"></button>
             </form>
@@ -40,180 +95,175 @@
     </div>
     {% endif %}
 
-    {# --- Lógica Principal de la Plantilla --- #}
-
+    {# --- LÓGICA PRINCIPAL --- #}
     {% if active_shift %}
-        
         {% if active_shift.actual_start_time %}
-            {# --- ESTADO 1: El turno ya está iniciado, mostrar el panel de control --- #}
             
-            {# 👇 NUEVO BOTÓN GIGANTE ACCESO A GPS 👇 #}
-            <div class="row mb-4">
+            {# --- BANNER GPS GIGANTE --- #}
+            <div class="row mb-4 animate__animated animate__fadeInUp">
                 <div class="col-12">
-                    <div class="card bg-dark text-white shadow-sm border-danger border-2">
-                        <div class="card-body d-flex justify-content-between align-items-center flex-wrap gap-3 py-4">
+                    <div class="card bg-dark text-white shadow-lg border-0 rounded-4 overflow-hidden position-relative">
+                        <div class="position-absolute top-0 end-0 opacity-25 p-4 pe-5">
+                            <i class="fas fa-satellite-dish fa-5x text-danger"></i>
+                        </div>
+                        <div class="card-body p-4 p-md-5 d-flex justify-content-between align-items-center flex-wrap gap-4 position-relative z-1">
                             <div>
-                                <h4 class="mb-1 text-danger fw-bold"><i class="fas fa-satellite-dish me-2"></i> Centro de Monitoreo GPS</h4>
-                                <span class="text-light">Atención de Alertas, Ralentí y Botones de Pánico en tiempo real.</span>
+                                <h3 class="mb-2 text-danger fw-bold"><i class="fas fa-satellite-dish me-2"></i> Centro de Monitoreo GPS</h3>
+                                <p class="text-light opacity-75 mb-0 fs-5">Atención de Alertas, Ralentí y Botones de Pánico en tiempo real.</p>
                             </div>
-                            <a href="{% url 'gps_triage_dashboard' %}" class="btn btn-danger btn-lg fw-bold shadow">
+                            <a href="{% url 'gps_triage_dashboard' %}" class="btn btn-danger btn-lg fw-bold shadow-lg px-4 py-3 rounded-pill hover-scale">
                                 Entrar a Sala de Triage <i class="fas fa-arrow-right ms-2"></i>
                             </a>
                         </div>
                     </div>
                 </div>
             </div>
-            {# 👆 FIN BOTON GIGANTE 👆 #}
 
             <div class="row g-4">
+                {# --- COLUMNA IZQUIERDA: PROGRESO Y ACCIONES --- #}
                 <div class="col-lg-8">
-                    <div class="card shadow-sm mb-4">
-                        <div class="card-header bg-light"><h5 class="mb-0 text-secondary"><i class="fas fa-chart-line me-2"></i>Progreso del Turno</h5></div>
-                        <div class="card-body">
-                            <div class="progress mb-4" style="height: 28px; border-radius: 8px;">
-                                <div class="progress-bar bg-primary" role="progressbar" style="width: {{ progress_percentage }}%" aria-valuenow="{{ progress_percentage }}" aria-valuemin="0" aria-valuemax="100">
-                                    <span class="fw-bold">{{ progress_percentage }}%</span>
+                    <div class="card glass-card shadow-sm mb-4 border-0">
+                        <div class="card-body p-4">
+                            <h5 class="fw-bold text-gray-800 mb-4"><i class="fas fa-chart-pie text-primary me-2"></i> Progreso de la Jornada</h5>
+                            
+                            <div class="progress mb-4 bg-light shadow-inner" style="height: 25px; border-radius: 50px;">
+                                <div class="progress-bar progress-bar-animated-stripe bg-primary rounded-pill fw-bold fs-6" role="progressbar" style="width: {{ progress_percentage }}%" aria-valuenow="{{ progress_percentage }}" aria-valuemin="0" aria-valuemax="100">
+                                    {{ progress_percentage }}%
                                 </div>
                             </div>
-                            <ul class="list-group list-group-flush border rounded">
+                            
+                            <div class="row g-3 mb-4 pb-4 border-bottom">
                                 {% for task_key, task_data in progress_tasks.items %}
-                                <li class="list-group-item d-flex justify-content-between align-items-center py-3">
-                                    <span class="fs-5 {% if task_data.completed %}text-success text-decoration-line-through{% else %}text-muted{% endif %}">
-                                        <i class="fas {% if task_data.completed %}fa-check-circle{% else %}fa-circle{% endif %} me-3"></i>{{ task_data.text }}
-                                    </span>
-                                    {% if task_data.completed %}<span class="badge bg-success rounded-pill px-3 py-2">Completado</span>{% else %}<span class="badge bg-secondary rounded-pill px-3 py-2">Pendiente</span>{% endif %}
-                                </li>
-                                {% endfor %}
-                            </ul>
-                            <div class="mt-4 pt-4 border-top text-center">
-                                <h5 class="mb-3 text-secondary">Acciones Rápidas</h5>
-                                <div class="action-grid">
-                                    <a href="{% url 'checklist' %}" class="action-btn" style="background-color: #007bff; color: white;">
-                                        <i class="fas fa-list-check"></i><span>Checklist</span>
-                                    </a>
-                                    <a href="{% url 'update_log' %}" class="action-btn" style="background-color: #17a2b8; color: white;">
-                                        <i class="fas fa-edit"></i><span>Bitácora</span>
-                                    </a>
-                                    <a href="{% url 'full_logbook_view' %}" class="action-btn" style="background-color: #343a40; color: white;">
-                                        <i class="fas fa-history"></i><span>Bitácora del día</span>
-                                    </a>
-                                    <a href="{% url 'my_logbook' %}" class="action-btn" style="background-color: #6c757d; color: white;">
-                                        <i class="fas fa-book"></i><span>Mi Bitácora actual</span>
-                                    </a>
-                                    <button type="button" class="action-btn" style="background-color: #ffc107; color: #212529;" data-bs-toggle="modal" data-bs-target="#shiftNoteModal">
-                                        <i class="fas fa-sticky-note"></i><span>Nota para Próximo Turno</span>
-                                    </button>
-                                    
-                                    {% if progress_percentage >= 99 %}
-                                    <a href="{% url 'end_turn_preview' %}" class="action-btn animate__animated animate__heartBeat animate__infinite" style="background-color: #dc3545; color: white;">
-                                        <i class="fas fa-power-off"></i><span>Finalizar Turno</span>
-                                    </a>
-                                    {% endif %}
+                                <div class="col-md-6">
+                                    <div class="p-3 rounded-3 border {% if task_data.completed %}bg-success text-white border-success{% else %}bg-white border-gray-200 text-dark{% endif %} d-flex align-items-center shadow-sm">
+                                        <i class="fas {% if task_data.completed %}fa-check-circle fs-3{% else %}fa-circle-notch fa-spin fs-3 text-primary{% endif %} me-3"></i>
+                                        <div class="flex-grow-1">
+                                            <h6 class="mb-0 fw-bold">{{ task_data.text }}</h6>
+                                            <small class="opacity-75">{% if task_data.completed %}Completado{% else %}En progreso{% endif %}</small>
+                                        </div>
+                                    </div>
                                 </div>
+                                {% endfor %}
+                            </div>
+
+                            {# --- NUEVA GRID DE BOTONES DE ACCIÓN --- #}
+                            <h5 class="fw-bold text-gray-800 mb-3"><i class="fas fa-th-large text-secondary me-2"></i> Panel de Herramientas</h5>
+                            <div class="row g-3">
+                                <div class="col-6 col-md-4">
+                                    <a href="{% url 'checklist' %}" class="action-card bg-primary text-white shadow-sm">
+                                        <i class="fas fa-tasks fa-2x mb-2"></i>
+                                        <span class="fw-bold text-sm text-center">Checklist</span>
+                                    </a>
+                                </div>
+                                <div class="col-6 col-md-4">
+                                    <a href="{% url 'update_log' %}" class="action-card bg-info text-white shadow-sm">
+                                        <i class="fas fa-edit fa-2x mb-2"></i>
+                                        <span class="fw-bold text-sm text-center">Nueva Novedad</span>
+                                    </a>
+                                </div>
+                                <div class="col-6 col-md-4">
+                                    <a href="{% url 'my_logbook' %}" class="action-card bg-secondary text-white shadow-sm">
+                                        <i class="fas fa-book fa-2x mb-2"></i>
+                                        <span class="fw-bold text-sm text-center">Mi Bitácora</span>
+                                    </a>
+                                </div>
+                                <div class="col-6 col-md-4">
+                                    <a href="{% url 'full_logbook_view' %}" class="action-card bg-dark text-white shadow-sm">
+                                        <i class="fas fa-history fa-2x mb-2"></i>
+                                        <span class="fw-bold text-sm text-center">Bitácora Global</span>
+                                    </a>
+                                </div>
+                                <div class="col-6 col-md-4">
+                                    <button type="button" class="action-card bg-warning text-dark shadow-sm w-100" data-bs-toggle="modal" data-bs-target="#shiftNoteModal">
+                                        <i class="fas fa-sticky-note fa-2x mb-2"></i>
+                                        <span class="fw-bold text-sm text-center">Dejar Nota</span>
+                                    </button>
+                                </div>
+                                
+                                {% if progress_percentage >= 99 %}
+                                <div class="col-6 col-md-4">
+                                    <a href="{% url 'end_turn_preview' %}" class="action-card bg-danger text-white shadow-sm animate__animated animate__pulse animate__infinite">
+                                        <i class="fas fa-power-off fa-2x mb-2"></i>
+                                        <span class="fw-bold text-sm text-center">Finalizar Turno</span>
+                                    </a>
+                                </div>
+                                {% endif %}
                             </div>
                         </div>
                     </div>
                 </div>
                 
+                {# --- COLUMNA DERECHA: ALERTAS Y TEMPORIZADOR --- #}
                 <div class="col-lg-4">
                     
-                    <div class="mb-4">
-                        <button type="button" class="btn btn-danger btn-lg w-100 shadow-sm" data-bs-toggle="modal" data-bs-target="#panicModal" style="font-size: 1.2rem; padding: 15px;">
-                            <i class="fas fa-exclamation-triangle me-2"></i>EMERGENCIA
-                        </button>
-                    </div>
+                    <button type="button" class="btn btn-danger btn-lg w-100 shadow-lg rounded-4 mb-4 fw-bold panic-btn-glow d-flex align-items-center justify-content-center p-3" data-bs-toggle="modal" data-bs-target="#panicModal">
+                        <i class="fas fa-exclamation-triangle fs-3 me-3"></i> 
+                        <span class="fs-4">EMERGENCIA</span>
+                    </button>
                     
-                    <div class="card text-center shadow-sm mb-4 border-primary">
-                        <div class="card-header bg-primary text-white">Tiempo para realizar Ronda Virtual</div>
-                        <div class="card-body"><h3 class="display-2 fw-bold text-primary" id="dashboard-round-countdown">--:--</h3></div>
-                        <div class="card-footer bg-light">
+                    {# --- TARJETA DE RONDA VIRTUAL RENOVADA --- #}
+                    <div class="card glass-card shadow-lg mb-4 border-0 overflow-hidden">
+                        <div class="bg-primary text-white text-center py-3">
+                            <h6 class="mb-0 fw-bold text-uppercase tracking-wider"><i class="fas fa-walking me-2"></i> Siguiente Ronda</h6>
+                        </div>
+                        <div class="card-body text-center p-4">
+                            <h1 class="display-1 fw-bolder text-primary timer-glow mb-4" id="dashboard-round-countdown">--:--</h1>
+                            
                             {% if not active_round_id %}
-                                <form method="post" action="{% url 'start_virtual_round' %}" class="d-grid">
-                                    {% csrf_token %}
-                                    <button type="submit" class="btn btn-primary">
-                                        <i class="fas fa-play-circle me-2"></i>Iniciar Ronda
-                                    </button>
-                                </form>
-                            {% else %}
-                                {# BOTÓN ACTUALIZADO PARA USAR MODAL #}
-                                <button type="button" class="btn btn-danger btn-lg shadow-sm w-100" onclick="openFinishRoundModal('{{ active_round_id }}')">
-                                     <i class="fas fa-stop-circle me-2"></i>Finalizar Ronda en Curso
+                                <button type="button" id="btn-start-round-direct" class="btn btn-primary btn-lg w-100 shadow rounded-pill fw-bold">
+                                    <i class="fas fa-play me-2"></i> Iniciar Ronda
                                 </button>
+                            {% else %}
+                                <a href="{% url 'virtual_round_view' %}" class="btn btn-warning btn-lg w-100 shadow rounded-pill fw-bold animate__animated animate__pulse animate__infinite text-dark">
+                                    <i class="fas fa-satellite-dish me-2"></i> Continuar Ronda
+                                </a>
                             {% endif %}
                         </div>
                     </div>
 
-                    <div class="card shadow-sm mt-4">
-                        <div class="card-header bg-light text-secondary"><h5 class="mb-0"><i class="fas fa-heartbeat me-2"></i>Estado de Servicios</h5></div>
-                        <div id="service-status-panel">
-                            <div class="p-3 text-center text-muted">
-                                <i class="fas fa-spinner fa-spin"></i> Cargando...
-                            </div>
+                    <div class="card glass-card shadow-sm border-0">
+                        <div class="card-header bg-transparent border-bottom-0 pt-4 pb-0">
+                            <h6 class="fw-bold text-secondary mb-0"><i class="fas fa-heartbeat me-2"></i> Estado de Servicios</h6>
+                        </div>
+                        <div id="service-status-panel" class="card-body">
+                            <div class="text-center text-muted"><i class="fas fa-spinner fa-spin"></i> Cargando...</div>
                         </div>
                     </div>
                 </div>
-
-                <div class="col-12">
-                    <div class="card shadow-sm border-info">
-                        <div class="card-header bg-light text-secondary"><h5 class="mb-0"><i class="fas fa-history me-2"></i>Tu Actividad Reciente</h5></div>
-                        <ul class="list-group list-group-flush activity-panel">
-                            {% for log in traceability_logs|slice:":5" %}
-                                <li class="list-group-item"><small>{{ log.action }} <span class="text-muted">- {{ log.timestamp|timesince }} atrás</span></small></li>
-                            {% empty %}
-                                <li class="list-group-item text-center text-muted py-3">No tienes actividad reciente.</li>
-                            {% endfor %}
-                        </ul>
-                    </div>
-                </div>
             </div>
+            
         {% else %}
             {# --- ESTADO 2: Turno asignado, pero no iniciado --- #}
-            <div class="text-center p-5 bg-light rounded shadow-lg animate__animated animate__fadeIn">
-                <h1 class="display-4 text-dark mb-4">¡Listo para Empezar!</h1>
+            <div class="text-center p-5 glass-card rounded-4 shadow-lg animate__animated animate__zoomIn max-w-2xl mx-auto mt-5">
+                <div class="bg-primary text-white rounded-circle d-inline-flex align-items-center justify-content-center mb-4 shadow" style="width: 80px; height: 80px;">
+                    <i class="fas fa-briefcase fs-1"></i>
+                </div>
+                <h1 class="display-5 fw-bold text-dark mb-3">¡Listo para Empezar!</h1>
 
-                {# --- NUEVA LÓGICA DE BLOQUEO EN EL TEMPLATE --- #}
                 {% if start_blocked %}
-                    <div class="alert alert-warning shadow-sm d-inline-block text-start" style="max-width: 600px;">
-                        <h4><i class="fas fa-clock me-2"></i>Espera un poco</h4>
+                    <div class="alert alert-warning shadow-sm mx-auto text-start border-warning border-2" style="max-width: 500px;">
+                        <h5 class="fw-bold"><i class="fas fa-clock me-2"></i>Demasiado temprano</h5>
                         <p class="mb-1">Tu turno está programado para las <strong>{{ active_shift.shift_type.start_time|date:"H:i" }}</strong>.</p>
-                        <p class="mb-0">El sistema se habilitará automáticamente a las <strong>{{ allowed_start_time|date:"H:i" }}</strong> (30 minutos antes).</p>
+                        <p class="mb-0">Se habilitará a las <strong>{{ allowed_start_time|date:"H:i" }}</strong> (30 minutos antes).</p>
                     </div>
-                    <div class="mt-3">
-                        <button disabled class="btn btn-secondary btn-lg shadow-sm" style="cursor: not-allowed; opacity: 0.6;">
-                            <i class="fas fa-lock me-2"></i>Inicio Bloqueado
-                        </button>
-                    </div>
+                    <button disabled class="btn btn-secondary btn-lg shadow-sm mt-3 px-5 py-3 rounded-pill fw-bold" style="cursor: not-allowed; opacity: 0.7;">
+                        <i class="fas fa-lock me-2"></i> Inicio Bloqueado
+                    </button>
                 {% else %}
-                    {# --- SI NO ESTÁ BLOQUEADO, MOSTRAMOS EL BOTÓN ORIGINAL --- #}
-                    <p class="lead text-muted">Presiona el botón para registrar el inicio de tu jornada de trabajo.</p>
+                    <p class="lead text-muted mb-4">Presiona el botón para registrar el inicio oficial de tu jornada.</p>
                     <form method="post" action="{% url 'start_shift' %}" id="start-shift-form">
                         {% csrf_token %}
-                        <button type="submit" id="start-shift-btn" class="btn btn-success btn-lg mt-3 shadow-sm animate__animated animate__pulse animate__infinite">
-                            <span id="btn-text"><i class="fas fa-play-circle me-2"></i>Iniciar Turno</span>
-                            <span id="btn-loading" class="d-none"><i class="fas fa-spinner fa-spin me-2"></i>Iniciando...</span>
+                        <button type="submit" id="start-shift-btn" class="btn btn-success btn-lg shadow-lg px-5 py-3 rounded-pill fw-bold animate__animated animate__pulse animate__infinite">
+                            <span id="btn-text"><i class="fas fa-power-off me-2"></i> Iniciar Turno Ahora</span>
+                            <span id="btn-loading" class="d-none"><i class="fas fa-spinner fa-spin me-2"></i> Registrando...</span>
                         </button>
                     </form>
-
                     <script>
-                        document.addEventListener('DOMContentLoaded', function() {
-                            const form = document.getElementById('start-shift-form');
-                            const button = document.getElementById('start-shift-btn');
-                            const btnText = document.getElementById('btn-text');
-                            const btnLoading = document.getElementById('btn-loading');
-                            let isSubmitting = false;
-
-                            if(form){
-                                form.addEventListener('submit', function(e) {
-                                    if (isSubmitting) { e.preventDefault(); return false; }
-                                    isSubmitting = true;
-                                    button.disabled = true;
-                                    button.classList.remove('animate__pulse', 'animate__infinite');
-                                    btnText.classList.add('d-none');
-                                    btnLoading.classList.remove('d-none');
-                                    button.classList.remove('btn-success');
-                                    button.classList.add('btn-warning');
-                                });
-                            }
+                        document.getElementById('start-shift-form')?.addEventListener('submit', function() {
+                            const btn = document.getElementById('start-shift-btn');
+                            btn.disabled = true;
+                            document.getElementById('btn-text').classList.add('d-none');
+                            document.getElementById('btn-loading').classList.remove('d-none');
                         });
                     </script>
                 {% endif %}
@@ -222,93 +272,65 @@
 
     {% else %}
         {# --- ESTADO 3: No hay turno asignado --- #}
-        <div class="alert alert-warning text-center p-4">
-            <h4 class="alert-heading">Sin Turno Asignado</h4>
-            <p class="mb-0">No tienes un turno activo asignado para hoy. Por favor, contacta a tu supervisor.</p>
+        <div class="alert alert-danger text-center p-5 rounded-4 shadow-sm mt-4 border-0">
+            <i class="fas fa-calendar-times display-1 text-danger opacity-50 mb-3"></i>
+            <h3 class="fw-bold">Sin Turno Asignado</h3>
+            <p class="lead mb-0">No tienes un turno activo asignado para hoy. Por favor, contacta a tu supervisor.</p>
         </div>
     {% endif %}
 
 </div>
 
-{# ... (El resto de los modales y scripts se mantiene igual) ... #}
-
-<div class="modal fade" id="shiftNoteModal" tabindex="-1" aria-labelledby="shiftNoteModalLabel" aria-hidden="true">
+{# --- MODALES INTACTOS (Nota y Pánico) --- #}
+<div class="modal fade" id="shiftNoteModal" tabindex="-1">
     <div class="modal-dialog modal-dialog-centered">
-        <div class="modal-content">
-            <div class="modal-header bg-warning text-dark">
-                <h5 class="modal-title" id="shiftNoteModalLabel">
-                    <i class="fas fa-sticky-note me-2"></i>Nueva Nota para el Siguiente Turno
-                </h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        <div class="modal-content border-0 shadow-lg rounded-4">
+            <div class="modal-header bg-warning text-dark border-0">
+                <h5 class="modal-title fw-bold"><i class="fas fa-sticky-note me-2"></i>Nota para Próximo Turno</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <form method="post" action="{% url 'create_shift_note_modal' %}">
-                <div class="modal-body">
+                <div class="modal-body p-4">
                     {% csrf_token %}
-                    <div class="mb-3">
-                        <label for="id_message" class="form-label">Nueva Nota para el Siguiente Turno <span class="text-danger">*</span></label>
-                        <textarea name="message" cols="40" rows="3" placeholder="Escribe aquí una nota, pendiente o instrucción para el próximo turno..." class="form-control" required id="id_message"></textarea>
-                    </div>
+                    <textarea name="message" rows="4" placeholder="Escribe instrucciones o pendientes importantes..." class="form-control rounded-3 bg-light border-0 p-3" required></textarea>
                 </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-                    <button type="submit" class="btn btn-primary">Guardar Nota</button>
+                <div class="modal-footer border-0 bg-light rounded-bottom-4">
+                    <button type="button" class="btn btn-secondary rounded-pill px-4" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-warning rounded-pill px-4 fw-bold shadow-sm">Guardar Nota</button>
                 </div>
             </form>
         </div>
     </div>
 </div>
 
-<div class="modal fade" id="panicModal" tabindex="-1" aria-labelledby="panicModalLabel" aria-hidden="true">
+<div class="modal fade" id="panicModal" tabindex="-1">
     <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
-        <div class="modal-content">
+        <div class="modal-content border-danger border-2 shadow-lg">
             <div class="modal-header bg-danger text-white">
-                <h5 class="modal-title" id="panicModalLabel">
-                    <i class="fas fa-exclamation-triangle me-2"></i>CONTACTOS DE EMERGENCIA
-                </h5>
-                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+                <h5 class="modal-title fw-bold"><i class="fas fa-exclamation-triangle me-2"></i>CONTACTOS DE EMERGENCIA</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
             </div>
-            <div class="modal-body" id="panicModalContent">
-                <div class="text-center">
-                    <div class="spinner-border text-danger" role="status">
-                        <span class="visually-hidden">Cargando contactos de emergencia...</span>
-                    </div>
-                    <p class="mt-3">Cargando contactos de emergencia...</p>
-                </div>
-            </div>
-        </div>
-    </div>
-</div>
-
-<div class="modal fade" id="finishRoundModal" tabindex="-1" aria-labelledby="finishRoundModalLabel" aria-hidden="true">
-    <div class="modal-dialog modal-dialog-centered modal-lg">
-        <div class="modal-content">
-            <div class="modal-header bg-danger text-white">
-                <h5 class="modal-title" id="finishRoundModalLabel">
-                    <i class="fas fa-video me-2"></i>Finalizar Ronda Virtual
-                </h5>
-                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
-            </div>
-            <div class="modal-body" id="finishRoundModalBody">
+            <div class="modal-body bg-light" id="panicModalContent">
                 <div class="text-center py-5">
                     <div class="spinner-border text-danger" role="status"></div>
-                    <p class="mt-2">Cargando instalaciones...</p>
                 </div>
             </div>
         </div>
     </div>
 </div>
 
+{# Modal Alarma Checklist #}
 <audio id="task-alarm-sound" src="{% static 'sounds/alarm.mp3' %}" preload="auto"></audio>
 <div id="alarm-modal" class="modal fade" tabindex="-1">
     <div class="modal-dialog modal-dialog-centered">
-        <div class="modal-content border-danger">
-            <div class="modal-header bg-danger text-white">
-                <h5 class="modal-title"><i class="fas fa-exclamation-triangle me-2"></i>¡Tarea Vencida!</h5>
-                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+        <div class="modal-content border-warning border-2">
+            <div class="modal-header bg-warning text-dark">
+                <h5 class="modal-title fw-bold"><i class="fas fa-clock me-2"></i>¡Tarea Vencida!</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
-            <div class="modal-body text-center">
-                <p class="fs-5">La tarea "<strong id="overdue-task-description"></strong>" no se ha completado.</p>
-                <a href="{% url 'checklist' %}" class="btn btn-primary mt-3">Ir al Checklist</a>
+            <div class="modal-body text-center p-4">
+                <p class="fs-5 mb-4">La tarea "<strong id="overdue-task-description"></strong>" debe ser completada.</p>
+                <a href="{% url 'checklist' %}" class="btn btn-dark w-100 rounded-pill fw-bold">Ir al Checklist Ahora</a>
             </div>
         </div>
     </div>
@@ -316,274 +338,162 @@
 
 {% endblock content %}
 
-{# Pasamos los datos del backend a JavaScript de forma segura #}
 {% block extra_js %}
-
-<script id="round-timer-data" type="application/json">
-{
-    "shiftStartTime": {% if active_shift and active_shift.actual_start_time %}"{{ shift_start_time_iso }}"{% else %}null{% endif %},
-    "roundCompletedThisCycle": {{ round_completed_this_cycle|yesno:"true,false" }},
-    "isRoundActive": {% if active_round_id %}true{% else %}false{% endif %}
-}
-</script>
-
 <script>
-// --- FUNCIÓN PARA ABRIR EL MODAL DE FINALIZAR RONDA (LÓGICA ACTUAL) ---
-function openFinishRoundModal(roundId) {
-    const modalEl = document.getElementById('finishRoundModal');
-    const modalBody = document.getElementById('finishRoundModalBody');
-    const modal = new bootstrap.Modal(modalEl);
-    
-    modal.show();
-
-    fetch(`/round/finish/${roundId}/`, {
-        headers: { 'X-Requested-With': 'XMLHttpRequest' }
-    })
-    .then(response => response.text())
-    .then(html => {
-        modalBody.innerHTML = html;
-        
-        const form = document.getElementById('finishRoundForm');
-        if(form) {
-            form.addEventListener('submit', function(e) {
-                e.preventDefault();
-                const submitBtn = form.querySelector('button[type="submit"]');
-                submitBtn.disabled = true;
-                submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Guardando...';
-
-                const formData = new FormData(form);
-                
-                fetch(form.action, {
-                    method: 'POST',
-                    body: formData,
-                    headers: { 'X-Requested-With': 'XMLHttpRequest' }
-                })
-                .then(response => response.json())
-                .then(data => {
-                    if (data.status === 'success') {
-                        window.location.reload();
-                    } else if (data.status === 'error') {
-                        modalBody.innerHTML = data.html;
-                    }
-                })
-                .catch(error => {
-                    console.error('Error:', error);
-                    alert('Error al finalizar ronda. Intente nuevamente.');
-                    submitBtn.disabled = false;
-                    submitBtn.innerHTML = 'Confirmar y Finalizar';
-                });
-            });
-        }
-    })
-    .catch(error => {
-        modalBody.innerHTML = '<div class="alert alert-danger">Error al cargar el formulario.</div>';
-    });
-}
-
 document.addEventListener('DOMContentLoaded', function() {
     
-    // =================================================================
-    // FIX IMPORTANTE: Desbloquear audio con la primera interacción
-    // =================================================================
+    // Desbloqueo de Audio
     document.body.addEventListener('click', function() {
         const alarmSound = document.getElementById('task-alarm-sound');
-        const gpsAlarmSound = document.getElementById('gps-alarm-sound');
-        
-        if (alarmSound) {
-            alarmSound.play().then(() => {
-                alarmSound.pause();
-                alarmSound.currentTime = 0;
-            }).catch(() => {});
-        }
-        
-        // 👇 También desbloqueamos silenciosamente el audio del GPS
-        if (gpsAlarmSound) {
-            gpsAlarmSound.play().then(() => {
-                gpsAlarmSound.pause();
-                gpsAlarmSound.currentTime = 0;
-            }).catch(() => {});
-        }
+        const gpsSound = document.getElementById('gps-alarm-sound');
+        if (alarmSound) { alarmSound.play().then(() => { alarmSound.pause(); alarmSound.currentTime = 0; }).catch(()=>{}); }
+        if (gpsSound) { gpsSound.play().then(() => { gpsSound.pause(); gpsSound.currentTime = 0; }).catch(()=>{}); }
     }, { once: true });
 
-
     // =================================================================
-    // Lógica de Alarma de Checklist
+    // NUEVO FLUJO DIRECTO PARA RONDA VIRTUAL
     // =================================================================
-    const alarmSound = document.getElementById('task-alarm-sound');
-    const alarmModalElement = document.getElementById('alarm-modal');
-    
-    if (alarmModalElement) {
-        const alarmModal = new bootstrap.Modal(alarmModalElement);
-        const overdueTaskDescription = document.getElementById('overdue-task-description');
-        let isAlarmModalVisible = false;
-        let hasInitialCheckRun = false;
-
-        const sessionKey = `checklist_alarm_${new Date().toDateString()}_${new Date().getHours()}`;
-
-        function checkApiForAlarms() {
-            if (isAlarmModalVisible) return;
-
-            fetch("{% url 'check_pending_alarms' %}")
-                .then(response => response.json())
-                .then(data => {
-                    if (hasInitialCheckRun && data.overdue_tasks && data.overdue_tasks.length > 0) {
-                        const alarmShown = sessionStorage.getItem(sessionKey);
-                        if (!alarmShown) {
-                            overdueTaskDescription.textContent = data.overdue_tasks[0].description;
-                            if(alarmSound) {
-                                alarmSound.currentTime = 0;
-                                alarmSound.play().catch(e => console.error("Error al reproducir sonido:", e));
-                            }
-                            alarmModal.show();
-                            sessionStorage.setItem(sessionKey, 'shown');
-                        }
-                    }
-                    hasInitialCheckRun = true;
-                })
-                .catch(error => console.error('Error al verificar alarmas de checklist:', error));
-        }
-
-        alarmModalElement.addEventListener('hidden.bs.modal', () => { 
-            isAlarmModalVisible = false;
-            sessionStorage.removeItem(sessionKey);
-        });
-        alarmModalElement.addEventListener('show.bs.modal', () => { isAlarmModalVisible = true; });
-
-        setInterval(checkApiForAlarms, 600000); 
-        setTimeout(checkApiForAlarms, 30000);
-    }
-    
-    // =================================================================
-    // Funcionalidad del Modal de Pánico
-    // =================================================================
-    const panicModalElement = document.getElementById('panicModal');
-    if (panicModalElement) {
-        panicModalElement.addEventListener('show.bs.modal', function() {
-            loadEmergencyContacts();
-        });
-    }
-
-    function loadEmergencyContacts() {
-        const modalContent = document.getElementById('panicModalContent');
-        fetch("{% url 'panic_button' %}")
-            .then(response => response.text())
-            .then(html => {
-                const parser = new DOMParser();
-                const doc = parser.parseFromString(html, 'text/html');
-                const bodyContent = doc.querySelector('body .container');
-                if (bodyContent) {
-                    modalContent.innerHTML = bodyContent.innerHTML;
+    const startRoundBtnDirect = document.getElementById('btn-start-round-direct');
+    if (startRoundBtnDirect) {
+        startRoundBtnDirect.addEventListener('click', async () => {
+            const token = document.querySelector('[name=csrfmiddlewaretoken]').value;
+            startRoundBtnDirect.disabled = true;
+            startRoundBtnDirect.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i> Preparando Entorno...';
+            
+            try {
+                const response = await fetch("{% url 'start_virtual_round' %}", {
+                    method: 'POST',
+                    headers: {
+                        'X-CSRFToken': token,
+                        'Content-Type': 'application/json',
+                        'X-Requested-With': 'XMLHttpRequest'
+                    },
+                    body: JSON.stringify({})
+                });
+                const data = await response.json();
+                
+                if (data.status === 'success') {
+                    // Redirige directamente a la nueva vista de rondas paso a paso
+                    window.location.href = "{% url 'virtual_round_view' %}";
                 } else {
-                    modalContent.innerHTML = '<div class="alert alert-danger">Error al cargar los contactos.</div>';
+                    alert('Error: ' + data.message);
+                    startRoundBtnDirect.disabled = false;
+                    startRoundBtnDirect.innerHTML = '<i class="fas fa-play me-2"></i> Iniciar Ronda';
                 }
-            })
-            .catch(error => {
-                modalContent.innerHTML = `<div class="alert alert-danger text-center"><h5>Error al cargar contactos</h5></div>`;
-            });
+            } catch (error) {
+                console.error("Fallo la petición", error);
+                startRoundBtnDirect.disabled = false;
+            }
+        });
+    }
+
+    // Sobreescribir el comportamiento del Modal de Alarma base para que también vaya directo
+    const baseModalStartBtn = document.getElementById('startRoundFromModal');
+    if (baseModalStartBtn) {
+        const newBtn = baseModalStartBtn.cloneNode(true);
+        baseModalStartBtn.parentNode.replaceChild(newBtn, baseModalStartBtn);
+        
+        newBtn.addEventListener('click', async () => {
+            const token = document.querySelector('[name=csrfmiddlewaretoken]').value;
+            newBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Abriendo...';
+            try {
+                const response = await fetch("{% url 'start_virtual_round' %}", {
+                    method: 'POST',
+                    headers: {'X-CSRFToken': token, 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest'},
+                    body: JSON.stringify({})
+                });
+                const data = await response.json();
+                if (data.status === 'success') {
+                    window.location.href = "{% url 'virtual_round_view' %}";
+                }
+            } catch (error) { console.error(error); }
+        });
     }
 
     // =================================================================
-    // LÓGICA DE TEMPORIZADOR DE RONDAS Y AUDIO CORREGIDA (NUEVA VERSIÓN)
+    // TEMPORIZADOR DE PRUEBAS A 30 SEGUNDOS (VISUAL)
     // =================================================================
-    const timerDataElement = document.getElementById('round-timer-data');
-    if (!timerDataElement) return;
-
-    const timerData = JSON.parse(timerDataElement.textContent);
-    const countdownElementIds = ['dashboard-round-countdown', 'global-round-countdown'];
+    // Verificamos si estamos en medio de una ronda
+    const isRoundActive = {% if active_round_id %}true{% else %}false{% endif %};
+    const countdownEl = document.getElementById('dashboard-round-countdown');
     
-    // Intentamos obtener el modal si existe en tu base, sino se omitirá sin error
-    const roundModalElement = document.getElementById('roundAlarmModal');
+    // Obtenemos el modal de base.html
+    const roundModalEl = document.getElementById('roundAlarmModal');
     let roundModal = null;
-    if (roundModalElement) {
-        roundModal = new bootstrap.Modal(roundModalElement);
-    }
+    if (roundModalEl) roundModal = new bootstrap.Modal(roundModalEl);
 
-    let lastCheckedMinute = new Date().getMinutes();
-    let roundCompletedThisCycle = timerData.roundCompletedThisCycle;
-    let isRoundActive = timerData.isRoundActive; 
+    let lastAlertedSecond = -1;
 
-    function mainTimerLoop() {
+    function timer30sTestLoop() {
         const now = new Date();
-        const currentMinute = now.getMinutes();
-
-        // 1. Detectar si estamos en el minuto 30 y SOLO alertar si no hay ronda activa
-        if (!isRoundActive && currentMinute === 30 && lastCheckedMinute !== currentMinute) {
-            lastCheckedMinute = currentMinute;
+        const s = now.getSeconds();
+        
+        // Disparador EXACTO a los 0 y 30 segundos
+        if (!isRoundActive && (s === 0 || s === 30) && lastAlertedSecond !== s) {
+            lastAlertedSecond = s;
             
-            const alarmSound = document.getElementById('task-alarm-sound');
-            
-            // Disparar Modal Visual
+            // Disparar Alarma Visual y Sonora
             if (roundModal) roundModal.show();
-            
-            // Disparar Sonido con Fallback
+            const alarmSound = document.getElementById('task-alarm-sound');
             if (alarmSound) {
                 alarmSound.currentTime = 0;
-                alarmSound.play().catch(e => {
-                    console.log("Audio bloqueado, usando alerta del navegador");
-                    // Fallback visual agresivo si el audio falla
-                    alert("¡ATENCIÓN! HORA DE LA RONDA VIRTUAL");
-                });
+                alarmSound.play().catch(e => console.log("Audio bloqueado"));
             }
-            
-            // Reiniciar estado de completado para el nuevo ciclo
-            roundCompletedThisCycle = false; 
-
-        } else if (currentMinute !== lastCheckedMinute) {
-            lastCheckedMinute = currentMinute;
         }
 
-        let timeToDisplay = "00:00";
-        
-        // 2. Calcular cuenta regresiva hacia el próximo minuto 30
-        if (roundCompletedThisCycle) {
-            timeToDisplay = "00:00";
-        } else {
-            const nextDueTime = new Date(now);
-            
-            // Si ya pasamos del minuto 30, apuntamos a las XX:30 de la siguiente hora
-            if (now.getMinutes() >= 30) {
-                nextDueTime.setHours(now.getHours() + 1, 30, 0, 0); 
+        // Si no hay ronda activa, calcular cuenta regresiva
+        if (!isRoundActive && countdownEl) {
+            const nextDue = new Date(now);
+            if (s >= 30) {
+                nextDue.setMinutes(now.getMinutes() + 1, 0, 0); // Próximo minuto top
             } else {
-                // Si aún no llegamos al minuto 30, apuntamos a las XX:30 de la hora actual
-                nextDueTime.setHours(now.getHours(), 30, 0, 0); 
+                nextDue.setSeconds(30, 0); // Segundo 30
             }
             
-            const timeRemaining = nextDueTime - now;
-
-            if (timeRemaining > 0) {
-                const minutes = String(Math.floor((timeRemaining / 1000 / 60) % 60)).padStart(2, '0');
-                const seconds = String(Math.floor((timeRemaining / 1000) % 60)).padStart(2, '0');
-                timeToDisplay = `${minutes}:${seconds}`;
-            }
+            const diffMs = nextDue - now;
+            const diffSecs = Math.floor(diffMs / 1000);
+            
+            countdownEl.textContent = `00:${String(diffSecs).padStart(2, '0')}`;
+            
+            // Efecto de urgencia cuando quedan 5 segundos
+            if (diffSecs <= 5) countdownEl.classList.add('text-danger');
+            else countdownEl.classList.remove('text-danger');
+        } else if (isRoundActive && countdownEl) {
+            countdownEl.textContent = "EN CURSO";
+            countdownEl.classList.replace('text-primary', 'text-warning');
         }
-        
-        // 3. Actualizar UI
-        countdownElementIds.forEach(id => {
-            const element = document.getElementById(id);
-            if (element) element.textContent = timeToDisplay;
+    }
+
+    {% if active_shift and active_shift.actual_start_time %}
+        setInterval(timer30sTestLoop, 1000);
+        timer30sTestLoop(); // Primera ejecución
+    {% endif %}
+
+    // =================================================================
+    // PÁNICO Y SERVICIOS 
+    // =================================================================
+    const panicModalEl = document.getElementById('panicModal');
+    if (panicModalEl) {
+        panicModalEl.addEventListener('show.bs.modal', () => {
+            fetch("{% url 'panic_button' %}")
+                .then(r => r.text())
+                .then(html => {
+                    const parser = new DOMParser();
+                    const doc = parser.parseFromString(html, 'text/html');
+                    document.getElementById('panicModalContent').innerHTML = doc.querySelector('body .container').innerHTML;
+                });
         });
     }
 
-    if (timerData.shiftStartTime) {
-        setInterval(mainTimerLoop, 1000);
-        mainTimerLoop();
-    }
-
-    // =================================================================
-    // Estado de Servicios
-    // =================================================================
-    const statusPanel = document.getElementById('service-status-panel');
     function updateServiceStatus() {
-        if (!statusPanel) return;
-        const url = `{% url 'ajax_get_service_status' %}?timestamp=${new Date().getTime()}`;
-        
-        fetch(url)
-            .then(response => response.text())
-            .then(html => { statusPanel.innerHTML = html; })
-            .catch(error => console.error('Error servicios:', error));
+        const p = document.getElementById('service-status-panel');
+        if (!p) return;
+        fetch(`{% url 'ajax_get_service_status' %}?t=${Date.now()}`)
+            .then(r => r.text())
+            .then(h => p.innerHTML = h);
     }
     updateServiceStatus();
-    setInterval(updateServiceStatus, 5000);
+    setInterval(updateServiceStatus, 15000); // 15 segs
 });
 </script>
 {% endblock extra_js %}
