@@ -147,7 +147,7 @@ def close_virtual_round(request, round_id):
     end_time = timezone.now()
     duration = end_time - active_round.start_time
     active_round.end_time = end_time
-    active_round.duration_seconds = duration.total_seconds()
+    active_round.duration_seconds = int(duration.total_seconds())
 
     logs = RoundInstallationLog.objects.filter(
         virtual_round=active_round, end_time__isnull=False
