@@ -2,7 +2,7 @@
 
 from datetime import timedelta
 from .models import VirtualRoundLog
-from .views import get_active_shift # Mantenemos tu importación original
+from .views._helpers import get_active_shift
 
 def shift_context(request):
     """
@@ -21,16 +21,18 @@ def shift_context(request):
 
     # 2. Si hay un turno activo e iniciado, calculamos la próxima ronda.
     if active_shift and active_shift.actual_start_time:
-        ROUND_INTERVAL_MINUTES = 60
-        
+        FIRST_ROUND_DELAY = timedelta(minutes=30)
+        ROUND_INTERVAL = timedelta(hours=1)
+
         last_round = VirtualRoundLog.objects.filter(
             operator_shift=active_shift
         ).order_by('-start_time').first()
 
-        base_time = last_round.start_time if last_round else active_shift.actual_start_time
-        next_round_due_time = base_time + timedelta(minutes=ROUND_INTERVAL_MINUTES)
-        
-        # Añadimos la hora de la ronda al contexto.
+        if last_round:
+            next_round_due_time = last_round.start_time + ROUND_INTERVAL
+        else:
+            next_round_due_time = active_shift.actual_start_time + FIRST_ROUND_DELAY
+
         context['global_next_round_due_time_iso'] = next_round_due_time.isoformat()
 
     return context
