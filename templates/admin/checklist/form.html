@@ -34,10 +34,10 @@
 
                         <h5 class="text-primary mt-4 mb-3"><i class="fas fa-building me-2"></i>Asignación Específica</h5>
                         <div class="alert alert-light border small">
-                            Si dejas Empresa/Instalación en blanco, la tarea aplicará de forma general.
+                            Si dejas Empresa en blanco, la tarea aplicará de forma general. Si seleccionas una Empresa, podrás elegir a qué instalaciones específicas aplica marcando sus casillas (se creará una tarea por cada instalación seleccionada).
                         </div>
                         {{ form.company|as_crispy_field }}
-                        {{ form.installation|as_crispy_field }}
+                        {{ form.multi_installations|as_crispy_field }}
                     </div>
 
                     <div class="col-md-6">
@@ -51,6 +51,10 @@
                                 {{ form.requires_legal_check }}
                                 <label class="form-check-label fs-6" for="{{ form.requires_legal_check.id_for_label }}">Exigir DDJJ</label>
                             </div>
+                        </div>
+                        
+                        <div class="row mb-2">
+                            <div class="col-12">{{ form.specific_time|as_crispy_field }}</div>
                         </div>
                         
                         <div class="row">
@@ -77,4 +81,127 @@
         </div>
     </div>
 </div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const companySelect = document.getElementById('id_company');
+    const container = document.getElementById('div_id_multi_installations');
+
+    if (!container) return;
+
+    // Encontrar todos los checkboxes generados por Crispy Forms
+    const checkboxes = container.querySelectorAll('input[type="checkbox"][name="multi_installations"]');
+
+    // Diccionario para saber a qué empresa pertenece cada instalación
+    const installationCompanies = {
+        {% for inst in form.multi_installations.field.queryset %}
+            "{{ inst.id }}": "{{ inst.company_id }}",
+        {% endfor %}
+    };
+
+    // 1. Crear e insertar la botonera "Seleccionar / Desmarcar"
+    const controlsDiv = document.createElement('div');
+    controlsDiv.className = 'mb-2 mt-2';
+    controlsDiv.innerHTML = `
+        <button type="button" class="btn btn-sm btn-outline-primary me-2" id="btn-select-all">
+            <i class="fas fa-check-double me-1"></i> Seleccionar Todas
+        </button>
+        <button type="button" class="btn btn-sm btn-outline-secondary" id="btn-deselect-all">
+            <i class="fas fa-square me-1"></i> Desmarcar
+        </button>
+    `;
+
+    // 2. Crear un mensaje de aviso dinámico (se oculta o muestra según corresponda)
+    const emptyMessage = document.createElement('div');
+    emptyMessage.className = 'alert alert-info py-2 small mt-2';
+    emptyMessage.style.display = 'none';
+
+    // Insertarlos debajo de la etiqueta "Instalaciones Específicas"
+    const label = container.querySelector('label');
+    if (label) {
+        label.parentNode.insertBefore(emptyMessage, label.nextSibling);
+        label.parentNode.insertBefore(controlsDiv, emptyMessage.nextSibling);
+    }
+
+    // 3. Aplicar estilos a la lista de checkboxes para que parezca una caja deslizable
+    let checkListWrapper = null;
+    if (checkboxes.length > 0) {
+        // Encontrar el contenedor que envuelve a toda la lista de checkboxes
+        checkListWrapper = checkboxes[0].closest('.form-check') ? checkboxes[0].closest('.form-check').parentNode : checkboxes[0].parentElement.parentNode;
+        checkListWrapper.style.maxHeight = '200px';
+        checkListWrapper.style.overflowY = 'auto';
+        checkListWrapper.style.border = '1px solid #dee2e6';
+        checkListWrapper.style.padding = '10px';
+        checkListWrapper.style.borderRadius = '5px';
+        checkListWrapper.style.backgroundColor = '#f8f9fa';
+        checkListWrapper.style.marginTop = '10px';
+    }
+
+    // 4. Función principal que filtra y ajusta la interfaz
+    function filterInstallations() {
+        const selectedCompany = companySelect.value;
+        let visibleCount = 0;
+
+        checkboxes.forEach(cb => {
+            const instId = cb.value;
+            const compId = installationCompanies[instId];
+            const wrapper = cb.closest('.form-check') || cb.parentElement; 
+
+            if (wrapper) {
+                // Solo mostrar la instalación si hay empresa seleccionada Y coincide
+                if (selectedCompany && compId === selectedCompany) {
+                    wrapper.style.display = ''; 
+                    visibleCount++;
+                } else {
+                    wrapper.style.display = 'none'; 
+                    cb.checked = false; // Desmarcar automáticamente para evitar guardados accidentales
+                }
+            }
+        });
+
+        // Lógica para mostrar/ocultar los distintos elementos de la UI
+        if (!selectedCompany) {
+            emptyMessage.innerHTML = '<i class="fas fa-info-circle me-2"></i>Seleccione una empresa para asignar instalaciones específicas.';
+            emptyMessage.className = 'alert alert-info py-2 small mt-2';
+            emptyMessage.style.display = 'block';
+            controlsDiv.style.display = 'none';
+            if (checkListWrapper) checkListWrapper.style.display = 'none';
+        } else if (visibleCount === 0) {
+            emptyMessage.innerHTML = '<i class="fas fa-exclamation-triangle me-2"></i>Esta empresa no tiene instalaciones registradas en el sistema.';
+            emptyMessage.className = 'alert alert-warning py-2 small mt-2';
+            emptyMessage.style.display = 'block';
+            controlsDiv.style.display = 'none';
+            if (checkListWrapper) checkListWrapper.style.display = 'none';
+        } else {
+            emptyMessage.style.display = 'none';
+            controlsDiv.style.display = 'block';
+            if (checkListWrapper) checkListWrapper.style.display = 'block';
+        }
+    }
+
+    // 5. Asignar los eventos
+    companySelect.addEventListener('change', filterInstallations);
+
+    document.getElementById('btn-select-all').addEventListener('click', () => {
+        checkboxes.forEach(cb => {
+            const wrapper = cb.closest('.form-check') || cb.parentElement;
+            if (wrapper && wrapper.style.display !== 'none') {
+                cb.checked = true;
+            }
+        });
+    });
+
+    document.getElementById('btn-deselect-all').addEventListener('click', () => {
+        checkboxes.forEach(cb => {
+            const wrapper = cb.closest('.form-check') || cb.parentElement;
+            if (wrapper && wrapper.style.display !== 'none') {
+                cb.checked = false;
+            }
+        });
+    });
+
+    // Ejecutar filtro al cargar la página (vital por si hay errores de formulario y se recarga)
+    filterInstallations();
+});
+</script>
 {% endblock %}
