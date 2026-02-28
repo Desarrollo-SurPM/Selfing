@@ -83,7 +83,7 @@ class UpdateLogAdmin(admin.ModelAdmin):
 # --- CHECKLIST ACTUALIZADO CON JERARQUÍA Y TIEMPOS ---
 @admin.register(ChecklistItem)
 class ChecklistItemAdmin(admin.ModelAdmin):
-    list_display = ('description', 'phase', 'parent', 'company', 'installation', 'order', 'alarm_trigger_delay', 'requires_legal_check')
+    list_display = ('description', 'phase', 'parent', 'company', 'installation', 'order', 'alarm_trigger_delay', 'requires_legal_check', 'specific_time')
     list_filter = ('phase', 'company', 'requires_legal_check', 'is_sequential')
     search_fields = ('description',)
     list_editable = ('order',)

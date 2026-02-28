@@ -1,6 +1,6 @@
 from datetime import datetime, timedelta
 from django.utils import timezone
-from django.db.models import Q
+from django.db.models import Case, When, Value, IntegerField, Q
 from ..models import OperatorShift, ChecklistItem, Company, ChecklistLog
 
 
@@ -83,4 +83,14 @@ def get_applicable_checklist_items(active_shift):
     if active_shift.monitored_companies.exists():
         assigned_companies = active_shift.monitored_companies.all()
         base_items = base_items.filter(Q(company__isnull=True) | Q(company__in=assigned_companies))
-    return base_items.order_by('phase', 'order')
+    
+    # === SOLUCIÓN DE ORDEN ===
+    # En lugar de usar base_items.order_by('phase', 'order'), forzamos el orden aquí:
+    return base_items.alias(
+        phase_order=Case(
+            When(phase='start', then=Value(1)),
+            When(phase='during', then=Value(2)),
+            When(phase='end', then=Value(3)),
+            output_field=IntegerField(),
+        )
+    ).order_by('phase_order', 'order')

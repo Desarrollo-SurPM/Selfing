@@ -115,6 +115,11 @@ class ChecklistItem(models.Model):
         verbose_name="Bloqueo por Tiempo", 
         help_text="Tiempo desde el inicio del turno para que se habilite (ej: '02:00:00' para 2 horas). Déjalo en blanco para que esté disponible de inmediato."
     )
+    specific_time = models.TimeField(
+        null=True, blank=True, 
+        verbose_name="Hora Específica", 
+        help_text="Si se define, la tarea se habilitará a esta hora exacta (ej: 14:30)."
+    )
     DIAS_SEMANA = [(0, 'Lunes'), (1, 'Martes'), (2, 'Miércoles'), (3, 'Jueves'), (4, 'Viernes'), (5, 'Sábado'), (6, 'Domingo')]
     dias_aplicables = models.CharField(max_length=50, blank=True, null=True, verbose_name="Días de la Semana Aplicables", help_text="Marcar los días en que aplica. Dejar todos sin marcar para que aplique siempre.")
     turnos_aplicables = models.ManyToManyField('ShiftType', blank=True, verbose_name="Tipos de Turno Aplicables", help_text="Marcar los turnos en que aplica. Dejar sin marcar para que aplique a todos.")
