@@ -24,8 +24,8 @@ urlpatterns = [
     path('notas-turno/crear/', views.create_shift_note_modal, name='create_shift_note_modal'),
 
     # Checklist interactivo
-    path('checklist/', views.checklist_view, name='checklist'),
-    path('checklist_view/', views.checklist_view, name='checklist_view'),
+    path('checklist/', views.checklist_index_view, name='checklist_index'),
+    path('checklist/phase/<str:phase>/', views.checklist_phase_view, name='checklist_phase'),
     path('checklist/update_order/', views.update_checklist_order, name='update_checklist_order'),
     path('checklist/start_task/<int:item_id>/', views.start_checklist_task, name='start_task'),
     path('checklist/pause_task/<int:item_id>/', views.pause_checklist_task, name='pause_task'),

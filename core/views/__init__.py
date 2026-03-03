@@ -30,7 +30,7 @@ from .operator_logbook import (
     dismiss_shift_note, create_shift_note_modal
 )
 from .operator_updates import update_log_view, review_and_send_novedades
-from .checklist import checklist_view, start_checklist_task, pause_checklist_task, finish_checklist_task
+from .checklist import checklist_index_view, checklist_phase_view, start_checklist_task, pause_checklist_task, finish_checklist_task
 from .shift_reports import end_turn_preview, sign_turn_report
 from .virtual_rounds import (
     start_virtual_round, virtual_round_view,
