@@ -1,5 +1,7 @@
 from django.db import models
 from django.contrib.auth.models import User
+from django.db.models.signals import m2m_changed
+from django.dispatch import receiver
 
 class Company(models.Model):
     name = models.CharField(max_length=100, unique=True)
@@ -132,7 +134,25 @@ class ChecklistItem(models.Model):
     
     # --- CAMPOS: CRUCE DINÁMICO ---
     company = models.ForeignKey(Company, on_delete=models.CASCADE, null=True, blank=True, verbose_name="Empresa Asociada", help_text="Dejar en blanco para tareas generales. Si se selecciona, aplica solo a turnos con esta empresa.")
-    installation = models.ForeignKey(Installation, on_delete=models.CASCADE, null=True, blank=True, verbose_name="Instalación Asociada", help_text="Seleccione si la tarea es específica para una sucursal/instalación particular.")
+    # 1. MANTENEMOS EL CAMPO ACTUAL PERO LO MARCAMOS COMO LEGACY
+    installation = models.ForeignKey(
+        Installation, 
+        on_delete=models.CASCADE, 
+        null=True, 
+        blank=True, 
+        related_name="legacy_checklist_items",
+        verbose_name="Instalación (Antiguo/No usar)", 
+        help_text="[MANTENER POR COMPATIBILIDAD] Use el nuevo selector múltiple de abajo."
+    )
+
+    # 2. AGREGAMOS EL NUEVO CAMPO MANY-TO-MANY
+    installations = models.ManyToManyField(
+        Installation, 
+        blank=True, 
+        related_name="checklist_items",
+        verbose_name="Múltiples Instalaciones", 
+        help_text="Seleccione las instalaciones para generar subtareas cronometradas automáticamente."
+    )
 
     class Meta:
         ordering = ['phase', 'order']
@@ -546,3 +566,26 @@ class GPSNotificationSettings(models.Model):
 
     def get_monthly_emails_list(self):
         return [email.strip() for email in self.monthly_emails.split(',') if email.strip()]
+    
+@receiver(m2m_changed, sender=ChecklistItem.installations.through)
+def generate_installation_subtasks(sender, instance, action, pk_set, **kwargs):
+    # Solo actuamos cuando se agregan instalaciones y si NO es ya una subtarea (no tiene parent)
+    if action == "post_add" and not instance.parent:
+        for inst_id in pk_set:
+            inst = Installation.objects.get(pk=inst_id)
+            # Creamos la subtarea clonando las reglas del padre
+            ChecklistItem.objects.get_or_create(
+                parent=instance,
+                company=instance.company,
+                # Asignamos la instalación individual al campo legacy para mantener la compatibilidad 
+                # con tu lógica si la hubiera
+                installation=inst, 
+                description=f"{instance.description} - {inst.name}",
+                defaults={
+                    'phase': instance.phase,
+                    'is_sequential': instance.is_sequential,
+                    'requires_legal_check': instance.requires_legal_check,
+                    'specific_time': instance.specific_time,
+                    'unlock_delay': instance.unlock_delay,
+                }
+            )

@@ -3,13 +3,13 @@ from ..models import ChecklistItem, VirtualRoundLog, Installation, ShiftType
 
 
 class ChecklistItemForm(forms.ModelForm):
-    # Campo VIRTUAL (no toca la BD) con CheckboxSelectMultiple para mejor UX
+    # Campo VIRTUAL para seleccionar múltiples instalaciones en la UI
     multi_installations = forms.ModelMultipleChoiceField(
         queryset=Installation.objects.all(),
         widget=forms.CheckboxSelectMultiple(),
         required=False,
         label="Instalaciones Específicas",
-        help_text="Marca las casillas de las instalaciones que apliquen. Se generará una tarea independiente por cada una."
+        help_text="Marque las casillas de las instalaciones que apliquen. Se generará una subtarea automática por cada una."
     )
 
     dias_aplicables = forms.MultipleChoiceField(
@@ -30,7 +30,7 @@ class ChecklistItemForm(forms.ModelForm):
 
     class Meta:
         model = ChecklistItem
-        # Ocultamos 'installation' (el original) e incluimos 'multi_installations' virtual
+        # Incluimos los campos necesarios del modelo
         fields = [
             'parent', 'description', 'phase', 'order',
             'company', 'dias_aplicables', 'turnos_aplicables',
@@ -58,56 +58,39 @@ class ChecklistItemForm(forms.ModelForm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        # Solo permitimos seleccionar como "Padre" a tareas que no tengan ya un padre (evitar niveles infinitos)
         self.fields['parent'].queryset = ChecklistItem.objects.filter(parent__isnull=True)
         self.fields['parent'].empty_label = "Ninguna (Esta es una tarea principal)"
 
-        # Si estamos editando y ya tiene una instalación asignada en la BD, la preseleccionamos
-        if self.instance and self.instance.pk and self.instance.installation:
-            self.fields['multi_installations'].initial = [self.instance.installation.pk]
-
-        if self.instance and self.instance.pk and self.instance.dias_aplicables:
-            self.fields['dias_aplicables'].initial = self.instance.dias_aplicables.split(',')
+        # Si estamos editando y tiene instalaciones en el campo ManyToMany, las precargamos en el campo virtual
+        if self.instance and self.instance.pk:
+            if self.instance.installations.exists():
+                self.fields['multi_installations'].initial = self.instance.installations.all()
+            
+            if self.instance.dias_aplicables:
+                self.fields['dias_aplicables'].initial = self.instance.dias_aplicables.split(',')
 
     def save(self, commit=True):
         instance = super().save(commit=False)
-        is_creating = instance.pk is None  # Saber si es un registro nuevo o una edición
         
+        # Guardamos los días seleccionados como una cadena separada por comas
         selected_days = self.cleaned_data.get('dias_aplicables')
         instance.dias_aplicables = ",".join(selected_days) if selected_days else ""
         
-        selected_insts = self.cleaned_data.get('multi_installations')
-        
         if commit:
-            if not selected_insts:
-                instance.installation = None
-                instance.save()
-                self.save_m2m()
+            instance.save()
+            # Guardamos las relaciones M2M estándar (turnos_aplicables)
+            self.save_m2m()
+            
+            # Sincronizamos el campo virtual 'multi_installations' con el real 'installations'
+            # Al llamar a .set(), se dispara la señal m2m_changed en models.py
+            selected_insts = self.cleaned_data.get('multi_installations')
+            if selected_insts:
+                instance.installations.set(selected_insts)
             else:
-                # 1. Guardamos la tarea original asignándole la PRIMERA instalación elegida
-                instance.installation = selected_insts[0]
-                instance.save()
-                self.save_m2m()
+                instance.installations.clear()
                 
-                # 2. CLONACIÓN: Si estamos creando (no editando) y eligió más de 1 instalación, clonamos la tarea
-                if is_creating and len(selected_insts) > 1:
-                    for inst in selected_insts[1:]:
-                        clone = ChecklistItem.objects.create(
-                            description=instance.description,
-                            phase=instance.phase,
-                            order=instance.order,
-                            unlock_delay=instance.unlock_delay,
-                            specific_time=instance.specific_time, # Copiamos la hora específica
-                            dias_aplicables=instance.dias_aplicables,
-                            alarm_trigger_delay=instance.alarm_trigger_delay,
-                            parent=instance.parent,
-                            is_sequential=instance.is_sequential,
-                            requires_legal_check=instance.requires_legal_check,
-                            company=instance.company,
-                            installation=inst # Asignamos la instalación clonada
-                        )
-                        clone.turnos_aplicables.set(self.cleaned_data.get('turnos_aplicables', []))
         return instance
-    
 
 class VirtualRoundCompletionForm(forms.ModelForm):
     checked_installations = forms.ModelMultipleChoiceField(

@@ -1,0 +1,52 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Selección de Fase - Checklist{% endblock %}
+
+{% block content %}
+<div class="container py-5 max-w-4xl mx-auto" style="font-family: 'Inter', sans-serif;">
+    <div class="text-center mb-5">
+        <h2 class="fw-bold text-dark"><i class="fas fa-tasks text-primary me-2"></i> Fases del Checklist</h2>
+        <p class="text-muted fs-5">Selecciona la etapa de tu turno para gestionar las tareas correspondientes.</p>
+    </div>
+
+    <div class="row g-4 justify-content-center">
+        <div class="col-md-4">
+            <a href="{% url 'checklist_phase' 'start' %}" class="card border-0 shadow-sm h-100 text-decoration-none bg-white p-4 text-center" style="transition: transform 0.2s; border-bottom: 5px solid #10b981 !important;">
+                <div class="card-body d-flex flex-column align-items-center justify-content-center">
+                    <i class="fas fa-play-circle fa-4x text-success mb-3"></i>
+                    <h4 class="fw-bold text-gray-800 mb-0">Inicio de Turno</h4>
+                </div>
+            </a>
+        </div>
+        
+        <div class="col-md-4">
+            <a href="{% url 'checklist_phase' 'during' %}" class="card border-0 shadow-sm h-100 text-decoration-none bg-white p-4 text-center" style="transition: transform 0.2s; border-bottom: 5px solid #3b82f6 !important;">
+                <div class="card-body d-flex flex-column align-items-center justify-content-center">
+                    <i class="fas fa-clock fa-4x text-primary mb-3"></i>
+                    <h4 class="fw-bold text-gray-800 mb-0">Durante el Turno</h4>
+                </div>
+            </a>
+        </div>
+        
+        <div class="col-md-4">
+            <a href="{% url 'checklist_phase' 'end' %}" class="card border-0 shadow-sm h-100 text-decoration-none bg-white p-4 text-center" style="transition: transform 0.2s; border-bottom: 5px solid #ef4444 !important;">
+                <div class="card-body d-flex flex-column align-items-center justify-content-center">
+                    <i class="fas fa-stop-circle fa-4x text-danger mb-3"></i>
+                    <h4 class="fw-bold text-gray-800 mb-0">Finalización</h4>
+                </div>
+            </a>
+        </div>
+    </div>
+    
+    <div class="text-center mt-5">
+        <a href="{% url 'operator_dashboard' %}" class="btn btn-outline-secondary btn-lg px-4 rounded-pill">
+            <i class="fas fa-arrow-left me-2"></i> Volver al Dashboard
+        </a>
+    </div>
+</div>
+
+<style>
+    .card:hover { transform: translateY(-5px); box-shadow: 0 10px 20px rgba(0,0,0,0.1) !important; }
+</style>
+{% endblock %}
