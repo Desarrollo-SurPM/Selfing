@@ -117,10 +117,10 @@
     legalCheck.addEventListener('change', (e) => submitFinishBtn.disabled = !e.target.checked);
 
     // Función para reproducir el audio de alarma
-    function playAlarm() {
-        const audio = new Audio("{% static 'sounds/alarm.mp3' %}");
-        audio.play().catch(e => console.log("Audio bloqueado por el navegador hasta interacción."));
-    }
+    //function playAlarm() {
+    //    const audio = new Audio("{% static 'sounds/alarm.mp3' %}");
+    //    audio.play().catch(e => console.log("Audio bloqueado por el navegador hasta interacción."));
+    //}
 
     // 1. BARRA DE PROGRESO
     function updateProgress() {
