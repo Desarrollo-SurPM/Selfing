@@ -110,10 +110,19 @@
     const legalCheck = document.getElementById('legalCheck');
     const submitFinishBtn = document.getElementById('submitFinishBtn');
     const tasksFromServer = JSON.parse(document.getElementById('tasks-data').textContent);
+    
+    // Set para evitar que la alarma suene repetidamente por la misma tarea
+    const alarmedTasks = new Set();
 
     legalCheck.addEventListener('change', (e) => submitFinishBtn.disabled = !e.target.checked);
 
-    // 1. BARRA DE PROGRESO DE LA FASE
+    // Función para reproducir el audio de alarma
+    function playAlarm() {
+        const audio = new Audio("{% static 'sounds/alarm.mp3' %}");
+        audio.play().catch(e => console.log("Audio bloqueado por el navegador hasta interacción."));
+    }
+
+    // 1. BARRA DE PROGRESO
     function updateProgress() {
         if (tasksFromServer.length === 0) return;
         const completedCount = tasksFromServer.filter(t => t.completed).length;
@@ -154,7 +163,7 @@
                 const taskObj = tasksFromServer.find(t => t.id === taskId);
                 taskObj.status = 'in_progress';
                 startVisualTimer(taskId, taskObj.accumulated || 0);
-                evaluateLocks();
+                evaluateLocks(); 
             }
         } catch(error) { console.error(error); }
     }
@@ -213,18 +222,18 @@
 
                 document.getElementById(`timer-${currentTaskId}`).textContent = data.duration;
                 document.getElementById(`controls-${currentTaskId}`).innerHTML = `
-                    <div class="text-green-700 font-bold flex items-center w-full">
+                    <div class="text-green-700 font-bold flex items-center w-full text-sm">
                         <i class="fas fa-check-circle fa-lg me-2"></i> <span>Completado en ${data.duration}</span>
                     </div>
                 `;
                 finishModal.hide();
-                evaluateLocks();
+                evaluateLocks(); 
             } else { alert(data.message); }
         } catch(error) { console.error(error); } 
         finally { submitFinishBtn.innerHTML = '<i class="fas fa-file-signature me-1"></i> Firmar'; }
     });
 
-    // 4. LÓGICA DE BLOQUEOS 
+    // 4. LÓGICA DE BLOQUEOS Y ALARMAS
     function evaluateLocks() {
         const now = new Date();
         let blockNextSeq = false; 
@@ -233,26 +242,75 @@
             const card = document.getElementById(`task-card-${task.id}`);
             if (!card) return;
             const btnStart = card.querySelector('.btn-start');
+            const btnFinish = document.getElementById(`btn-finish-${task.id}`);
             let isLocked = false;
             let lockReason = '';
 
-            // Bloqueo Secuencial (Solo afecta a la columna izquierda / is_sequential)
-            if (!task.is_scheduled && task.is_sequential && blockNextSeq && task.status === 'pending') {
+            // Bloqueo Secuencial 
+            if (!task.parent_id && !task.specific_time && task.is_sequential && blockNextSeq && task.status === 'pending') {
                 isLocked = true;
                 lockReason = 'Requiere tarea anterior';
             }
 
-            // Bloqueo por Tiempo (Afecta columna derecha o tareas con unlock_delay)
-            if (task.unlock_time && task.status === 'pending') {
-                const unlockTime = new Date(task.unlock_time);
-                if (now < unlockTime) {
+            // Bloqueo por Tiempo (specific_time) o Retraso de inicio (unlock_time)
+            let targetTime = null;
+            if (task.specific_time) {
+                const [hours, mins] = task.specific_time.split(':');
+                targetTime = new Date();
+                targetTime.setHours(parseInt(hours), parseInt(mins), 0, 0);
+            } else if (task.unlock_time) {
+                targetTime = new Date(task.unlock_time);
+            }
+
+            if (targetTime && task.status === 'pending') {
+                if (now < targetTime) {
                     isLocked = true;
-                    const diffMins = Math.ceil((unlockTime - now) / 60000);
+                    const diffMins = Math.ceil((targetTime - now) / 60000);
                     lockReason = diffMins > 60 ? `Disponible en ${Math.floor(diffMins/60)}h ${diffMins%60}m` : `Disponible en ${diffMins} min`;
+                } else if (task.specific_time) {
+                    // Si ya pasó la hora y tiene hora específica: ¡Hacer sonar la alarma!
+                    if (!alarmedTasks.has(task.id)) {
+                        playAlarm();
+                        alarmedTasks.add(task.id);
+                    }
                 }
             }
 
-            // Aplicar estilos
+            // NUEVA LÓGICA PADRE-HIJOS (INSTALACIONES)
+            const children = tasksFromServer.filter(c => c.parent_id === task.id);
+            if (children.length > 0) {
+                const wrapper = document.getElementById(`children-wrapper-${task.id}`);
+                if (wrapper) {
+                    if (task.status === 'pending') wrapper.classList.add('hidden');
+                    else wrapper.classList.remove('hidden');
+                }
+
+                if (task.status === 'in_progress' && btnFinish) {
+                    const allCompleted = children.every(c => c.status === 'completed');
+                    if (!allCompleted) {
+                        btnFinish.disabled = true;
+                        btnFinish.innerHTML = '<i class="fas fa-lock me-1"></i> Cerrar instalaciones primero';
+                        btnFinish.classList.remove('bg-green-600', 'hover:bg-green-700');
+                        btnFinish.classList.add('bg-gray-500', 'hover:bg-gray-600', 'opacity-75', 'cursor-not-allowed');
+                    } else {
+                        btnFinish.disabled = false;
+                        btnFinish.innerHTML = '<i class="fas fa-check me-1"></i> Finalizar Tarea';
+                        btnFinish.classList.remove('bg-gray-500', 'hover:bg-gray-600', 'opacity-75', 'cursor-not-allowed');
+                        btnFinish.classList.add('bg-green-600', 'hover:bg-green-700');
+                    }
+                }
+            }
+
+            // Bloquear a los hijos por seguridad si el padre fue forzado a pendiente
+            if (task.parent_id) {
+                const parent = tasksFromServer.find(p => p.id === task.parent_id);
+                if (parent && parent.status === 'pending') {
+                    isLocked = true;
+                    lockReason = 'Inicie tarea principal';
+                }
+            }
+
+            // Aplicar estilos de bloqueo visual a Start
             if (isLocked) {
                 card.classList.add('locked-task');
                 if (btnStart) {
@@ -270,50 +328,112 @@
             }
 
             // Registrar si la tarea secuencial actual NO está terminada para bloquear la siguiente
-            if (!task.is_scheduled && task.is_sequential && task.status !== 'completed') {
+            if (!task.parent_id && !task.specific_time && task.is_sequential && task.status !== 'completed') {
                 blockNextSeq = true;
             }
         });
     }
     setInterval(evaluateLocks, 5000);
 
-    // 5. GENERACIÓN HTML Y RENDER
-    function generateCardHTML(task, isChild, extraHTML = '') {
+    // 5. PRE-CÁLCULO DE BLOQUEOS (para render inicial sin flash)
+    function computeLockState() {
+        const now = new Date();
+        let blockNextSeq = false;
+        const lockMap = {};
+
+        tasksFromServer.forEach(task => {
+            let isLocked = false;
+            let lockReason = '';
+
+            // Bloqueo Secuencial
+            if (!task.parent_id && !task.specific_time && task.is_sequential && blockNextSeq && task.status === 'pending') {
+                isLocked = true;
+                lockReason = 'Requiere tarea anterior';
+            }
+
+            // Bloqueo por Tiempo
+            let targetTime = null;
+            if (task.specific_time) {
+                const [hours, mins] = task.specific_time.split(':');
+                targetTime = new Date();
+                targetTime.setHours(parseInt(hours), parseInt(mins), 0, 0);
+            } else if (task.unlock_time) {
+                targetTime = new Date(task.unlock_time);
+            }
+
+            if (targetTime && task.status === 'pending' && now < targetTime) {
+                isLocked = true;
+                const diffMins = Math.ceil((targetTime - now) / 60000);
+                lockReason = diffMins > 60 ? `Disponible en ${Math.floor(diffMins/60)}h ${diffMins%60}m` : `Disponible en ${diffMins} min`;
+            }
+
+            // Bloqueo hijos por padre pendiente
+            if (task.parent_id) {
+                const parent = tasksFromServer.find(p => p.id === task.parent_id);
+                if (parent && parent.status === 'pending') {
+                    isLocked = true;
+                    lockReason = 'Inicie tarea principal';
+                }
+            }
+
+            lockMap[task.id] = { isLocked, lockReason };
+
+            if (!task.parent_id && !task.specific_time && task.is_sequential && task.status !== 'completed') {
+                blockNextSeq = true;
+            }
+        });
+
+        return lockMap;
+    }
+
+    // 6. GENERACIÓN HTML
+    function generateCardHTML(task, isChild, extraHTML = '', lockInfo = null) {
         const isCompleted = task.status === 'completed';
         const inProgress = task.status === 'in_progress';
-        const indentClass = isChild ? 'ms-8 border-s-4 border-s-indigo-500 border-y border-e shadow-sm' : 'border border-gray-300 shadow-sm';
-        const iconChild = isChild ? '<i class="fas fa-level-up-alt fa-rotate-90 me-2 text-indigo-400"></i>' : '';
-        
+        const isLocked = lockInfo?.isLocked || false;
+        const lockReason = lockInfo?.lockReason || '';
+
+        const indentClass = isChild ? 'border-s-4 border-s-indigo-400 border-y border-e shadow-sm' : 'border border-gray-300 shadow-sm';
+        const iconChild = isChild ? '<i class="fas fa-building me-2 text-indigo-500"></i>' : '';
+        const paddingClass = isChild ? 'p-3 mb-2' : 'p-4 mb-3';
+        const titleSize = isChild ? 'text-sm' : 'text-md';
+        const lockedClass = isLocked ? 'locked-task' : '';
+
         let bgClass = "bg-white";
         if(isCompleted) bgClass = "bg-green-50 border-2 border-green-500";
         else if(inProgress) bgClass = "bg-blue-50 border-blue-400";
         else if(task.status === 'paused') bgClass = "bg-yellow-50 border-yellow-400";
 
+        const startBtnColor = isLocked ? 'bg-gray-500 hover:bg-gray-600' : 'bg-blue-600 hover:bg-blue-700';
+        const startBtnLabel = isLocked
+            ? `<i class="fas fa-lock me-1"></i> ${lockReason}`
+            : `<i class="fas fa-play me-1"></i> ${task.status === 'paused' ? 'Reanudar' : 'Iniciar'}`;
+
         return `
-            <div class="task-item p-4 mb-3 rounded-lg ${indentClass} ${bgClass} transition-all" id="task-card-${task.id}" data-status="${task.status}">
+            <div class="task-item ${lockedClass} ${paddingClass} rounded-lg ${indentClass} ${bgClass} transition-all" id="task-card-${task.id}" data-status="${task.status}">
                 ${extraHTML}
                 <div class="flex justify-between items-start mb-3">
-                    <h5 class="text-md font-bold text-gray-800 ${isCompleted ? 'text-gray-400 line-through' : ''}">
+                    <h5 class="${titleSize} font-bold text-gray-800 ${isCompleted ? 'text-gray-400 line-through' : ''}">
                         ${iconChild}${task.description}
                     </h5>
-                    <div class="timer-display bg-gray-100 text-gray-700 px-2 py-1 rounded text-sm font-mono border">
+                    <div class="timer-display bg-gray-100 text-gray-700 px-2 py-1 rounded text-xs font-mono border">
                         <i class="fas fa-stopwatch text-gray-500"></i> <span id="timer-${task.id}">${task.duration}</span>
                     </div>
                 </div>
-                
+
                 <div id="controls-${task.id}" class="flex gap-2">
                     ${isCompleted ? `
-                        <div class="text-green-700 font-bold flex items-center w-full">
+                        <div class="text-green-700 font-bold flex items-center w-full text-sm">
                             <i class="fas fa-check-circle fa-lg me-2"></i> <span>Completado en ${task.duration}</span>
                         </div>
                     ` : `
-                        <button id="btn-start-${task.id}" onclick="startTask(${task.id})" class="${inProgress ? 'hidden' : ''} btn-start flex-1 bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 rounded text-sm transition">
-                            <i class="fas fa-play me-1"></i> ${task.status === 'paused' ? 'Reanudar' : 'Iniciar'}
+                        <button id="btn-start-${task.id}" onclick="startTask(${task.id})" ${isLocked ? 'disabled' : ''} class="${inProgress ? 'hidden' : ''} btn-start flex-1 ${startBtnColor} text-white font-medium py-2 rounded text-xs transition">
+                            ${startBtnLabel}
                         </button>
-                        <button id="btn-pause-${task.id}" onclick="pauseTask(${task.id})" class="${inProgress ? '' : 'hidden'} flex-1 bg-gray-500 hover:bg-gray-600 text-white font-medium py-2 rounded text-sm transition">
+                        <button id="btn-pause-${task.id}" onclick="pauseTask(${task.id})" class="${inProgress ? '' : 'hidden'} flex-1 bg-gray-500 hover:bg-gray-600 text-white font-medium py-2 rounded text-xs transition">
                             <i class="fas fa-pause me-1"></i> Pausa
                         </button>
-                        <button id="btn-finish-${task.id}" onclick="prepareFinishTask(${task.id}, '${task.description.replace(/'/g, "\\'")}')" class="${inProgress ? '' : 'hidden'} flex-1 bg-green-600 hover:bg-green-700 text-white font-medium py-2 rounded text-sm transition">
+                        <button id="btn-finish-${task.id}" onclick="prepareFinishTask(${task.id}, '${task.description.replace(/'/g, "\\'")}')" class="${inProgress ? '' : 'hidden'} flex-1 bg-green-600 hover:bg-green-700 text-white font-medium py-2 rounded text-xs transition">
                             <i class="fas fa-check me-1"></i> Finalizar
                         </button>
                     `}
@@ -323,33 +443,49 @@
     }
 
     function renderTaskCards() {
+        const lockMap = computeLockState();
         const rootTasks = tasksFromServer.filter(t => !t.parent_id);
         const childTasks = tasksFromServer.filter(t => t.parent_id);
-        
-        const seqContainer = document.getElementById('list-sequential');
-        const schContainer = document.getElementById('list-scheduled');
-        
+
+        let seqHTML = ''; let schHTML = '';
         let seqCount = 0; let schCount = 0;
 
         rootTasks.forEach(rootTask => {
-            const isSch = rootTask.is_scheduled;
-            const targetContainer = isSch ? schContainer : seqContainer;
+            const isSch = !!rootTask.specific_time;
             if(isSch) schCount++; else seqCount++;
 
-            const extraHTML = isSch ? `<div class="mb-2"><span class="badge bg-warning text-dark px-2 py-1 rounded"><i class="fas fa-clock me-1"></i> Horario: ${rootTask.specific_time} hrs</span></div>` : '';
-            targetContainer.innerHTML += generateCardHTML(rootTask, false, extraHTML);
-            
-            // Sub-tareas (Las instalaciones generadas por la señal en models.py)
+            const specificTimeDisplay = rootTask.specific_time ? rootTask.specific_time.substring(0, 5) : '';
+            const extraHTML = isSch ? `<div class="mb-2"><span class="badge bg-warning text-dark px-2 py-1 rounded"><i class="fas fa-clock me-1"></i> Horario: ${specificTimeDisplay} hrs</span></div>` : '';
+
+            let blockHTML = generateCardHTML(rootTask, false, extraHTML, lockMap[rootTask.id]);
+
             const children = childTasks.filter(c => c.parent_id === rootTask.id);
-            children.forEach(child => {
-                targetContainer.innerHTML += generateCardHTML(child, true, '');
-            });
+            if (children.length > 0) {
+                let childrenHTML = `<div id="children-wrapper-${rootTask.id}" class="subtasks-wrapper ${rootTask.status === 'pending' ? 'hidden' : ''} mt-2 mb-4 p-3 bg-gray-50 border border-gray-200 rounded-lg ms-4 shadow-inner">`;
+                childrenHTML += `<h6 class="text-xs font-bold text-gray-500 mb-3 text-uppercase"><i class="fas fa-sitemap me-1"></i> Instalaciones a revisar:</h6>`;
+                children.forEach(child => {
+                    let childDesc = child.description;
+                    if (childDesc.includes('-')) {
+                        const parts = childDesc.split('-');
+                        childDesc = parts.pop().trim();
+                    }
+                    childrenHTML += generateCardHTML({...child, description: childDesc}, true, '', lockMap[child.id]);
+                });
+                childrenHTML += `</div>`;
+                blockHTML += childrenHTML;
+            }
+
+            if(isSch) schHTML += blockHTML; else seqHTML += blockHTML;
         });
+
+        // Insertar todo de una sola vez para evitar renders parciales
+        document.getElementById('list-sequential').innerHTML = seqHTML;
+        document.getElementById('list-scheduled').innerHTML = schHTML;
 
         if(seqCount === 0) document.getElementById('empty-seq').classList.remove('hidden');
         if(schCount === 0) document.getElementById('empty-sch').classList.remove('hidden');
 
-        // Reanudar timers
+        // Reanudar timers de tareas guardadas
         tasksFromServer.forEach(task => {
             if (task.status === 'in_progress') {
                 let initialSeconds = task.accumulated || 0;
