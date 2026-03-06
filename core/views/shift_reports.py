@@ -8,7 +8,7 @@ from django.utils import timezone
 from django.core.files.base import ContentFile
 from django.template.loader import get_template
 from xhtml2pdf import pisa
-from ..models import Company, UpdateLog, ChecklistLog, VirtualRoundLog, TurnReport, TraceabilityLog
+from ..models import Company, UpdateLog, ChecklistLog, VirtualRoundLog, RoundInstallationLog, TurnReport, TraceabilityLog
 from ..utils import link_callback
 from ._helpers import get_active_shift
 
@@ -72,7 +72,23 @@ def end_turn_preview(request):
     ).select_related('installation__company').order_by(
         'installation__company__name', 'installation__name', 'created_at'
     )
-    rondas_virtuales = VirtualRoundLog.objects.filter(operator_shift=active_shift)
+    rondas_virtuales = VirtualRoundLog.objects.filter(
+        operator_shift=active_shift
+    ).prefetch_related(
+        'installation_logs__installation__company'
+    ).order_by('start_time')
+
+    # Calcular tiempo entre rondas (tiempo de respuesta)
+    rondas_list = list(rondas_virtuales)
+    for i, ronda in enumerate(rondas_list):
+        if i == 0:
+            ronda.gap_seconds = None
+        else:
+            prev = rondas_list[i - 1]
+            if prev.end_time and ronda.start_time:
+                ronda.gap_seconds = int((ronda.start_time - prev.end_time).total_seconds())
+            else:
+                ronda.gap_seconds = None
 
     context = {
         'operator': request.user,
@@ -82,7 +98,7 @@ def end_turn_preview(request):
         'current_time': timezone.now(),
         'checklist_by_phase': checklist_by_phase,
         'updates_log': updates_log,
-        'rondas_virtuales': rondas_virtuales,
+        'rondas_virtuales': rondas_list,
     }
 
     template = get_template('operator/turn/pdf.html')
