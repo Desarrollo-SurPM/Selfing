@@ -39,36 +39,40 @@ def get_operator_companies(operator_user):
 
 
 def calculate_log_datetime(log):
-    if log.manual_timestamp:
-        event_time = log.manual_timestamp
-    else:
-        event_time = timezone.localtime(log.created_at).time()
+    # Si no hay hora manual, usamos la hora real de creación de la bitácora
+    if not log.manual_timestamp:
+        return log.created_at
 
     shift = log.operator_shift
-    base_date = shift.date
-    start = shift.shift_type.start_time
-    end = shift.shift_type.end_time
+    
+    # Si por alguna razón no hay turno activo, usamos la fecha de creación
+    if not shift or not shift.actual_start_time:
+        candidate_dt = datetime.combine(log.created_at.date(), log.manual_timestamp)
+        return timezone.make_aware(candidate_dt)
 
-    if start > end:
-        if event_time <= end:
-            return datetime.combine(base_date + timedelta(days=1), event_time)
-        elif event_time >= start:
-            return datetime.combine(base_date, event_time)
-        else:
-            if event_time.hour >= 12:
-                return datetime.combine(base_date, event_time)
-            else:
-                return datetime.combine(base_date + timedelta(days=1), event_time)
-    else:
-        if start.hour < 6:
-            if event_time.hour >= 20:
-                return datetime.combine(base_date - timedelta(days=1), event_time)
-            return datetime.combine(base_date, event_time)
-        else:
-            if event_time < start and event_time.hour < 12:
-                return datetime.combine(base_date + timedelta(days=1), event_time)
-            return datetime.combine(base_date, event_time)
+    shift_start = shift.actual_start_time
+    # Creamos una fecha candidata combinando la fecha de inicio del turno con la hora manual
+    candidate_dt = timezone.make_aware(datetime.combine(shift_start.date(), log.manual_timestamp))
 
+    # 1. Manejo de turnos nocturnos (ej. 20:00 a 08:00)
+    if shift.shift_type.start_time > shift.shift_type.end_time:
+        if log.manual_timestamp <= shift.shift_type.end_time:
+            candidate_dt += timedelta(days=1)
+    
+    # 2. EL ARREGLO: Manejo del lapso de gracia ANTES del turno
+    if candidate_dt < shift_start:
+        diferencia = shift_start - candidate_dt
+        # Si se registró hace MÁS de 25 minutos antes del turno, asumimos que es del día anterior
+        if diferencia > timedelta(minutes=25):
+            candidate_dt -= timedelta(days=1)
+        # Si la diferencia es <= 25 minutos (ej. 08:17 para un turno de 08:30),
+        # NO restamos un día, lo dejamos dentro del mismo día y ciclo.
+
+    # 3. Verificación de seguridad: si por algún motivo la fecha calculada está en el futuro respecto a ahora
+    if candidate_dt > timezone.now():
+        candidate_dt -= timedelta(days=1)
+
+    return candidate_dt
 
 def get_applicable_checklist_items(active_shift):
     if not active_shift or not active_shift.shift_type:
