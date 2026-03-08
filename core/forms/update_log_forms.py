@@ -38,14 +38,21 @@ class UpdateLogForm(forms.ModelForm):
                 event_dt_today = timezone.make_aware(datetime.datetime.combine(now_dt.date(), timestamp_time))
             except ValueError:
                 raise ValidationError("Formato de hora inválido. Use HH:MM.")
-            if timestamp_time > now_dt.time():
+            
+            # Le damos una tolerancia de 5 minutos al futuro por si hay desfase de relojes
+            future_buffer = (now_dt + timedelta(minutes=5)).time()
+            
+            # Si la hora ingresada es mayor al tiempo actual (+5 mins buffer), asume el día de ayer
+            if timestamp_time > future_buffer:
                 event_dt = event_dt_today - timedelta(days=1)
             else:
                 event_dt = event_dt_today
+                
             if event_dt > now_dt:
                 raise ValidationError("La fecha y hora del evento no pueden ser futuras.")
             if now_dt - event_dt > timedelta(hours=24):
                 raise ValidationError("No puedes registrar eventos de más de 24 horas de antigüedad.")
+                
         return timestamp_time
 
 
@@ -68,15 +75,25 @@ class UpdateLogEditForm(forms.ModelForm):
         timestamp_time = self.cleaned_data.get('manual_timestamp')
         if timestamp_time:
             now_dt = timezone.localtime(timezone.now())
-            event_dt_today = timezone.make_aware(datetime.datetime.combine(now_dt.date(), timestamp_time))
-            if timestamp_time > now_dt.time():
+            try:
+                event_dt_today = timezone.make_aware(datetime.datetime.combine(now_dt.date(), timestamp_time))
+            except ValueError:
+                raise ValidationError("Formato de hora inválido. Use HH:MM.")
+            
+            # Le damos una tolerancia de 5 minutos al futuro por si hay desfase de relojes
+            future_buffer = (now_dt + timedelta(minutes=5)).time()
+            
+            # Si la hora ingresada es mayor al tiempo actual (+5 mins buffer), asume el día de ayer
+            if timestamp_time > future_buffer:
                 event_dt = event_dt_today - timedelta(days=1)
             else:
                 event_dt = event_dt_today
+                
             if event_dt > now_dt:
                 raise ValidationError("La fecha y hora del evento no pueden ser futuras.")
             if now_dt - event_dt > timedelta(hours=24):
                 raise ValidationError("No puedes registrar eventos de más de 24 horas de antigüedad.")
+                
         return timestamp_time
 
 
